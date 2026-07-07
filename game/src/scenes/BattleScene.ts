@@ -87,6 +87,8 @@ import type { LoadedGameState } from '../systems/save'
 import { createGameSave } from '../systems/save'
 import type { SlotId } from '../systems/saveSlots'
 import { buildSlotEnvelope, writeSlot, readSlot } from '../systems/saveSlots'
+import { readCampaignIndex, writeCampaignIndex, advanceCampaignFrontier } from '../systems/campaignProgress'
+import { SCENE } from './shellShared'
 import { MpModel, createMp, getRole1MaxMp, setMaxMp, tickMpRegen } from '../systems/mp'
 import {
   Role1SkillRuntime,
@@ -351,6 +353,10 @@ export class BattleScene extends Phaser.Scene {
   // registry the shell populated; playtimeSec accrues here (only place it can).
   private activeSlot: SlotId | null = null
   private saveOrigin: 'new' | 'continue' = 'new'
+  // Which campaign node WorldMapScene's click passed in (init() data); null
+  // when BattleScene is entered directly (dev/debug boot with no shell), which
+  // falls back to the slot's saved progress like before S1.
+  private entryCampaignIndex: number | null = null
   private playtimeSec = 0
   private playtimeAccMs = 0
   // Esc pause menu (continue / save & quit to main menu).
@@ -378,6 +384,12 @@ export class BattleScene extends Phaser.Scene {
 
   constructor() {
     super('battle')
+  }
+
+  /** WorldMapScene passes which node was clicked; a direct/debug boot into
+   * 'battle' (no shell) omits it and falls back to the slot's saved progress. */
+  init(data?: { campaignIndex?: number }): void {
+    this.entryCampaignIndex = typeof data?.campaignIndex === 'number' ? data.campaignIndex : null
   }
 
   preload(): void {
@@ -556,23 +568,17 @@ export class BattleScene extends Phaser.Scene {
     this.skillRuntime = createRole1SkillRuntime()
     syncRole1SkillLevels(this.skillRuntime, SKILL_DEMO_LEVELS)
 
-    // Campaign level index. save.ts (another team's file) has no level field, so
-    // this rides a BattleScene-owned side-channel key per slot rather than
-    // stomping GameSave. TODO: fold into GameSave with a version bump when the
-    // save owner adds a `campaignIndex` field.
+    // Campaign level index: WorldMapScene passes the exact node clicked
+    // (entryCampaignIndex); a direct/debug boot with no shell falls back to the
+    // slot's saved frontier (readCampaignIndex -- systems/campaignProgress,
+    // shared with WorldMapScene so both read/write the identical side-channel
+    // key; save.ts itself has no level field, see that file's header).
     this.campaignIndex =
-      this.activeSlot !== null && this.saveOrigin === 'continue'
-        ? this.readSavedLevel(this.activeSlot)
-        : 0
-  }
-
-  private levelKey(slot: SlotId): string {
-    return `zmxy3-remake.slot.v1.${slot}.level`
-  }
-  private readSavedLevel(slot: SlotId): number {
-    const raw = window.localStorage.getItem(this.levelKey(slot))
-    const n = raw === null ? 0 : Math.floor(Number(raw))
-    return Number.isFinite(n) ? Math.min(Math.max(0, n), CAMPAIGN.length - 1) : 0
+      this.entryCampaignIndex !== null
+        ? Math.min(Math.max(0, this.entryCampaignIndex), CAMPAIGN.length - 1)
+        : this.activeSlot !== null && this.saveOrigin === 'continue'
+          ? readCampaignIndex(window.localStorage, this.activeSlot)
+          : 0
   }
 
   /** Write the current live state back to the active slot (no-op without a slot). */
@@ -584,7 +590,7 @@ export class BattleScene extends Phaser.Scene {
       inventory: this.inventory,
     })
     writeSlot(window.localStorage, this.activeSlot, buildSlotEnvelope(save, this.playtimeSec))
-    window.localStorage.setItem(this.levelKey(this.activeSlot), String(this.campaignIndex))
+    writeCampaignIndex(window.localStorage, this.activeSlot, this.campaignIndex)
   }
 
   // ---------- pause / return to main menu ----------
@@ -1023,15 +1029,25 @@ export class BattleScene extends Phaser.Scene {
     return true
   }
 
+  /**
+   * S1 world-map hub: clearing a level no longer chains straight into the next
+   * one in this scene (screen-fidelity-spec.md S1 -- "通关回 WorldMapScene，不是
+   * 传送门串行"). Persist the unlock (never regressing on a replay of an earlier
+   * level -- advanceCampaignFrontier), autosave, then hand off to the map; the
+   * player re-enters via clicking the next node there.
+   */
   private onAdvanceLevel(): void {
-    const next = this.campaignIndex + 1
-    if (next >= CAMPAIGN.length) {
-      this.showToast('恭喜通关全部关卡！', '#ffe066')
-      return
+    const clearedAll = this.campaignIndex + 1 >= CAMPAIGN.length
+    if (this.activeSlot !== null) {
+      const frontier = readCampaignIndex(window.localStorage, this.activeSlot)
+      this.campaignIndex = advanceCampaignFrontier(this.campaignIndex, frontier)
     }
-    this.heroState.x = HERO_START_X
-    this.startLevel(next)
     this.saveToSlot()
+    this.showToast(clearedAll ? '恭喜通关全部关卡！返回世界地图' : '通关！返回世界地图', '#ffe066')
+    this.time.delayedCall(900, () => {
+      this.npcClient?.dispose()
+      this.scene.start(SCENE.worldMap)
+    })
   }
 
   private buildHud(): void {
@@ -1103,7 +1119,10 @@ export class BattleScene extends Phaser.Scene {
       onClose: () => {
         this.input.keyboard!.enabled = true
       },
-      onCraftEnter: () => this.openCraftMode(),
+      // No onCraftEnter: the forge entry point lives on WorldMapScene's 炼丹炉
+      // button now (screen-fidelity-spec.md S1). 老君 chat stays available here
+      // unchanged; openCraftMode/furnacePanel below stay wired for the
+      // __openCraft/__submitCraft acceptance hooks, just not reachable from UI.
     })
   }
 

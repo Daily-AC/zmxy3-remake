@@ -11,6 +11,7 @@ export const SCENE = {
   mainMenu: 'mainmenu',
   slotSelect: 'slotselect',
   characterSelect: 'charselect',
+  worldMap: 'worldmap',
   battle: 'battle',
 } as const
 

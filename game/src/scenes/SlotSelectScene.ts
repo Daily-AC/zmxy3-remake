@@ -194,7 +194,9 @@ export class SlotSelectScene extends Phaser.Scene {
     this.registry.set(REG.activeSave, env.save)
     this.registry.set(REG.loadedState, restoreGameState(env.save))
     this.registry.set(REG.origin, 'continue')
-    this.scene.start(SCENE.battle)
+    // S1: a loaded save also lands on the world-map hub -- the original
+    // SelectPLace screen is likewise reached before any level, never mid-battle.
+    this.scene.start(SCENE.worldMap)
   }
 
   private askDelete(slot: SlotId): void {

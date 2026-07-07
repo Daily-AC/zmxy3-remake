@@ -177,7 +177,9 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.registry.set(REG.activeSave, env.save)
     this.registry.set(REG.loadedState, restoreGameState(env.save))
     this.registry.set(REG.origin, 'new')
-    this.scene.start(SCENE.battle)
+    // S1: selecting a hero lands on the world-map hub, not straight into
+    // battle (screen-fidelity-spec.md S1 -- 选人确认→WorldMapScene).
+    this.scene.start(SCENE.worldMap)
   }
 
   private exposeHooks(): void {
