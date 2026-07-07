@@ -38,6 +38,35 @@
 - 已启动第一批并行移植（独立纯逻辑，与 combat-slice 装备闭环阶段A 不冲突）：port-hero-damage(受伤死亡+原创复活)、port-progression(等级经验)。技能树(最大资产)、炼丹炉(原创+agent嵌入)、存档、关卡链待后续批次。UI 打磨第二轮暂缓（功能优先于美化）。
 - UI 打磨第一轮已验收合入（对话框水墨化+老君头像框+输入框内嵌、调试HUD挂F1、背景右缝修复露出完整第1关美术）。
 
+### === 会话交接 session1 → session2（2026-07-07 15:20）===
+
+换会话原因：session1 上下文已长。remote（Daily-AC/zmxy3-remake）是唯一代码真源，读 CLAUDE.md + 本文件即可接手。
+
+**⚠️ 换会话即中断的在途 agent**（新会话无法 SendMessage 旧会话的 agent，从工作树捡起或重派）：
+- combat-slice：装备闭环**阶段A**（数值接入 applyEquipStats 进连击伤害 + 武器视觉 role1_equip0 叠加 + onHit 吸血/灼烧/冰冻结算 + 面板显示 atk）。判据未验：炼杖→穿→悟空手里出现金箍棒→打怪伤害变高→吸血回血。工作树可能有半成品。
+- port-progression → 移植 SaveSystem → systems/save.ts（未完成）
+- port-hero-damage → 移植 LevelSystem → systems/level.ts（2 关 + 难度墙，未完成）
+
+**已移植完成、已合入 remote（纯逻辑在 repo，但都还没接进 BattleScene）**：
+- systems/progression.ts（等级/经验，359672f）、systems/heroCombat.ts（受伤/死亡/i-frame/原创复活 1500ms）
+- systems/equipment.ts（穿脱）、effects.ts（applyEquipStats/rollOnHitProcs）、inventory/dropRoll/items（背包掉落，codex）
+
+**🔑 下一个关键节点 = 集成批次**（把移植成果变可玩）：heroSim 目前只是物理/连招状态机，**没有英雄身份状态（hp/atk/level）宿主**；progression/heroCombat/equipment 各自独立。集成时在 BattleScene 建一个统一 HeroIdentityState（hp/mp/atk/def/level/exp）供它们共同挂靠，然后接线：怪命中→applyHeroDamage（悟空会死+血条+复活）、杀怪→gainExp（升级）、装备→applyEquipStats 进伤害。做完游戏里才看得到"会死/升级/装备生效"。动 BattleScene，单支笔串行。
+
+**下一步优先级**：
+1. 完成在途（阶段A装备闭环、SaveSystem、LevelSystem）→ 重派 agent
+2. **集成批次**（HeroIdentityState + 受伤死亡/等级/装备数值接进 BattleScene）
+3. **炼丹炉合成**（原创 + agent 炼器嵌入，差异化核心）：agent-server 已有炼器能力，游戏里嵌成"掉料→找老君用料现场炼独一无二装备→穿上变强"的养成飞轮中枢。设计依据 gameplay-anatomy.md §5。
+4. 技能树移植（kagami 最大资产 SkillUISystem+HeroSkillSystem+Role*，先 Role1 悟空子集+MP，别整块搬 5 角色避免大重构）
+5. UI 打磨第二轮（HUD 真组件/怪血条/背包窗/toast，combat-slice UI 大棒阶段B；素材在 assets/extracted/ui/ + MANIFEST）
+6. 终包：tools/acceptance/acceptance.sh 一键出 home exe
+
+**⚠️ kagami 移植源**：clone 在 /private/tmp/.../scratchpad/zmxy-eval/kagami-phaser（session 临时目录，**换会话后大概率丢失**）。新会话继续移植需重拉：`git clone --depth 1 --filter=blob:none --sparse https://github.com/kagami-kasumi/zaomengxiyou3-zaixutiantingpian-phaser-version`（走代理 127.0.0.1:7897），重点 src/systems/（2.4 万行纯逻辑，只 InputSystem.ts 碰 Phaser）。移植清单见本文件"战略纠偏"段。
+
+**MVP 方向（用户拍板，别改）**：方向1炼丹炉飞轮 + 方向2战斗循环都做，不降级；移植>重写；用户在现实把控时间，别自我阉割范围。
+
+**基建**：agent-server 部署 home wss://zm-dev.qmledmq.cn:8443（老君 24h 在线，DeepSeek 驱动，NPC_BRAIN_PROVIDER=claude 可切回 claude 对照）；打包 acceptance.sh；home 依赖链已装（截屏走 ZmxyScreenshot 计划任务，见 docs/research/home-setup.md）。**git push 坑**：环境变量 https_proxy 偶尔不被 git 继承致 SSL_ERROR_SYSCALL，用 `git -c http.proxy=http://127.0.0.1:7897 push` 显式指定 + 失败重试几次。
+
 ### 赛后路线图（终包后）
 - 关卡流水线：16 个同构关卡包可多 agent 并行移植（导包→抠怪物动作表→接波次→对 kagami 文档验数值）；每关 Boss 专属机制（HP_REJECT/弹幕MC）是硬骨头逐个啃。
 - 功能线（独立于关卡）：多角色（唐僧/八戒/沙僧动作表已备）、宠物、法宝、技能树。
