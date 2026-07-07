@@ -163,6 +163,9 @@
   - survivability 续单交付（de94cee）：装备 hp/mp 词条真接血池（syncHeroEquipment，scale 3.5→3.0 吸收改真修）；原版每怪 exp 反编译落 monsterExp.ts；自然轨迹真值只到 lv8/11 vs 门槛 15/21（关卡结构性压缩所致），主会话拍板 CAMPAIGN_EXP_MULTIPLIER=6（d650b0d/9525a7d，性质同养成替代层可回退，测试 pin 6× 落带 + ×1 对照断言）。承伤线四段全闭环。
   - ui-finish HUD 像素级重做收官（5aac615/09cbbc2/c6ba94f/d76b5a8/161d8d2）：12 条差距清单全闭（拆底板/胶囊条/墨牌/墨点等级/删属性行/按键帮助进 Esc/背景接缝根修+莲叶前景）；技能坞三轮迭代（双重深框根因→图标框相连当槽→FFDec 挖 RoleSkillInterfacev3550 亮图标换装）；4 项承伤接线补丁入 09cbbc2（魔防/syncHeroEquipment/MP 容量/monsterExp）。主会话逐轮终审（round3/COMPARE2/COMPARE3 亲看），定稿待用户点头后统一推。三件套中炼丹炉窗/结算横幅终审过；失败横幅因无败局机制不接（待用户拍板要不要败局）；默认上坞 5 技拍板 slz/lys/hytj/lyfb/jdy。
   - 乌龟怪体型确认真渲染 bug（BattleScene:937 按 sheet 格高归一致 Monster7 大英雄 35%），已派 monster-scale 修复棒（tasks/monster-scale-brief.md，原则=全体统一 px→world 缩放保 SWF 原生比例）。
+- 23:0x **用户严厉打回 UI 终版 + 方法论升级（重要教训）**：我终审放水（"分不出门派"是形容词打分不是判断——血条不等长/错位/图标暗肉眼可见）。用户指令"抄上游仓库"。新方法写死：复刻 UI 一律抄原版 SWF 对象树 PlaceObject 坐标 + 原件位图组装、零手调；验收改机器可查（同分辨率 overlay + 像素 diff，布局层 diff≈0 才过）；版本几何分歧 vendor 胜（复刻真源）。教训入全局 memory（feedback-ui-fidelity-pixel-diff）。
+- 23:5x~00:1x **对象树重排收官（7288335/bec3bc2/9941695）**：FFDec 导出 export.RoleInfo（OtherMat1 chid341）对象树，血条真值=三条等宽 143×11（之前不等长纯属按眼画）；组装后 vs vendor 复合图像素 diff：几何零错位。过程中主会话从 DIFF 抓到漏报子件 chid262（herobeattacktimes=怒气/无双充能条），拍板渲染空 chrome（与装饰性无双按钮一致性）；终版 DIFF 亮区仅剩烘焙标签+动态数字+AA。vs Online 头像锚定对比图证两版几何吻合。monster-scale 验收合入（b292b35，全体统一 px→world 缩放，巨灵神反证原生比例原则双向成立；monster30 72% 身高判原生保真不追）。**功能缺口对账**（ui-finish report 点名）：怒气系统/失败横幅（无败局，拍板赛内不做）/4 技能下坞待绑定 UI/HP·MP·EXP 标签为手写文字。
+- 00:0x kagami UI 悖论解答（用户问"没布局代码怎么像官方"）：kagami 视觉层根本没做（调研档案：不是可玩游戏、零素材），像官方的是机制层；UI 布局唯一真源=SWF 对象树（正在走的路）。派两路借力：ruffle-spike（Ruffle 跑解密 SWF→"活的原版"参照）、community-sweep（社区还原度资料扫荡→docs/research/community-fidelity-resources.md）。
 
 ### 赛后路线图（终包后）
 - **NPC Agent 能力架构**（游戏作为 MCP、每 NPC 受限工具集=权限边界、动态权限；炼丹炉照配方合成 / 老君概率交易以贱换尊）：用户 2026-07-07 提出的拓展构想，是"agent 驱动 NPC"愿景的完全体，需深入设计再做，**暂缓**。完整记录见 docs/design/npc-agent-mcp.md。
