@@ -183,7 +183,7 @@ i.e. the real game is a strictly **sequential one-boss-at-a-time chain**, not "g
 L1→L4 关卡链已接进 `BattleScene.ts`（只动 BattleScene；level.ts / data/levels/*.ts / monster JSON 均只读）。
 
 ### 做了什么
-- **CAMPAIGN 链**：`[LEVEL_1(level.ts), LEVEL_2_TIANWANG, LEVEL_3_ERLANGSHEN, LEVEL_4_XIENIAN]`。
+- **CAMPAIGN 链**：`[LEVEL_1_WUYING, LEVEL_2_TIANWANG, LEVEL_3_ERLANGSHEN, LEVEL_4_XIENIAN]`（链头用真·第1关 巫鹰关，boss 巫鹰 monster3 300hp）。
   单怪硬编码场景重构成 `level.ts` 的波次/BOSS 状态机 + 多怪实体数组 `MonsterEntity[]`：每帧
   `updateLevelSpawn`→`spawnActiveWave`，全清后 `isBossZoneTriggered`→`spawnBoss`，Boss 死
   →`revealTransferDoor`→传送门；`↑/W` 站门内 `tryClearArena`→`onAdvanceLevel` 进下一关。
