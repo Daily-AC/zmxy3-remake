@@ -73,3 +73,63 @@
 ## 测试基线
 - tsc `--noEmit`：exit 0（三件每件后都跑过）。
 - `vitest run`：387（起始）→ 401（并行 agent 加了承伤/monsterExp 测试）全绿。furnace.test 14 个全过。
+
+---
+
+# 第二阶段：HUD 像素级重做（现场纠偏，2026-07-07）
+
+用户把当前构建与原版实机（`docs/reference/zmxy-online-screens/battle-hud-user2.png`）并排，判"web 感过重"，team-lead 下 12 条逐元素差距清单。①技能坞初审打回（旧 task1 版），②③过。本阶段按清单重做 HUD，方法论：原版位图优先、每轮并排自查。
+
+## commit（本阶段，均未 push）
+- `5aac615` HUD 组件重做（RoleInfoHud + SkillBarHud + hudTheme）
+- `09cbbc2` BattleScene 场景侧（坞重定位/背景接缝/暂停帮助）+ 4 项承伤接线补丁
+- `c6ba94f` 技能坞图标框相连 + 大白热键 + ADD-glow（①第一轮重做）
+- `d76b5a8` 挖出更亮图标（RoleSkillInterface skillicon）换上 + 画槽框（①收口）
+
+## 12 条清单逐条
+
+| # | 项 | 状态 | 做法 |
+|---|---|---|---|
+| 1 | 拆整块底板 | ✓ | RoleInfoHud 去 plate，头像+条各自悬浮 |
+| 2 | 短粗胶囊血条 | ✓ | 重画：capsule r=h/2、墨色描边、TAB_W 左标签牌 |
+| 3 | 条上白字大号居中 | ✓ | value text 居中、白字黑描边 |
+| 4 | 墨色标签牌 | ✓ | 每条左端深色 tab + HP/MP/EXP 白字 |
+| 5 | 等级墨点白字 | ✓ | 用 `hud_avatar_wukong` 位图烘焙的墨点，动态白数字对齐盖住烘焙"99"；裁掉该位图底部烘焙白条 |
+| 6 | 删属性行 | ✓ | 移除"攻击/武器"文字 |
+| 7/8 | 亮色满格图标+原版格框 | ✓ | 见下"图标挖掘" |
+| 9 | 去 Lv/MP 只留热键 | ✓ | SkillBarHud 不再画 level/mpCost |
+| 10 | 无双+按钮簇 | ✓ | 用提取 `hud_roleinfo_bottom_skilldock` 位图 cluster 区（无双/法宝/宠物/技能/青包/设置） |
+| 11 | 按键帮助挪 Esc 菜单 | ✓ | 删战场文字，暂停面板加高加 help 行 |
+| 12 | 背景第二道彩虹接缝 | ✓ | 见下"背景接缝" |
+
+## ①图标挖掘（team-lead 批准的第二轮，硬时间盒，已收手）
+
+**根因**：`ss_*.png`（`OtherMatv3570.swf` chid1-40，45px，暗红火+烘焙深框）叠在坞底灰空槽上=双重深框="暗成一团"。
+
+**挖掘（FFDec `tools/ffdec/ffdec-cli.jar`）**：`RoleSkillInterfacev3550.swf`（未加密）导出 178 图，其中 `skillicon_*`（66px，边到边亮火焰，无烘焙框）是技能树 UI 图标，40 个符号含悟空全 9 技能（`skillicon_slz/lys/hytj/lyfb/jdy/qsez/zz/hmz/hyjj`）。比 ss_* 明显亮一档、更清晰。已拷为 `game/public/assets/online/skill-icons/sb_*.png`，`skill_<id>` 改指向它。因新图无框，SkillBarHud 改为**画槽框**（深底+棕金细边，cell 相连成排）内嵌亮图标 + 大白热键居中。证据：`tmp/debug-shots/ui-finish-1-skilldock-COMPARE3.png`。剩微差：我画的棕金框比原版细黑框略重，可辩护为雕花框风格。
+
+## 背景接缝（第 12 条）
+
+**根因**：`floorBgN` 是**整场景图**（自带宫殿+彩虹在顶、雕花石台+云在下），被当"地面带"从 y470 平铺就把它自带的彩虹重画在了画面下缘=第二道彩虹。**改法**：`placeFloor()` 给 floor 纹理加子帧裁掉顶部 27%（彩虹+宫殿，bg11 已画），只贴石台+云 band 到脚下（`FLOOR_TOP_Y`）；并把 `bg12`（莲叶前景：绿莲叶+粉莲花+栏杆）depth 从 -20 提到 -8（floor 之前），莲叶前景显出来，与参照前景一致。
+
+## 石台（team-lead 批：不追）
+
+原版参照那道米色雕花石台是"大闹天庭篇"该关的地面 art；我们 L1 用的 `floorBg1` 是天宫云景（自带蓝色浮空石台已在裁剪带里但融进云不显眼）。米色石台属别关 art，非本关素材。接受现状（L1 用云+莲叶前景，与参照的莲叶前景吻合），不强塞别关石台。
+
+## 乌龟怪体型核查（team-lead 要求：只核不改，结论落此）
+
+**结论：真渲染 bug，属关卡/怪物线，不归 UI 棒。**
+
+`BattleScene.ts:937` 怪物 scale = `(isBoss?2.0:1.5) * (200/cellH)`——归一的是 **sheet cell 高度**（把任意 cellH 拉到 300px cell = 英雄 200×1.5），**不是角色轮廓**。实测 idle 帧 alpha 包围盒：
+- 英雄 role1_0：轮廓 100px，填其 200 cell 的 50%，显示 100×1.5 = **150px**
+- Monster7（cellH 150）：轮廓 101px，填其 150 cell 的 67%，显示 101×2.0 = **202px（英雄 1.35 倍）**
+- Monster8：轮廓 94px，显示 188px（**1.25 倍**）
+
+即怪物美术填满其（更小的 150）cell、英雄在其（更大的 200）cell 里有留白，cell 归一后怪的**轮廓**就比英雄大 1.25~1.35 倍。原版参照里怪与英雄大致同高，说明原版不用这套 cell 归一。**修法建议（不归我）**：按测量轮廓高度归一，或给每 species 一个对齐原版的 scale 因子，让轮廓≈英雄轮廓，而非 cell≈cell。
+
+## 4 项承伤接线补丁（照 `hero-survivability-report.md` 精确应用，已进 `09cbbc2`）
+
+所调用 systems 函数均已由承伤线提交（HEAD 实测存在）：① `resolveIncomingHeroDamage` 魔防分数 `0`→`heroMagicDef(this.identity)`；② `seedFromSave` 尾 + `doEquip`/`doUnequip` 后 `syncHeroEquipment(this.identity, this.equipment)`（不接裸血比改前低约14%）；③ `this.mp` 容量 `+this.identity.equipMaxMpBonus`（createMp + syncMpMax 两处）；④ `awardKillExp` 加 `species` 参数、`monsterExp(species)` 替 flat `MONSTER_KILL_EXP=80`（常量已删）。验证：tsc 干净、401 全绿、进战斗无 runtime error。魔防仅 L10+ 生效（曲线 L10 起 10%），L1 boot 观测不到效果，具体减伤 A/B 按承伤 report 由用户手玩定夺。
+
+## 第二阶段测试基线
+tsc `--noEmit` exit 0；`vitest run` 401 全绿（每 commit 后跑过）。验收全程用独立 playwright-core 脚本 + 缓存 chromium（`~/Library/Caches/ms-playwright/chromium-1228`）起自有 vite（`--port 5175 --strictPort`）——共享 MCP 浏览器被并行 agent 反复抢占，另起隔离链路。
