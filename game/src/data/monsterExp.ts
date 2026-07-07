@@ -69,20 +69,24 @@ export const MONSTER_BASE_EXP: Record<string, number> = {
 export const DEFAULT_MONSTER_EXP = 10
 
 /**
- * Campaign-wide exp multiplier. 1 = faithful original values, applied as-is.
+ * Campaign-wide exp multiplier. NOT a fudge on the original per-monster exp —
+ * those (MONSTER_BASE_EXP) are the faithful recovered values, kept as-is. This
+ * is a named, reversible compensation for a STRUCTURAL choice this project made:
+ * it compresses each of the original's multi-stage tower climbs into 4-6 waves
+ * (L4 is 4 kills), so the original's swarm+replay kill count — which its exp
+ * curve (progression.ts, untouched) is calibrated for — never happens. Same
+ * nature as heroSurvivability's growth-substitute scale: an explicit stand-in
+ * for a missing layer, to be lowered when the campaign gets real wave density
+ * post-hackathon.
  *
- * BALANCE CAVEAT (待拍板, do NOT raise without sign-off): a natural single
- * playthrough with multiplier 1 reaches only ~lv3 / lv8 / lv11 by the L2 / L3 /
- * L4 boss (the original per-monster exp is calibrated for the original's
- * swarm+replay grinding, but this project compresses each multi-stage tower
- * into 4-6 waves — e.g. L4 is 4 kills). The survivability model's winnable
- * 到关等级 (L3 ~lv15, L4 ~lv21) is therefore NOT reached without grinding.
- * The steep exp curve (progression.ts, untouched) makes no single multiplier
- * hit both milestones cleanly, but ~6 lands L3≈16 / L4≈20, inside the
- * lv15±1 / lv21±2 target band. Left at 1 pending balance拍板 — raising it is
- * "放大", which is a lead decision, not this layer's. See report §exp.
+ * Set to 6 (team-lead sign-off 2026-07-07). Rationale/derivation: a natural
+ * single playthrough at 1 reaches only ~lv3 / lv8 / lv11 by the L2 / L3 / L4
+ * boss — short of the survivability model's winnable 到关等级 (L3 ~lv15,
+ * L4 ~lv21). The steep curve makes no single multiplier hit both milestones
+ * exactly, but 6 lands L3≈16 / L4≈20, inside the lv15±1 / lv21±2 target band.
+ * See tasks/hero-survivability-report.md 续单二.
  */
-export const CAMPAIGN_EXP_MULTIPLIER = 1
+export const CAMPAIGN_EXP_MULTIPLIER = 6
 
 /** Kill-exp awarded for a monster species, after the campaign multiplier. */
 export function monsterExp(species: string): number {
