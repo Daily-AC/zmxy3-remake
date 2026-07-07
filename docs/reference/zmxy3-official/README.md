@@ -71,3 +71,14 @@ UI，跟核心玩法复刻无关）、`MicropaymentInterface`（内购商城，�
 可以直接用，不需要先跑 `tools/decrypt-zmxyol-swf.py`）——只有 `EIconv3420`/
 `OtherMatv3570`/`MagicWeaponv1240` 这三个是本次重新抓到的、已知需要解密的旧包
 （PIVOT=300/END=325，跟上次一致）。
+
+## 后续更新：不用再等用户点，88 个官方资源已批量直下到本地（同日）
+
+反编译已缓存的官方 loader（`v3870.swf` → 内嵌 `gamefile.swf`）拿到完整资源清单和
+CDN 直连 URL 规律，方法+过程详见 `docs/research/canonical-art-hunt.md`"后续"一节。
+结果：88 个官方 SWF（134MB，覆盖开局必加载的 7 个 UI 包、全部关卡容器、boss、宠物、
+四个角色本体）已直接从 `https://sda.4399.com/4399swf/upload_swf/ftp7/hanbao/20120107/6/`
+批量拉到本地 `vendor/canonical-hunt/official_4399/batch/`（gitignored，不进 git，
+跟 `vendor/` 全部素材同规矩）。以后要抠具体某个关卡/怪物/UI 面板的美术，直接从这批
+本地文件解密（`tools/decrypt-zmxyol-swf.py`，未加密的文件跳过这步）+ FFDec 导出即可，
+不需要再连 home、不需要再等用户点任何界面。
