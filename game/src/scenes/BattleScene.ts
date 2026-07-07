@@ -94,6 +94,7 @@ import {
   syncRole1SkillLevels,
   tickRole1SkillRuntime,
   tryCastRole1Skill,
+  getRole1SkillMpCost,
 } from '../systems/heroSkill'
 import {
   NpcClient,
@@ -105,6 +106,18 @@ import {
   resolveNpcServerUrl,
 } from '../net/npcClient'
 import { DialogueBox } from '../ui/DialogueBox'
+import {
+  HUD_TEXTURES,
+  HUD_ICONS,
+  ONLINE_TEXTURES,
+  ICON_FALLBACK_KEY,
+  FloatKind,
+} from '../ui/hud/hudTheme'
+import { RoleInfoHud } from '../ui/hud/RoleInfoHud'
+import { SkillBarHud, SkillSlotData } from '../ui/hud/SkillBarHud'
+import { BossHpBar, MonsterHpBar } from '../ui/hud/MonsterHpBar'
+import { BackpackWindow } from '../ui/hud/BackpackWindow'
+import { Toast, spawnFloatingText } from '../ui/hud/Toast'
 import roleRaw from '../data/roles/role1.json'
 
 const roleData = roleRaw as unknown as RoleData
@@ -255,6 +268,8 @@ interface MonsterEntity {
   // Incoming hits (combo / skill / burn), drained one per frame into
   // advanceMonster's single incoming-hit slot — monsterSim dedups by attackId.
   hitQueue: { attackId: number; damage: number }[]
+  /** Grunt head HP bar (bosses use the top BossHpBar instead). */
+  hpBar?: MonsterHpBar
 }
 
 /**
@@ -275,8 +290,6 @@ export class BattleScene extends Phaser.Scene {
   private levelState!: LevelState
   private monsters: MonsterEntity[] = []
   private bossEntity: MonsterEntity | null = null
-  private bossHpBar?: Phaser.GameObjects.Graphics
-  private bossHpText?: Phaser.GameObjects.Text
   private portal?: Phaser.GameObjects.Container
   private floorImg?: Phaser.GameObjects.Image
   private bgBase?: Phaser.GameObjects.Image
@@ -288,12 +301,16 @@ export class BattleScene extends Phaser.Scene {
   private dropSprites = new Map<DropEntity, Phaser.GameObjects.Container>()
   private pickupCfg!: PickupConfig
   private inventory: Inventory = createInventory(24)
-  private invText!: Phaser.GameObjects.Text
-  // Debug telemetry, hidden by default, toggled with F1.
+  // Real battle-HUD components (ui/hud/), replacing the old debug text.
+  private roleInfoHud!: RoleInfoHud
+  private skillBar!: SkillBarHud
+  private backpack!: BackpackWindow
+  private bossBar!: BossHpBar
+  private toastUi!: Toast
+  // F1 debug telemetry (hidden by default).
   private debugTexts: Phaser.GameObjects.Text[] = []
   private debugVisible = false
   private hud!: Phaser.GameObjects.Text
-  private mhpText!: Phaser.GameObjects.Text
   private playedHitIds = new Set<number>()
   private bgmStarted = false
   private injected: HeroEdges = { ...NO_EDGES }
@@ -305,7 +322,6 @@ export class BattleScene extends Phaser.Scene {
   private promptText!: Phaser.GameObjects.Text
   private dialogue!: DialogueBox
   private dialogueFresh = true
-  private toast?: Phaser.GameObjects.Text
   // Forge: one in-flight craft at a time. Holds the locked-material transaction,
   // the budget the return is re-validated against, and a timeout that refunds.
   private craftPending: {
@@ -334,7 +350,7 @@ export class BattleScene extends Phaser.Scene {
   // Monotonic ids for skill/burn hits, kept clear of combo (from 1). Each
   // monster entity has its own hitQueue; these just guarantee unique ids.
   private skillAttackId = 200000
-  private mpBar!: Phaser.GameObjects.Graphics
+  private skillBarAccMs = 0
 
   // Equipment / hero combat state
   private equipment: Equipment = createEquipment()
@@ -342,8 +358,6 @@ export class BattleScene extends Phaser.Scene {
   // Unified hero identity: level/exp (progression) + live hp/death (heroCombat),
   // with equipment layering atk/def on top. Created in create().
   private identity!: HeroIdentityState
-  private statsText!: Phaser.GameObjects.Text
-  private heroHpBar!: Phaser.GameObjects.Graphics
   private burnAttackId = 100000 // kept clear of hero attackIds (which start at 1)
   private simClockMs = 0
 
@@ -385,6 +399,11 @@ export class BattleScene extends Phaser.Scene {
       }
     }
     this.load.image('ink_panel', 'assets/extracted/ui/dialogue_textpanel_crop.png')
+    // Real battle-HUD art: RoleInfo avatar, boss bar, backpack window/cell,
+    // item icons, and Online-sourced skill icons.
+    for (const { key, url } of [...HUD_TEXTURES, ...HUD_ICONS, ...ONLINE_TEXTURES]) {
+      this.load.image(key, url)
+    }
     const audio: Record<string, string> = {
       bgm: 'bg1.mp3',
       hit12: 'Role1_hit1AndHit2.mp3',
@@ -444,6 +463,8 @@ export class BattleScene extends Phaser.Scene {
     // E: equip the first equippable item in the bag. U: take the weapon off.
     kb.on('keydown-E', () => this.equipFirstFromBag())
     kb.on('keydown-U', () => this.doUnequip('weapon'))
+    // B: toggle the backpack window.
+    kb.on('keydown-B', () => this.toggleBackpack())
     // Number keys 1-9: cast the nine Role1 active skills.
     for (const [code, skillId] of SKILL_KEYS) {
       kb.on('keydown-' + code, () => this.castSkill(skillId))
@@ -465,7 +486,6 @@ export class BattleScene extends Phaser.Scene {
     this.buildHud()
     this.buildDialogue()
     this.buildPauseMenu()
-    this.buildBossHud()
     this.applyHeroRender('wait')
     this.startAudioOnFirstInput()
     this.connectNpc()
@@ -685,7 +705,7 @@ export class BattleScene extends Phaser.Scene {
         const attackId = ++this.skillAttackId
         if (e.state.resolvedAttackIds.includes(attackId)) continue
         e.hitQueue.push({ attackId, damage: dmg })
-        this.floatText(e.state.x, GROUND_Y - 90, `-${dmg}`, '#7ac7ff')
+        this.floatText(e.state.x, GROUND_Y - 90, `-${dmg}`, 'damage')
       }
     }
     if (hb.activeAfterMs > 0) this.time.delayedCall(hb.activeAfterMs, fire)
@@ -783,7 +803,10 @@ export class BattleScene extends Phaser.Scene {
     this.campaignIndex = Math.min(Math.max(0, index), CAMPAIGN.length - 1)
     const def = CAMPAIGN[this.campaignIndex]
     this.levelState = createLevelState(def)
-    for (const e of this.monsters) e.sprite.destroy()
+    for (const e of this.monsters) {
+      e.hpBar?.destroy()
+      e.sprite.destroy()
+    }
     this.monsters = []
     this.bossEntity = null
     this.portal?.setVisible(false)
@@ -864,6 +887,8 @@ export class BattleScene extends Phaser.Scene {
       burn: null,
       frozenUntilMs: 0,
       hitQueue: [],
+      // Grunts get a head HP bar; the boss uses the top BossHpBar.
+      hpBar: isBoss ? undefined : new MonsterHpBar(this),
     }
     this.monsters.push(entity)
     return entity
@@ -885,35 +910,18 @@ export class BattleScene extends Phaser.Scene {
 
   // ---------- boss HP bar ----------
 
-  private buildBossHud(): void {
-    this.bossHpBar = this.add.graphics().setScrollFactor(0).setDepth(120).setVisible(false)
-    this.bossHpText = this.add
-      .text(480, 40, '', { fontSize: '16px', color: '#ffe9c0', fontStyle: 'bold', stroke: '#3a1010', strokeThickness: 3 })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(121)
-      .setVisible(false)
-  }
-
   private updateBossHud(): void {
-    const bar = this.bossHpBar
-    const label = this.bossHpText
-    if (!bar || !label) return
     const b = this.bossEntity
     if (!b || b.state.mode === 'gone') {
-      bar.setVisible(false)
-      label.setVisible(false)
+      this.bossBar.setVisible(false)
       return
     }
-    const maxHp = b.config.stats.hp
-    const frac = maxHp > 0 ? Math.max(0, b.state.hp) / maxHp : 0
-    bar.setVisible(true).clear()
-    bar.fillStyle(0x2a1010, 0.9).fillRoundedRect(240, 54, 480, 16, 4)
-    bar.fillStyle(0xd94a4a, 1).fillRoundedRect(240, 54, Math.max(2, 480 * frac), 16, 4)
-    bar.lineStyle(2, 0xd9b45a, 0.9).strokeRoundedRect(240, 54, 480, 16, 4)
-    label.setVisible(true).setText(
-      `${CAMPAIGN[this.campaignIndex].boss.label}　${Math.max(0, Math.round(b.state.hp))}/${maxHp}`,
-    )
+    this.bossBar.setVisible(true)
+    this.bossBar.update({
+      name: CAMPAIGN[this.campaignIndex].boss.label,
+      hp: b.state.hp,
+      maxHp: b.config.stats.hp,
+    })
   }
 
   // ---------- portal / level advance ----------
@@ -954,48 +962,37 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private buildHud(): void {
-    // Debug telemetry — hidden by default, F1 toggles. Acceptance hooks
-    // (__heroState/__worldState) are unaffected; this is only on-screen text.
-    this.hud = this.add
-      .text(16, 12, '', { fontSize: '14px', color: '#8a93b8', fontFamily: 'monospace' })
-      .setScrollFactor(0)
-      .setDepth(100)
-      .setVisible(false)
-    this.mhpText = this.add
-      .text(16, 92, '', { fontSize: '14px', color: '#e08a8a', fontFamily: 'monospace' })
-      .setScrollFactor(0)
-      .setDepth(100)
-      .setVisible(false)
-    this.debugTexts.push(this.hud, this.mhpText)
+    // Real battle HUD (ui/hud/): top-left RoleInfo (avatar + HP/MP/EXP + atk),
+    // top boss bar, bottom-left skill dock, backpack window (toggle B).
+    this.roleInfoHud = new RoleInfoHud(this, 16, 14)
+    this.roleInfoHud.container.setScrollFactor(0).setDepth(100)
+    this.bossBar = new BossHpBar(this)
+    this.bossBar.setVisible(false)
+    this.skillBar = new SkillBarHud(this, 20, 470)
+    this.skillBar.container.setScrollFactor(0).setDepth(100)
+    this.backpack = new BackpackWindow(this, {
+      iconKeyFor: (item) => (this.textures.exists('icon_' + item.id) ? 'icon_' + item.id : ICON_FALLBACK_KEY),
+      onClose: () => {},
+    })
+    this.toastUi = new Toast(this)
+    this.refreshSkillBar()
 
-    // Inventory strip: a semi-transparent dark plate so white text reads over
-    // the bright clouds.
-    this.add
-      .rectangle(958, 10, 190, 92, 0x0c0d12, 0.5)
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(99)
-    this.invText = this.add
-      .text(778, 18, '', { fontSize: '14px', color: '#e8ecff', fontFamily: 'monospace' })
+    // F1 debug telemetry (hidden by default).
+    this.hud = this.add
+      .text(16, 100, '', { fontSize: '13px', color: '#8a93b8', fontFamily: 'monospace' })
       .setScrollFactor(0)
       .setDepth(100)
+      .setVisible(false)
+    this.debugTexts = [this.hud]
+
     this.add
-      .text(480, 520, 'A/D 走　K 跳　J 连击　1-9 技能　W/↑ 对话　E 穿戴 U 卸下　Esc 菜单', {
+      .text(480, 522, 'A/D 走　K 跳　J 连击　1-9 技能　B 背包　W/↑ 对话/传送　E 穿戴　Esc 菜单', {
         fontSize: '13px',
         color: '#c8cfe6',
       })
       .setScrollFactor(0)
       .setDepth(100)
       .setOrigin(0.5)
-
-    // Hero stat panel (top-left): level/exp + HP bar + MP bar + attack + weapon.
-    this.add.rectangle(12, 10, 280, 100, 0x0c0d12, 0.5).setOrigin(0, 0).setScrollFactor(0).setDepth(99)
-    this.heroHpBar = this.add.graphics().setScrollFactor(0).setDepth(100)
-    this.mpBar = this.add.graphics().setScrollFactor(0).setDepth(100)
-    this.statsText = this.add
-      .text(22, 52, '', { fontSize: '13px', color: '#e8ecff', lineSpacing: 3 })
-      .setScrollFactor(0)
-      .setDepth(100)
 
     // NPC name tag (world-space, above the NPC).
     this.npcTag = this.add
@@ -1280,7 +1277,7 @@ export class BattleScene extends Phaser.Scene {
       if (e.state.resolvedAttackIds.includes(s.attackId)) continue
       if (e.hitQueue.some((h) => h.attackId === s.attackId)) continue
       e.hitQueue.push({ attackId: s.attackId, damage })
-      this.floatText(e.state.x, GROUND_Y - 90, `-${damage}`, '#ffe37a')
+      this.floatText(e.state.x, GROUND_Y - 90, `-${damage}`, 'damage')
       if (!firstHit) firstHit = e
     }
     if (firstHit && !this.playedHitIds.has(s.attackId)) {
@@ -1323,7 +1320,7 @@ export class BattleScene extends Phaser.Scene {
     // Burn tick -> queue as an incoming hit (monsterSim resolves it normally).
     if (e.state.mode !== 'dead' && e.burn && this.simClockMs >= e.burn.nextAtMs) {
       e.hitQueue.push({ attackId: ++this.burnAttackId, damage: e.burn.power })
-      this.floatText(e.state.x, GROUND_Y - 70, `烧 -${e.burn.power}`, '#ff7a4d')
+      this.floatText(e.state.x, GROUND_Y - 70, `烧 -${e.burn.power}`, 'burn')
       e.burn.ticksLeft -= 1
       e.burn.nextAtMs = this.simClockMs + BURN_INTERVAL_MS
       if (e.burn.ticksLeft <= 0) e.burn = null
@@ -1349,7 +1346,10 @@ export class BattleScene extends Phaser.Scene {
 
   private reapMonsters(): void {
     for (const e of this.monsters) {
-      if (e.state.mode === 'gone' && e !== this.bossEntity) e.sprite.destroy()
+      if (e.state.mode === 'gone' && e !== this.bossEntity) {
+        e.hpBar?.destroy()
+        e.sprite.destroy()
+      }
     }
     this.monsters = this.monsters.filter((e) => e.state.mode !== 'gone' || e === this.bossEntity)
   }
@@ -1368,7 +1368,7 @@ export class BattleScene extends Phaser.Scene {
     const before = c.hp
     c.hp = Math.min(c.maxHp, c.hp + power)
     const healed = c.hp - before
-    this.floatText(this.heroState.x, GROUND_Y - 90, `+${healed || power}`, '#6ef07a')
+    this.floatText(this.heroState.x, GROUND_Y - 90, `+${healed || power}`, 'heal')
     this.hero.setTint(0xd6ffd6)
     this.time.delayedCall(120, () => this.hero.clearTint())
   }
@@ -1383,10 +1383,10 @@ export class BattleScene extends Phaser.Scene {
   // hero's stats. Show light feedback (float text + a level-up toast/flash).
   private awardKillExp(x: number, y: number): void {
     const result = gainHeroExp(this.identity, MONSTER_KILL_EXP)
-    this.floatText(x, y - 40, `+${result.appliedExp} EXP`, '#c8b0ff')
+    this.floatText(x, y - 40, `+${result.appliedExp} EXP`, 'exp')
     if (result.levelsGained > 0) {
       this.showToast(`升级！ Lv.${result.levelAfter}`, '#ffe066')
-      this.floatText(this.heroState.x, GROUND_Y - 110, `LEVEL UP!`, '#ffe066')
+      this.floatText(this.heroState.x, GROUND_Y - 110, 'LEVEL UP!', 'exp')
       this.hero.setTint(0xfff2a8)
       this.time.delayedCall(220, () => {
         if (!isHeroDead(this.identity)) this.hero.clearTint()
@@ -1423,13 +1423,13 @@ export class BattleScene extends Phaser.Scene {
     const events = damageHero(this.identity, hit, this.simClockMs)
     for (const e of events) {
       if (e.type === 'hurt') {
-        this.floatText(this.heroState.x, GROUND_Y - 60, `-${mitigated}`, '#ff5a5a')
+        this.floatText(this.heroState.x, GROUND_Y - 60, `-${mitigated}`, 'crit')
         this.hero.setTint(0xff9a9a)
         this.time.delayedCall(120, () => {
           if (!isHeroDead(this.identity)) this.hero.clearTint()
         })
       } else if (e.type === 'death') {
-        this.floatText(this.heroState.x, GROUND_Y - 60, `-${mitigated}`, '#ff5a5a')
+        this.floatText(this.heroState.x, GROUND_Y - 60, `-${mitigated}`, 'crit')
         this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
       }
     }
@@ -1440,17 +1440,14 @@ export class BattleScene extends Phaser.Scene {
     this.hero.setAlpha(1)
     this.hero.setAngle(0)
     this.showToast('复活！', '#6ef0a0')
-    this.floatText(this.heroState.x, GROUND_Y - 90, '复活', '#6ef0a0')
+    this.floatText(this.heroState.x, GROUND_Y - 90, '复活', 'heal')
     this.hero.setTint(0xd6ffd6)
     this.time.delayedCall(200, () => this.hero.clearTint())
   }
 
-  private floatText(x: number, y: number, text: string, color: string): void {
-    const t = this.add
-      .text(x, y, text, { fontSize: '18px', color, fontStyle: 'bold' })
-      .setOrigin(0.5)
-      .setDepth(30)
-    this.tweens.add({ targets: t, y: y - 34, alpha: 0, duration: 700, onComplete: () => t.destroy() })
+  /** Rising floating text, styled per FLOAT_STYLES (ui/hud/Toast). */
+  private floatText(x: number, y: number, text: string, kind: FloatKind = 'damage'): void {
+    spawnFloatingText(this, x, y, text, kind)
   }
 
   private spawnDrops(x: number, y: number): void {
@@ -1560,6 +1557,7 @@ export class BattleScene extends Phaser.Scene {
   private renderEntity(e: MonsterEntity): void {
     if (e.state.mode === 'gone') {
       e.sprite.setVisible(false)
+      e.hpBar?.setVisible(false)
       return
     }
     const key = e.species + '_' + e.state.action
@@ -1573,6 +1571,8 @@ export class BattleScene extends Phaser.Scene {
     else e.sprite.clearTint()
     const off = e.data.offset
     e.sprite.setPosition(e.state.x + off.x * e.scale, e.state.y + MON_RENDER_OFFSET_Y + off.y * e.scale)
+    // Grunt head HP bar (hidden at full / on death); boss uses the top bar.
+    e.hpBar?.update(e.state.hp, e.config.stats.hp, e.state.x, GROUND_Y - 110)
   }
 
   private updateParallax(): void {
@@ -1581,48 +1581,60 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private updateHud(): void {
-    const s = this.heroState
-    this.hud.setText(
-      [
-        `action: ${s.action}  combo: ${s.combo.stage}`,
-        `x: ${s.x.toFixed(0)}  grounded: ${s.vertical.grounded}  jumps: ${s.vertical.jumpCount}`,
-        `NPC: ${this.npcStatusLabel()}`,
-      ].join('\n'),
-    )
-    const alive = this.aliveMonsters()
-    this.mhpText.setText(
-      `Lv${this.campaignIndex + 1} 怪物:${alive.length}${
-        this.bossEntity ? `  BOSS hp:${this.bossEntity.state.hp}` : ''
-      }`,
-    )
-    const stacks = listStacks(this.inventory)
-    const body = stacks.length ? stacks.map((st) => `${st.item.name} ×${st.qty}`).join('\n') : '(空)'
-    this.invText.setText('背包\n' + body)
-
-    // Hero HP bar + MP bar + stats.
+    // Top-left RoleInfo (avatar + HP/MP/EXP bars + atk/weapon).
     const c = this.identity.combat
-    const hp = Math.round(c.hp)
-    const bar = this.heroHpBar
-    bar.clear()
-    bar.fillStyle(0x2a1414, 1).fillRoundedRect(22, 18, 200, 14, 4)
-    const frac = c.maxHp > 0 ? c.hp / c.maxHp : 0
-    const barColor = isHeroDead(this.identity) ? 0x555555 : 0xd94a4a
-    bar.fillStyle(barColor, 1).fillRoundedRect(22, 18, Math.max(2, 200 * frac), 14, 4)
-    bar.lineStyle(1, 0xd9b45a, 0.8).strokeRoundedRect(22, 18, 200, 14, 4)
-    // MP bar (blue), just under HP.
-    const mpBar = this.mpBar
-    mpBar.clear()
-    mpBar.fillStyle(0x141a2a, 1).fillRoundedRect(22, 36, 200, 9, 3)
-    const mpFrac = this.mp.maxMp > 0 ? this.mp.mp / this.mp.maxMp : 0
-    mpBar.fillStyle(0x4a7ad9, 1).fillRoundedRect(22, 36, Math.max(2, 200 * mpFrac), 9, 3)
-    mpBar.lineStyle(1, 0x6a8fd9, 0.7).strokeRoundedRect(22, 36, 200, 9, 3)
-    const atk = heroTotalAtk(this.identity, this.equipment)
-    const weaponName = this.equipment.weapon ? this.equipment.weapon.name : '空手'
     const p = this.identity.progression
-    this.statsText.setText(
-      `Lv.${p.level}  EXP ${p.exp}/${p.expToNext}　MP ${Math.round(this.mp.mp)}/${this.mp.maxMp}\n` +
-        `HP ${hp}/${c.maxHp}　攻击 ${atk}　武器: ${weaponName}`,
-    )
+    this.roleInfoHud.update({
+      level: p.level,
+      hp: c.hp,
+      maxHp: c.maxHp,
+      mp: this.mp.mp,
+      maxMp: this.mp.maxMp,
+      exp: p.exp,
+      expToNext: p.expToNext,
+      atk: heroTotalAtk(this.identity, this.equipment),
+      weaponName: this.equipment.weapon ? this.equipment.weapon.name : '空手',
+    })
+    // Skill dock cooldown sweep (shared busy-lock, normalized to a nominal cast).
+    const cdFrac = this.skillRuntime.cooldownMs > 0 ? Math.min(1, this.skillRuntime.cooldownMs / 1000) : 0
+    for (let i = 0; i < SKILL_KEYS.length; i++) this.skillBar.setCooldown(i, cdFrac)
+    // Rebuild slot affordability/level a few times a second (MP regens/drains).
+    this.skillBarAccMs += this.game.loop.delta
+    if (this.skillBarAccMs >= 300) {
+      this.skillBarAccMs = 0
+      this.refreshSkillBar()
+    }
+
+    if (this.debugVisible) {
+      const s = this.heroState
+      this.hud.setText(
+        `Lv${this.campaignIndex + 1} ${CAMPAIGN[this.campaignIndex].name}  怪:${this.aliveMonsters().length}` +
+          `\naction:${s.action} combo:${s.combo.stage} x:${s.x.toFixed(0)}  NPC:${this.npcStatusLabel()}`,
+      )
+    }
+  }
+
+  /** (Re)build the bottom-left skill dock from the current loadout/MP. */
+  private refreshSkillBar(): void {
+    const slots: SkillSlotData[] = SKILL_KEYS.map(([code, skillId]) => {
+      const level = this.skillRuntime.levels[skillId]
+      const mpCost = level > 0 ? getRole1SkillMpCost(skillId, level) : 0
+      const hotkey = code === 'ONE' ? '1' : code === 'TWO' ? '2' : code === 'THREE' ? '3' :
+        code === 'FOUR' ? '4' : code === 'FIVE' ? '5' : code === 'SIX' ? '6' :
+        code === 'SEVEN' ? '7' : code === 'EIGHT' ? '8' : '9'
+      return { skillId, hotkey, mpCost, level, disabled: level <= 0 || this.mp.mp < mpCost }
+    })
+    this.skillBar.setSlots(slots)
+  }
+
+  private toggleBackpack(): void {
+    if (this.dialogue.isOpen) return
+    if (this.backpack.isOpen) {
+      this.backpack.close()
+    } else {
+      this.backpack.setItems(listStacks(this.inventory))
+      this.backpack.open()
+    }
   }
 
   // ---------- equipment ----------
@@ -1678,15 +1690,8 @@ export class BattleScene extends Phaser.Scene {
     this.dialogue.open()
   }
 
-  private showToast(text: string, color: string): void {
-    this.toast?.destroy()
-    const t = this.add
-      .text(480, 200, text, { fontSize: '30px', color, fontStyle: 'bold' })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(120)
-    this.toast = t
-    this.tweens.add({ targets: t, y: 160, alpha: 0, duration: 1800, ease: 'Cubic.easeOut', onComplete: () => t.destroy() })
+  private showToast(text: string, color = '#f0d99a'): void {
+    this.toastUi.show(text, color)
   }
 
   private startAudioOnFirstInput(): void {
@@ -1912,6 +1917,10 @@ export class BattleScene extends Phaser.Scene {
     w.__setSkillLevels = (levels: Partial<Role1SkillLevels>) => {
       syncRole1SkillLevels(this.skillRuntime, levels)
       return this.skillRuntime.levels
+    }
+    w.__toggleBackpack = () => {
+      this.toggleBackpack()
+      return this.backpack.isOpen
     }
     // Level-chain acceptance hooks.
     w.__levelState = () => ({
