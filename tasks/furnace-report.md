@@ -130,3 +130,55 @@ bug 的服务端永远造不出超过材料所值的装备。
 - `forge.ts` 的 `opencode`/`claude` 两条真实 LLM provider 已实现（复用 `llm.ts` 共享单例 + 既有 `craft-validate` 沙箱），但只有 `mock` 做了端到端验证；真实 LLM forge 的字面质量沿用 README 里 DeepSeek 的已知局限（专有名词字面保真度偏低），不影响沙箱安全性。
 - DeepSeek key 仍走环境变量 `DEEPSEEK_API_KEY`，配置/代码无 key 值。
 - 两处协议类型定义（game/net 与 agent-server/types）靠手工同步，沿用 repo 既有惯例；未来若嫌易漂移可提取共享包，非本棒范围。
+
+## 附录 A：真实 LLM 端到端 + 字段 shape 差异（收尾单，本项目铁律：mock 通过不算完成）
+
+新增 `agent-server/test/forge-real.ts`（脚本 `npm run test:real`，走**真实** opencode+DeepSeek
+V4 Flash，key 走环境变量；`REMOTE_WS=wss://...` 可切远端）。
+
+**A.1 本地真实往返**（默认 provider，起本地 server）：
+
+- 请求：14×玄铁碎片（稀有度3）→ 预算 **210 点**；描述「一把又能吸血、又能点燃敌人的赤红长枪，攻击也要高」。
+- 真实响应 `craft_result.item`：
+  ```json
+  { "id":"forge-real-req-...", "name":"赤血焚天枪", "kind":"equip", "rarity":2,
+    "desc":"以玄铁碎片为骨，丹炉赤焰为魂，炼就的猩红长枪。枪身滚烫……",
+    "effects":[ {"type":"stat","stat":"atk","value":45},
+                {"type":"onHit","effect":"lifesteal","chance":0.35,"power":15},
+                {"type":"onHit","effect":"burn","chance":0.3,"power":12} ] }
+  ```
+  `flavor`：「猴头，十四块玄铁碎片就想要吸血又烧人的枪？也就是老君我疼你——接着，别在丹房里舞……」
+- 游戏侧 `validateCraftedEquipment` **接受**：成本 98 / 预算 210，入库为「赤血焚天枪」。
+
+**A.2 字段 shape 差异（mock vs 真实 LLM）**：**结构完全一致**，`CraftedItem` 六字段
+（`id/name/kind/rarity/desc/effects[]`）+ 顶层 `flavor` 两边 shape 相同，游戏侧
+`validateCraftedEquipment` 对两者走同一条校验路径、无需任何分支适配。差异只在"值来源/内容"
+而非"形状"：
+
+| 维度 | mock（确定性） | 真实 DeepSeek |
+|---|---|---|
+| effects 数值 | 故意越界（atk 999、power 999、chance 0.9） | 模型自控，天然在界内（atk 45、0.35/15、0.3/12） |
+| 是否触发 clamp | **触发**（→ 50、30、0.5），`desc` 追加「（丹炉火候不足，威力已收敛）」 | **未触发**，`desc` 无收敛后缀 |
+| effects 条数 | 2（atk + 1 onHit，按关键词） | 3（atk + lifesteal + burn，模型自行组合） |
+| rarity | 硬编码 3 | 模型判断（本次 2） |
+| name/desc/flavor | 模板拼接 | 生成式，文采足、引用「十四块玄铁碎片」和火/血诉求 |
+
+**结论**：真实上游字段 shape 与 mock 一致，无隐藏字段/类型意外；游戏侧双层校验（clamp +
+超预算拒收）对真实 LLM 输出同样成立。唯一需游戏侧留意的行为差异：真实模型正常情况下
+**不触发** clamp（desc 无收敛后缀），而 mock 恒触发——UI 若据 desc 后缀提示"被收敛"，
+真实链路下多数不会出现，属正常。
+
+**A.3 远端真实往返**（home 部署后，mac 直连 `wss://zm-dev.qmledmq.cn:8443`）：见 §附录 B。
+
+## 附录 B：home 部署 + 远端真实 e2e 验证
+
+**部署**（只更新 agent-server 代码 + 重启该 systemd 服务，未动 Caddy/其他）：
+- home-wsl（用户 zyl）`~/projects/zmxy3-remake`，服务 `zmxy-agent`（system unit `/etc/systemd/system/zmxy-agent.service`，Restart=always）。
+- 部署前 HEAD `e8d5d68`（旧代码，无 craft 协议）→ `git pull --ff-only` 快进到 origin/master 顶 `faab9ba`（含本棒 `2599e68`；工作树部署前 clean，纯 fast-forward 无冲突）→ `agent-server && npm install`（无新依赖，幂等）→ `sudo systemctl restart zmxy-agent`。
+- 重启后 `systemctl is-active` = **active**，journal 打印 `listening on ws://localhost:5181`。DeepSeek key 仍由 unit 的 `bash -lc` 从 `~/.profile` 读入，全程未落任何文件。
+
+**远端真实往返**（`REMOTE_WS=wss://zm-dev.qmledmq.cn:8443 npm run test:real`，mac 直连公网 Caddy）：
+- 请求：14×玄铁碎片 → 预算 210 点；同一句火/血长枪描述。
+- 真实响应 item：`赤焰噬魂枪`（rarity 2；atk 48、lifesteal 0.3/14、burn 0.25/12），desc「玄铁淬以三昧真火炼就……」，flavor「猴头你这些玄铁碎片倒还够看，丹炉一响，赤焰噬魂枪就成了——挨着烫嘴，砍着回血，美得你！」
+- 游戏侧校验**接受**：成本 96 / 210，入库为「赤焰噬魂枪」。
+- 证明：mac → 公网 wss → home 部署的新版 agent-server → 真实 DeepSeek 炼器 → 游戏侧双层校验入库，全链路真实跑通（非 mock、非本地）。

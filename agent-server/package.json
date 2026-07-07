@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test:unit": "node --import tsx --test test/*.test.ts",
     "test:forge": "tsx test/forge-mock.ts",
+    "test:real": "tsx test/forge-real.ts",
     "test:mock": "tsx test/mock-game.ts",
     "test": "npm run test:unit && npm run test:forge && npm run test:mock"
   },
