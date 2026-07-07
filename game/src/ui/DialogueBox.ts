@@ -118,17 +118,22 @@ export class DialogueBox {
       .setVisible(false)
 
     // 炼宝 button, top-right of the dialogue panel — opens the 炼丹炉 forge window.
-    const bx = x + w / 2 - 62
-    const by = y - h / 2 + 22
-    const enterRect = this.scene.add
-      .rectangle(bx, by, 92, 32, 0x3a2c12, 0.9)
-      .setStrokeStyle(2, GOLD, 1)
-      .setInteractive({ useHandCursor: true })
-    enterRect.on('pointerdown', () => this.cfg.onCraftEnter?.())
-    const enterLabel = this.scene.add
-      .text(bx, by, '炼宝 ✦', { fontSize: '14px', color: '#f0d99a', fontStyle: 'bold' })
-      .setOrigin(0.5)
-    this.root.add(this.scene.add.container(0, 0, [enterRect, enterLabel]))
+    // Only rendered when the host scene actually wires a forge (S1 moved the
+    // forge entry point to WorldMapScene's 炼丹炉 button; BattleScene no longer
+    // passes onCraftEnter, so this dialogue stays chat-only there).
+    if (this.cfg.onCraftEnter) {
+      const bx = x + w / 2 - 62
+      const by = y - h / 2 + 22
+      const enterRect = this.scene.add
+        .rectangle(bx, by, 92, 32, 0x3a2c12, 0.9)
+        .setStrokeStyle(2, GOLD, 1)
+        .setInteractive({ useHandCursor: true })
+      enterRect.on('pointerdown', () => this.cfg.onCraftEnter?.())
+      const enterLabel = this.scene.add
+        .text(bx, by, '炼宝 ✦', { fontSize: '14px', color: '#f0d99a', fontStyle: 'bold' })
+        .setOrigin(0.5)
+      this.root.add(this.scene.add.container(0, 0, [enterRect, enterLabel]))
+    }
   }
 
   private makeAvatar(cx: number, cy: number): Phaser.GameObjects.Image {
