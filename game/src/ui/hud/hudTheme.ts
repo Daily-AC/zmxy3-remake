@@ -53,6 +53,7 @@ export const HUD_TEXTURES: TextureRef[] = [
   { key: 'furnace_making', url: `${UI}furnace_making.png` }, // 制作 craft panel (export.strength.Making)
   { key: 'furnace_fusion', url: `${UI}furnace_fusion.png` }, // 合成 fusion panel (export.strength.Fusion)
   { key: 'furnace_frame', url: `${UI}furnace_frame.png` }, // 炼丹炉 ink window frame (official StrengthEquipment 打造 tab header)
+  { key: 'skilldock', url: `${UI}hud_roleinfo_bottom_skilldock.png` }, // 无双 + 法宝/宠物/技能/青包/设置 + 5 empty slots (export.RoleInfo bottom)
 ]
 
 /** Item icon keys (21 extracted). Host scene loads these; BackpackWindow maps item.id -> key. */

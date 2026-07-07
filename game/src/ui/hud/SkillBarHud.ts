@@ -1,72 +1,97 @@
 import Phaser from 'phaser'
 import { HUD_COLORS } from './hudTheme'
 
-// Bottom-left skill dock: a row of skill slots (icon + hotkey letter + cooldown
-// sweep + MP cost), matching the 造梦 series battle bar (hotkeys Y U I O L).
+// Bottom-left skill dock, rebuilt on the original 造梦 chrome: the extracted
+// export.RoleInfo bottom bar (hud_roleinfo_bottom_skilldock) supplies the 无双
+// button + 法宝/宠物/技能/青包/设置 cluster + five carved slots; we only overlay
+// the live skill icon, a cooldown sweep, and the hotkey letter. Matching the
+// Online battle bar, the slots carry ONLY the hotkey letter (Y U I O L) — no
+// level / MP text on the dock (that lives in the skill panel).
 //
-// SOURCE NOTE: the skill ICONS are 造梦 Online-sourced art (造3 has no standalone
-// skill-icon bitmaps;全系列可用无版权障碍 — CLAUDE.md). Marked for the packaging
-// style-consistency review, NOT a replacement debt. The dock cells, hotkey
-// letters and cooldown overlay are DNA-drawn (not Online). Default icon key is
-// `skill_<skillId>` (symbol-matched to heroSkill.ts Role1SkillId).
+// SOURCE NOTE: skill ICONS are 造梦 Online art (造3 has no standalone skill-icon
+// bitmaps); the dock chrome is extracted 造3 export.RoleInfo. Marked for the
+// packaging style review, not a replacement debt.
 export const ASSET_SOURCE_ONLINE = true
 
+const DOCK_TEX = 'skilldock'
+const DOCK_NATIVE_W = 320
+const DOCK_NATIVE_H = 144
+// Slot centers measured in the native 320x144 dock art (see ui-finish-report).
+const SLOT_CX = [127, 167, 207, 247, 287]
+const SLOT_CY = 72
+const SLOT_FIT = 38 // icon fit — fills the ~37px slot fully (no dark border)
+
 export interface SkillSlotData {
-  /** heroSkill.ts Role1SkillId; used for the default icon key `skill_<id>`. */
   skillId?: string
-  /** Explicit icon texture key (overrides skillId). */
   iconKey?: string
   hotkey: string
-  /** 0 = ready, 1 = just cast (full cooldown). Drives the top-down dark sweep. */
   cooldownFrac?: number
   mpCost?: number
   level?: number
-  /** Greyed out (not learned / insufficient MP). */
   disabled?: boolean
 }
 
 export interface SkillBarHudOptions {
-  cell?: number
-  gap?: number
+  /** Dock scale (native art is 320x144). */
+  scale?: number
   iconKeyFor?: (data: SkillSlotData) => string | undefined
 }
 
 interface SlotView {
   cx: number
-  cell: number
+  cy: number
+  size: number
   cd: Phaser.GameObjects.Graphics
 }
 
 export class SkillBarHud {
   readonly container: Phaser.GameObjects.Container
   private readonly scene: Phaser.Scene
-  private readonly opts: { cell: number; gap: number; iconKeyFor: (d: SkillSlotData) => string | undefined }
+  private readonly scale: number
+  private readonly iconKeyFor: (d: SkillSlotData) => string | undefined
   private readonly slotLayer: Phaser.GameObjects.Container
   private slots: SlotView[] = []
 
   constructor(scene: Phaser.Scene, x: number, y: number, opts: SkillBarHudOptions = {}) {
     this.scene = scene
-    this.opts = {
-      cell: opts.cell ?? 48,
-      gap: opts.gap ?? 8,
-      iconKeyFor:
-        opts.iconKeyFor ?? ((d) => d.iconKey ?? (d.skillId && scene.textures.exists(`skill_${d.skillId}`) ? `skill_${d.skillId}` : undefined)),
+    this.scale = opts.scale ?? 1.3
+    this.iconKeyFor =
+      opts.iconKeyFor ??
+      ((d) => d.iconKey ?? (d.skillId && scene.textures.exists(`skill_${d.skillId}`) ? `skill_${d.skillId}` : undefined))
+
+    const children: Phaser.GameObjects.GameObject[] = []
+    if (scene.textures.exists(DOCK_TEX)) {
+      children.push(scene.add.image(0, 0, DOCK_TEX).setOrigin(0, 0).setScale(this.scale))
+    } else {
+      // Fallback: draw five carved slots.
+      const g = scene.add.graphics()
+      SLOT_CX.forEach((cx) => {
+        const s = 36 * this.scale
+        g.fillStyle(HUD_COLORS.trackDark, 0.95).fillRoundedRect(cx * this.scale - s / 2, SLOT_CY * this.scale - s / 2, s, s, 6)
+        g.lineStyle(2, HUD_COLORS.gold, 0.7).strokeRoundedRect(cx * this.scale - s / 2, SLOT_CY * this.scale - s / 2, s, s, 6)
+      })
+      children.push(g)
     }
+
     this.slotLayer = scene.add.container(0, 0)
-    this.container = scene.add.container(x, y, [this.slotLayer]).setScrollFactor(0).setDepth(100)
+    children.push(this.slotLayer)
+    this.container = scene.add.container(x, y, children).setScrollFactor(0).setDepth(100)
+  }
+
+  /** Native dock size in world units (for positioning by the host scene). */
+  get displayHeight(): number {
+    return DOCK_NATIVE_H * this.scale
+  }
+  get displayWidth(): number {
+    return DOCK_NATIVE_W * this.scale
   }
 
   setSlots(slots: SkillSlotData[]): void {
     this.slotLayer.removeAll(true)
     this.slots = []
-    const { cell, gap } = this.opts
-    slots.forEach((d, i) => {
-      const cx = i * (cell + gap) + cell / 2
-      this.buildSlot(cx, cell, d)
-    })
+    slots.slice(0, SLOT_CX.length).forEach((d, i) => this.buildSlot(i, d))
   }
 
-  /** Cheap per-frame cooldown update for one slot (0 ready .. 1 full). */
   setCooldown(index: number, frac: number): void {
     const s = this.slots[index]
     if (!s) return
@@ -78,58 +103,44 @@ export class SkillBarHud {
     return this
   }
 
-  private buildSlot(cx: number, cell: number, d: SkillSlotData): void {
-    const half = cell / 2
-    const bg = this.scene.add.graphics()
-    bg.fillStyle(HUD_COLORS.trackDark, 0.92).fillRoundedRect(cx - half, -half, cell, cell, 8)
-    bg.lineStyle(2, HUD_COLORS.gold, d.disabled ? 0.4 : 0.85).strokeRoundedRect(cx - half, -half, cell, cell, 8)
-    this.slotLayer.add(bg)
+  private buildSlot(i: number, d: SkillSlotData): void {
+    const cx = SLOT_CX[i] * this.scale
+    const cy = SLOT_CY * this.scale
+    const size = SLOT_FIT * this.scale
 
-    const iconKey = this.opts.iconKeyFor(d)
+    // Bright, slot-filling icon (no dark backing — the carved slot IS the frame).
+    const iconKey = this.iconKeyFor(d)
     if (iconKey && this.scene.textures.exists(iconKey)) {
-      const icon = this.scene.add.image(cx, 0, iconKey)
-      icon.setScale(Math.min(1, (cell - 8) / Math.max(icon.width, icon.height)))
-      if (d.disabled) icon.setTint(0x555555)
+      const icon = this.scene.add.image(cx, cy, iconKey)
+      icon.setScale(size / Math.max(icon.width, icon.height))
+      if (d.disabled) icon.setTint(0x777777)
       this.slotLayer.add(icon)
     }
 
-    // Cooldown sweep (redrawn on update).
+    // Cooldown sweep (top-down dark wipe).
     const cd = this.scene.add.graphics()
     this.slotLayer.add(cd)
-    const view: SlotView = { cx, cell, cd }
+    const view: SlotView = { cx, cy, size, cd }
     this.slots.push(view)
     this.drawCooldown(view, d.cooldownFrac ?? 0)
 
-    // Hotkey badge (drawn text — NOT a placeholder).
-    const kb = this.scene.add.graphics()
-    kb.fillStyle(HUD_COLORS.ink, 0.9).fillRoundedRect(cx + half - 17, half - 15, 15, 13, 3)
-    this.slotLayer.add(kb)
+    // Hotkey letter only — big, white, bottom-right (matches the Online bar).
     this.slotLayer.add(
-      this.scene.add.text(cx + half - 9, half - 9, d.hotkey, { fontSize: '11px', fontStyle: 'bold', color: HUD_COLORS.textGold }).setOrigin(0.5),
+      this.scene.add
+        .text(cx + size / 2 - 3, cy + size / 2 - 2, d.hotkey, {
+          fontSize: `${Math.round(15 * this.scale)}px`,
+          fontStyle: 'bold',
+          color: '#ffffff',
+        })
+        .setOrigin(1, 1)
+        .setStroke('#1a1008', 3),
     )
-    // MP cost (bottom-left).
-    if (d.mpCost != null) {
-      this.slotLayer.add(
-        this.scene.add
-          .text(cx - half + 3, half - 12, String(d.mpCost), { fontSize: '10px', color: '#9fd0ff' })
-          .setShadow(1, 1, '#000', 2),
-      )
-    }
-    // Level (top-left).
-    if (d.level != null) {
-      this.slotLayer.add(
-        this.scene.add
-          .text(cx - half + 3, -half + 2, `Lv${d.level}`, { fontSize: '10px', color: '#e8d9a0' })
-          .setShadow(1, 1, '#000', 2),
-      )
-    }
   }
 
   private drawCooldown(view: SlotView, frac: number): void {
-    const half = view.cell / 2
+    const half = view.size / 2
     view.cd.clear()
     if (frac <= 0) return
-    const h = view.cell * frac
-    view.cd.fillStyle(0x000000, 0.62).fillRoundedRect(view.cx - half, -half, view.cell, h, 8)
+    view.cd.fillStyle(0x000000, 0.6).fillRect(view.cx - half, view.cy - half, view.size, view.size * frac)
   }
 }
