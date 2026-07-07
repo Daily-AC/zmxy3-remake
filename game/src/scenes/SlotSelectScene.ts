@@ -102,11 +102,25 @@ export class SlotSelectScene extends Phaser.Scene {
     // rounded-rect fill doesn't leave a visible seam.
     panel.fillRect(PANEL_X, PANEL_Y + HEADER_H - RADIUS, PANEL_W, RADIUS)
 
+    // Title position tuned against the reference via normalized cross-
+    // correlation (weighted centroid), not eyeballed -- see report "终审返修":
+    // pre-fix residual was (dx=-0.7, dy=+5.6)px, i.e. X was already aligned,
+    // Y needed +6px down. Baseline was (W/2, PANEL_Y+HEADER_H/2).
     this.add
-      .text(W / 2, PANEL_Y + HEADER_H / 2, '存档记录', { fontSize: '26px', fontStyle: 'bold', color: COLOR_TITLE })
+      .text(W / 2 - 1, PANEL_Y + HEADER_H / 2 + 6, '存档记录', {
+        fontSize: '26px',
+        fontStyle: 'bold',
+        color: COLOR_TITLE,
+      })
       .setOrigin(0.5)
 
-    // Red ✕ close (top-right of the dialog) -> main menu.
+    // Red ✕ close (top-right of the dialog) -> main menu. Checked against the
+    // reference for the 终审返修 pass: the reference's red X actually sits
+    // over the *persistent right-side menu strip* (above "新的开始"), not
+    // over the 存档记录 dialog itself -- our layout has no such persistent
+    // side panel (that's a separate main-menu structure outside S3's scope),
+    // so literal pixel-position matching doesn't apply here. Kept at the
+    // dialog's own top-right corner as the closest structural equivalent.
     this.add
       .text(PANEL_X + PANEL_W - 10, PANEL_Y - 22, '✕', { fontSize: '26px', fontStyle: 'bold', color: '#ffffff' })
       .setOrigin(0.5)
@@ -139,10 +153,13 @@ export class SlotSelectScene extends Phaser.Scene {
     frame.fillStyle(COLOR_CARD, 0.94).fillRoundedRect(left, top, CARD_W, CARD_H, CARD_RADIUS)
     this.cardLayer.add(frame)
 
-    // Big orange slot numeral (left).
+    // Big orange slot numeral (left). X tuned +13px right against the
+    // reference via weighted-centroid cross-correlation (终审返修: pre-fix
+    // residual measured dx=+13.8px on slot 1, dx=+11.4px on slot 2 --
+    // averaged, applied uniformly; Y residual was within noise, untouched).
     this.cardLayer.add(
       this.add
-        .text(left + 34, cy, `${summary.slot + 1}`, {
+        .text(left + 47, cy, `${summary.slot + 1}`, {
           fontSize: '40px',
           fontStyle: 'bold',
           color: '#ffffff',
