@@ -43,6 +43,7 @@ wss.on("connection", (ws) => {
             onSay: (text) => send(ws, { type: "npc_say", npcId: msg.npcId, text }),
             onGiveItem: (item) => send(ws, { type: "give_item", npcId: msg.npcId, item }),
             onSetGoal: (goal) => send(ws, { type: "set_goal", npcId: msg.npcId, goal }),
+            onCraftItem: (item) => send(ws, { type: "craft_item", npcId: msg.npcId, item }),
           });
           break;
         }
