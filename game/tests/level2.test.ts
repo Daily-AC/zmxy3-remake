@@ -124,13 +124,26 @@ describe('Level 2 天王关 — real 2.swf wave/boss port', () => {
     }
   })
 
-  it('the boss appears in the arena, not in a grunt wave', () => {
-    const gruntSpecies = new Set(
-      LEVEL_2_TIANWANG.stopPoints.flatMap((sp) => sp.roster).map((r) => r.species),
-    )
-    expect(gruntSpecies.has(LEVEL_2_TIANWANG.boss.species)).toBe(false)
-    // ...but the two sub-bosses DO appear inside grunt waves
-    expect(gruntSpecies.has('monster6' as any)).toBe(true)
-    expect(gruntSpecies.has('monster16' as any)).toBe(true)
+  it('tier separation: grunt waves are pure, each Heavenly King appears solo, 多闻天王 only in the arena', () => {
+    // 增长/广目 are boss-grade — they must never spawn inside a grunt roster.
+    const SUBBOSS = new Set(['monster6', 'monster16'])
+    const waves = LEVEL_2_TIANWANG.stopPoints.map((sp) => sp.roster.map((r) => r.species))
+
+    // (1) any wave containing a King is that King ALONE
+    for (const w of waves) {
+      if (w.some((s) => SUBBOSS.has(s))) {
+        expect(w).toHaveLength(1)
+        expect(SUBBOSS.has(w[0])).toBe(true)
+      }
+    }
+    // (2) every King gets exactly one solo wave
+    for (const sb of SUBBOSS) {
+      expect(waves.filter((w) => w.length === 1 && w[0] === sb)).toHaveLength(1)
+    }
+    // (3) all grunt waves precede all sub-boss waves (小兵波 → sub-boss → boss)
+    const hasBoss = waves.map((w) => w.some((s) => SUBBOSS.has(s)))
+    expect(hasBoss.indexOf(true)).toBeGreaterThan(hasBoss.lastIndexOf(false))
+    // (4) the arena boss 多闻天王 never appears in a wave
+    expect(waves.flat()).not.toContain(LEVEL_2_TIANWANG.boss.species)
   })
 })

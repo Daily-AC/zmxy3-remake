@@ -6,9 +6,11 @@
 //   scene 1 (StageListener21) -> 增长天王  Monster6  (sub-boss)
 //   scene 2 (StageListener22) -> 广目天王  Monster16 (sub-boss)
 //   scene 3 (StageListener23) -> 多闻天王  Monster15 (final boss, fb/dungeon gate)
-// Compressed here into level.ts's single-level LevelDef model: the two
-// sub-bosses appear as heavy members of grunt waves, and 多闻天王 is the
-// arena boss.
+// Compressed here into level.ts's single-level LevelDef with a clean tier
+// split so boss-grade monsters never spawn as trash: pure escalating grunt
+// waves (Monster9/10/19) first, then each Heavenly King as its OWN solo stop
+// point (增长→广目), then 多闻天王 as the arena boss. No King shares a roster
+// with grunts.
 //
 // STATS ARE REAL, recovered verbatim from each export.monster.MonsterN
 // constructor in 打开我开始玩.swf (hp/def/speed/attackRange/alertRange) — unlike
@@ -89,14 +91,13 @@ export const LEVEL_2_TIANWANG: LevelDef = {
   name: '天王关',
   spawnIntervalMs: 6000,
   stopPoints: [
-    // scene 1 — opening grunts, then 增长天王 joins a grunt wave
+    // ── grunt waves (escalating), no Heavenly King mixed in ──
     wave('monster9', 'monster10'),
-    wave('monster9', 'monster19', 'monster6'),
-    // scene 2 — grunts, then 广目天王
     wave('monster10', 'monster19', 'monster9'),
-    wave('monster19', 'monster10', 'monster16'),
-    // scene 3 — final grunt wave before the boss arena
-    wave('monster9', 'monster10', 'monster19'),
+    wave('monster19', 'monster10', 'monster9', 'monster19'),
+    // ── Heavenly Kings, each its own solo appearance (escalating hp) ──
+    wave('monster6'), // 增长天王 (7874)
+    wave('monster16'), // 广目天王 (12000)
   ],
   boss: {
     species: 'monster15',

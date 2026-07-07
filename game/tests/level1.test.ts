@@ -100,13 +100,26 @@ describe('Level 1 巫鹰关 — real 1.swf wave/boss port', () => {
     expect(s.monster3.hp).toBe(300) // 巫鹰 boss, verbatim
   })
 
-  it('the arena boss is not in a grunt wave, but the three mini-bosses are', () => {
-    const waveSpecies = new Set(
-      LEVEL_1_WUYING.stopPoints.flatMap((sp) => sp.roster).map((r) => r.species),
-    )
-    expect(waveSpecies.has(LEVEL_1_WUYING.boss.species)).toBe(false) // 巫鹰 only in arena
-    expect(waveSpecies.has('monster4')).toBe(true) // 千里眼
-    expect(waveSpecies.has('monster2')).toBe(true) // 顺风耳
-    expect(waveSpecies.has('monster5')).toBe(true) // 巨灵神
+  it('tier separation: grunt waves are pure, each mini-boss appears solo, 巫鹰 only in the arena', () => {
+    // 千里眼/顺风耳/巨灵神 are boss-grade — they must never spawn inside a grunt roster.
+    const SUBBOSS = new Set(['monster4', 'monster2', 'monster5'])
+    const waves = LEVEL_1_WUYING.stopPoints.map((sp) => sp.roster.map((r) => r.species))
+
+    // (1) any wave containing a sub-boss is that sub-boss ALONE
+    for (const w of waves) {
+      if (w.some((s) => SUBBOSS.has(s))) {
+        expect(w).toHaveLength(1)
+        expect(SUBBOSS.has(w[0])).toBe(true)
+      }
+    }
+    // (2) every mini-boss gets exactly one solo wave
+    for (const sb of SUBBOSS) {
+      expect(waves.filter((w) => w.length === 1 && w[0] === sb)).toHaveLength(1)
+    }
+    // (3) all grunt waves precede all sub-boss waves (小兵波 → sub-boss → boss)
+    const hasBoss = waves.map((w) => w.some((s) => SUBBOSS.has(s)))
+    expect(hasBoss.indexOf(true)).toBeGreaterThan(hasBoss.lastIndexOf(false))
+    // (4) the arena boss 巫鹰 never appears in a wave
+    expect(waves.flat()).not.toContain(LEVEL_1_WUYING.boss.species)
   })
 })

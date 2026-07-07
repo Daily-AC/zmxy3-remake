@@ -130,15 +130,28 @@ describe('Level 3 二郎神关 — real 3.swf wave/boss port', () => {
     expect(s.monster22.hp).toBeGreaterThan(16000)
   })
 
-  it('the boss appears in the arena, not in a grunt wave', () => {
-    const gruntSpecies = new Set(
-      LEVEL_3_ERLANGSHEN.stopPoints.flatMap((sp) => sp.roster).map((r) => r.species),
-    )
-    expect(gruntSpecies.has(LEVEL_3_ERLANGSHEN.boss.species)).toBe(false)
-    // ...but the two named elites DO appear inside grunt waves
-    expect(gruntSpecies.has('monster21' as any)).toBe(true)
-    expect(gruntSpecies.has('monster20' as any)).toBe(true)
-    // the companion (哮天犬) is folded into the final wave, not the arena
-    expect(gruntSpecies.has('monster23' as any)).toBe(true)
+  it('tier separation: grunt waves are pure, each elite appears solo, 二郎神 only in the arena, 哮天犬 never a grunt', () => {
+    // 朱子真/袁洪 are elite-grade; they must never spawn inside a grunt roster.
+    const SUBBOSS = new Set(['monster21', 'monster20'])
+    const waves = LEVEL_3_ERLANGSHEN.stopPoints.map((sp) => sp.roster.map((r) => r.species))
+
+    // (1) any wave containing an elite is that elite ALONE
+    for (const w of waves) {
+      if (w.some((s) => SUBBOSS.has(s))) {
+        expect(w).toHaveLength(1)
+        expect(SUBBOSS.has(w[0])).toBe(true)
+      }
+    }
+    // (2) every elite gets exactly one solo wave
+    for (const sb of SUBBOSS) {
+      expect(waves.filter((w) => w.length === 1 && w[0] === sb)).toHaveLength(1)
+    }
+    // (3) all grunt waves precede all sub-boss waves (小兵波 → sub-boss → boss)
+    const hasBoss = waves.map((w) => w.some((s) => SUBBOSS.has(s)))
+    expect(hasBoss.indexOf(true)).toBeGreaterThan(hasBoss.lastIndexOf(false))
+    // (4) the arena boss 二郎神 never appears in a wave
+    expect(waves.flat()).not.toContain(LEVEL_3_ERLANGSHEN.boss.species)
+    // (5) 哮天犬 (9999999 hp companion) is NOT wave-spawned as a trash mob
+    expect(waves.flat()).not.toContain('monster23')
   })
 })
