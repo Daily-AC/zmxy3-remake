@@ -50,7 +50,8 @@ else
   ssh home 'Expand-Archive -Path "$env:USERPROFILE\zmxy3-spike\win-unpacked.zip" -DestinationPath "$env:USERPROFILE\zmxy3-spike\unpacked" -Force'
 fi
 
-echo "==> shipping run-and-capture.ps1 (kept in sync every run)"
+echo "==> shipping run-and-capture.ps1 + playthrough-script.json (kept in sync every run)"
 scp -O "$SCRIPT_DIR/run-and-capture.ps1" 'home:zmxy3-spike/run-and-capture.ps1'
+scp -O "$SCRIPT_DIR/playthrough-script.json" 'home:zmxy3-spike/playthrough-script.json'
 
 echo "==> build-and-ship done"
