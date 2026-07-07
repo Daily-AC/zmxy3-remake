@@ -35,8 +35,9 @@ import { Toast } from '../ui/hud/Toast'
 // itself a literal transcript of the export.SelectPLace object tree + AS3
 // (dual-source pipeline, tasks/worldmap-report.md). This scene only:
 //   - places that art at its xfl Matrix tx/ty inside one scaled+offset
-//     container (worldMapTransform covers the 940x590 original stage into our
-//     960x540 canvas -- no per-element hand tuning),
+//     container (worldMapTransform contain-fits the 940x590 original stage
+//     into our 960x540 canvas -- pillarboxed, zero content cropped, no
+//     per-element hand tuning),
 //   - derives node click/hover state from the save's campaign frontier
 //     (systems/campaignProgress, save-driven -- see that module's header for
 //     why this differs from the AS3's own curBigStage debug-override branch),
@@ -60,26 +61,32 @@ const FURNACE_TEX_KEYS = new Set(['furnace_frame', 'furnace_making'])
 const GREY_TINT = 0x8a8a8a
 const NPC_ID = 'laojun'
 
-// Unlike the flat-authored buttons/decorations/chests (top-left anchored --
-// origin (0,0) lines their PlaceObject Matrix tx/ty up directly with their
-// exported bitmap's top-left pixel), the campaign/locked NODE marker symbols
-// (Symbol 857/871/864/878/886/897/904/911/918 in OtherMat1.swf's library) are
-// authored with their local (0,0) origin near each icon's own visual center,
-// not its top-left corner. Confirmed by reading each symbol's frame-3 (hover)
-// raw-shape BitmapFill Matrix, which gives the bitmap's local top-left offset
-// directly: e.g. Symbol 857 (s1_1)'s hover shape has BitmapFill Matrix
-// tx=-74.75 ty=-110.05 on a 151x167 exported bitmap -> the true local origin
-// sits at fraction (74.75/151, 110.05/167) = (0.495, 0.659) into the image,
-// not (0,0). Every node's normal/current/hover PNG shares identical pixel
-// dimensions (verified), so one origin fraction applies across all three
-// states. Full per-node derivation in tasks/worldmap-report.md. s1_3 (Symbol
-// 864) nests its hover art one symbol deeper than the others with no
-// directly-declared shape bounds at this level, so it keeps the origin(0,0)
-// default as a documented approximation (its node is the least visually
-// prominent of the four playable ones either way).
+// A symbol's PlaceObject Matrix tx/ty maps its LOCAL (0,0), which is NOT
+// necessarily its artwork's top-left corner: buttons/chests are authored
+// top-left-anchored (origin (0,0) lines their Matrix tx/ty up directly with
+// the exported bitmap's top-left pixel), but the NODE marker symbols (Symbol
+// 857/871/864/878/886/897/904/911/918 in OtherMat1.swf's library) AND five
+// of the six landmark decorations have their local origin inside the
+// artwork. Rendering those with origin (0,0) shifts them right+down by the
+// artwork's negative local bounds -- the exact ghost-offset the 2026-07-08
+// review overlay caught on llbt/dsgbtn/sssl/kls/btnnmg and the s1_3 gate.
+//
+// Each fraction below = (-boundsXmin/width, -boundsYmin/height) of the
+// symbol's visual-state bounds (up/over/down for buttons, all placed
+// children for sprites), computed from OtherMat1's swf2xml by chaining
+// PlaceObject matrices down to shape bounds (tmp/worldmap-extract/
+// deco_origins.py). Cross-check: that derivation reproduces s1_1
+// (0.495,0.659) and s1_2 (0.460,0.532) exactly as the earlier per-node
+// BitmapFill-Matrix reading did (tasks/worldmap-report.md). Every state PNG
+// of a given symbol shares identical pixel dimensions (verified), so one
+// fraction covers all states. s1_3 (Symbol 864) is a 677x568 scenery sprite
+// (the stone gate + steps); its deeper nesting defeated the BitmapFill
+// shortcut, but the recursive bounds walk resolves it to (0.101,0.102) --
+// the earlier origin(0,0) approximation is removed.
 const NODE_ORIGIN: Record<string, { x: number; y: number }> = {
   s1_1: { x: 0.495, y: 0.659 },
   s1_2: { x: 0.46, y: 0.532 },
+  s1_3: { x: 0.101, y: 0.102 },
   s2_1: { x: 0.46, y: 0.466 },
   s2_2: { x: 0.476, y: 0.582 },
   s2_3: { x: 0.497, y: 0.655 },
@@ -89,6 +96,22 @@ const NODE_ORIGIN: Record<string, { x: number; y: number }> = {
 }
 function nodeOrigin(id: string): { x: number; y: number } {
   return NODE_ORIGIN[id] ?? { x: 0, y: 0 }
+}
+
+// Landmark decoration origins, same derivation (deco_origins.py; each
+// symbol's bounds match its exported PNG's pixel size exactly, except kls
+// 171x156 bounds vs 171x160 PNG -- <=4px residual, recorded in the report).
+// sgzz is genuinely top-left-authored and stays (0,0).
+const DECO_ORIGIN: Record<string, { x: number; y: number }> = {
+  dsgbtn: { x: 0.516, y: 0.563 },
+  llbt: { x: 0.5, y: 0.5 },
+  sgzz: { x: 0, y: 0 },
+  btnnmg: { x: 0.668, y: 0.487 },
+  kls: { x: 0.538, y: 0.535 },
+  sssl: { x: 0.525, y: 0.504 },
+}
+function decoOrigin(id: string): { x: number; y: number } {
+  return DECO_ORIGIN[id] ?? { x: 0, y: 0 }
 }
 
 function asSlotId(v: unknown): SlotId | null {
@@ -167,8 +190,8 @@ export class WorldMapScene extends Phaser.Scene {
   // ---------- map rendering ----------
 
   private renderMap(): void {
-    const { scale, offsetY } = worldMapTransform(960, 540)
-    const map = this.add.container(0, offsetY).setScale(scale)
+    const { scale, offsetX, offsetY } = worldMapTransform(960, 540)
+    const map = this.add.container(offsetX, offsetY).setScale(scale)
 
     if (this.textures.exists(MAP_BG_TEX)) {
       map.add(this.add.image(0, 0, MAP_BG_TEX).setOrigin(0, 0))
@@ -176,7 +199,8 @@ export class WorldMapScene extends Phaser.Scene {
 
     for (const deco of WORLDMAP_DECORATIONS) {
       if (!this.textures.exists(deco.textureNormal)) continue
-      const img = this.add.image(deco.x, deco.y, deco.textureNormal).setOrigin(0, 0)
+      const origin = decoOrigin(deco.id)
+      const img = this.add.image(deco.x, deco.y, deco.textureNormal).setOrigin(origin.x, origin.y)
       if (deco.scale) img.setScale(deco.scale)
       map.add(img)
     }

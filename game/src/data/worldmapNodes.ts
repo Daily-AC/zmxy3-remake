@@ -179,27 +179,25 @@ export const WORLDMAP_STAGE_H = 590
 
 export interface WorldMapTransform {
   scale: number
+  offsetX: number
   offsetY: number
 }
 
 /**
- * Cover-fit the 940x590 original stage into the game's 960x540 canvas: scale
- * to fill the width (matches the original's own full-bleed bg, which is
- * exactly 940x590 with no letterboxing baked into the SWF), then let the
- * small vertical overflow crop off entirely from the TOP.
- *
- * Bottom-anchored rather than centered: the bottom button row (savebtn etc.,
- * ty~506-508, 71px tall -- data below) sits close enough to the stage's own
- * 590px bottom edge that a centered crop clips their baked labels (verified
- * against tmp/worldmap-overlay -- the bottom pixel row of "学习技能" etc. was
- * cut off). Centering was never a deliberate design choice about the crop's
- * content, just an even split; bottom-anchoring keeps every button fully
- * legible at the cost of a few extra px off the top (open sky above the
- * topmost temple, no interactive content there). Pure arithmetic on the xfl
- * coordinates either way -- no manual per-element tuning.
+ * Contain-fit the 940x590 original stage into the game's 960x540 canvas:
+ * scale by the binding (height) dimension and pillarbox the leftover width,
+ * rather than cropping. An earlier cover-fit-width version cropped ~62px off
+ * the stage's height to fill the canvas -- team-lead review (2026-07-08)
+ * caught that this deletes real content the original always shows in full
+ * (the two corner 补偿礼包 chests were clipped, the topmost temple's roofline
+ * went off-canvas). Cropping baked content is strictly worse than a ~50px
+ * black pillarbox bar on each side, which loses nothing and introduces no
+ * distortion. Every node/decoration/button coordinate stays the literal xfl
+ * Matrix value; only this shared transform changed.
  */
 export function worldMapTransform(canvasW: number, canvasH: number): WorldMapTransform {
-  const scale = canvasW / WORLDMAP_STAGE_W
-  const offsetY = canvasH - WORLDMAP_STAGE_H * scale
-  return { scale, offsetY }
+  const scale = canvasH / WORLDMAP_STAGE_H
+  const offsetX = (canvasW - WORLDMAP_STAGE_W * scale) / 2
+  const offsetY = 0
+  return { scale, offsetX, offsetY }
 }

@@ -187,3 +187,35 @@ FFDec `-format xfl:cs6 -export xfl` 导出 `out_res/OtherMat1.swf` 的 `Symbol 9
 ## Commit 列表
 
 见本次 session 的本地 commit 历史（未 push）。
+
+## 终审返修（2026-07-08 02:3x~03:2x，主会话终审 + 就地收尾）
+
+终审结论：AS3 骨/坐标/接线/测试全过，两项打回。返修由 s1b（舞台映射）与主会话（因 s1b 会话被平台策略误报中断两次，主会话按同一套推导就地收尾）完成。
+
+### 1. 舞台映射：cover+顶部裁切 → contain 等比 + pillarbox
+
+原版舞台 940×590（主 SWF header displayRect 实证）。原 cover-fit 裁掉顶部 62px 真实内容（两角补偿礼包宝箱被切半、金顶天宫顶部出画），参照图完整显示这些内容——裁内容比黑边更伤保真。改为等比 540/590≈0.9153、水平居中、左右各 ~50px pillarbox（`worldMapTransform`，s1b 完成）。像素级验证：渲染截图 0–49 与 911–959 列为统一场景底色 (11,14,25)，舞台内容恰占 50–910，无越界（底色非纯黑，记豁免）。
+
+### 2. Overlay 方法重做 + 由此揪出的第三个真 bug（装饰件 origin）
+
+旧 overlay 把 960×646 参照图直接重采样到 960×540，两侧几何未对齐，diff 全图鬼影不可判。重做：按行暗度剖面切掉参照图上下黑框（游戏区 rows 26–629，960×604，纵横比 1.589≈940/590，证明参照图本身就是等比完整舞台），等比缩放到我方舞台矩形 (50,0)–(910,540) 再 blend/diff。
+
+对齐后 diff 暴露**装饰件系统性右下偏移**（双影签名）：`WORLDMAP_DECORATIONS` 渲染写死 `setOrigin(0,0)`，但六个地标符号里五个的本地原点在图形内部——与节点标记同类 bug，原报告"buttons/decorations/chests 都是左上锚"的断言对 decorations 不成立。修复：`tools/worldmap-deco-origins.py` 解析 OtherMat1 swf2xml，沿 PlaceObject 矩阵链递归到 shape bounds，算出 visual-state 并集 bounds → origin 分数（button 态含 over/down；注意 over/down 记录可能同时挂 hitTest 标志，不能按 hitTest 排除）。结果（bounds 与导出 PNG 尺寸逐一吻合）：
+
+| 符号 | id | origin | 备注 |
+| --- | --- | --- | --- |
+| dsgbtn | 847 | (0.516, 0.563) | sprite |
+| llbt | 973 | (0.500, 0.500) | button，150×164 全态并集=PNG |
+| sgzz | 889 | (0, 0) | 本就左上锚，diff 中始终对齐互证 |
+| btnnmg | 931 | (0.668, 0.487) | sprite |
+| kls | 924 | (0.538, 0.535) | bounds 171×156 vs PNG 171×160，≤4px 残差记豁免 |
+| sssl | 840 | (0.525, 0.504) | sprite（=左下大树） |
+
+方法交叉验证：同一推导复现 s1_1 (0.495,0.659)、s1_2 (0.460,0.532)，与原报告 BitmapFill 法逐位一致。顺带解决遗留缺口 #1：s1_3（Symbol 864）实为 677×568 大场景 sprite（石牌坊+台阶），递归 bounds 得 origin (0.101,0.102)，`NODE_ORIGIN` 补齐，origin(0,0) 近似移除——旧 diff 里牌坊双影即此。
+
+### 3. 返修后判定（证据）
+
+- 量化：舞台区 |diff|≥40 像素占比 11.5% → 7.68%；**双影全部消失**（llbt/dsgbtn/sssl/kls/btnnmg/牌坊只剩 AA 轮廓）。
+- 剩余亮斑全为状态差非几何差，豁免清单：未解锁节点 GREY_TINT 置灰 vs 参照图已推进存档全彩（含 s1_3 整幅场景画）；宝箱发光帧；按钮亮暗态与烘焙文字；AA/重采样模糊；kls ≤4px；场景底色 (11,14,25) 非纯黑。
+- 证据文件：`game/tmp/worldmap-overlay/rework2-{blend-50-50,diff}.png`、`rework-ref-aligned.png`（几何对齐后的参照）、`game/tmp/worldmap-flow/rework2-worldmap-canvas.png`（宝箱/金顶天宫完整可见）、`rework2-battle.png`（地图点岛进战斗仍通）。
+- 回归：413 测试全绿，`npm run build` 过。frontier 推进视觉证据沿用首轮（2-worldmap vs 4-worldmap-after-clear 像素 diff bbox 恰为台阶区，本次变更不触碰该逻辑）。
