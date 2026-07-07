@@ -1,0 +1,50 @@
+[
+  { "id": "01-boot-menu", "waitMs": 3000, "capture": true },
+  { "id": "02-enter-slot-select", "js": "window.__shellEnter && window.__shellEnter()", "waitMs": 800, "capture": true },
+  { "id": "03-new-game", "js": "window.__shellNewGame && window.__shellNewGame(0)", "waitMs": 1000, "capture": true },
+  { "id": "04-select-wukong", "js": "window.__shellSelectHero && window.__shellSelectHero(1)", "waitMs": 200, "capture": false },
+  { "id": "05-confirm-enter-battle", "js": "window.__shellConfirm && window.__shellConfirm()", "waitMs": 2500, "capture": true },
+  { "id": "06-attack-1", "js": "window.__inject && window.__inject('pressAttack')", "waitMs": 180, "capture": false },
+  { "id": "07-attack-2", "js": "window.__inject && window.__inject('pressAttack')", "waitMs": 180, "capture": false },
+  { "id": "08-attack-3", "js": "window.__inject && window.__inject('pressAttack')", "waitMs": 180, "capture": false },
+  { "id": "09-attack-4", "js": "window.__inject && window.__inject('pressAttack')", "waitMs": 180, "capture": false },
+  { "id": "10-attack-5-combo", "js": "window.__inject && window.__inject('pressAttack'); window.__heroState ? window.__heroState() : null", "waitMs": 400, "capture": true },
+  { "id": "11-set-skill-level", "js": "window.__setSkillLevels && window.__setSkillLevels({ slz: 1 })", "waitMs": 100, "capture": false },
+  { "id": "12-cast-skill", "js": "window.__castSkill ? window.__castSkill('slz') : null", "waitMs": 500, "capture": true },
+  { "id": "13-guarantee-kill", "js": "window.__killGrunts ? window.__killGrunts() : null", "waitMs": 600, "capture": true },
+  { "id": "14-teleport-to-drop", "js": "(function(){ if(!window.__worldState || !window.__teleportTo) return null; var w = window.__worldState(); var d = w.drops && w.drops[0]; if(d) window.__teleportTo(d.x); return d; })()", "waitMs": 700, "capture": true },
+  { "id": "15-teleport-to-npc", "js": "window.__teleportTo && window.__teleportTo(1380)", "waitMs": 300, "capture": false },
+  { "id": "16-npc-open", "js": "window.__npcOpen ? window.__npcOpen() : null", "waitMs": 600, "capture": true },
+  { "id": "17-give-materials", "js": "window.__giveMaterials ? window.__giveMaterials() : null", "waitMs": 300, "capture": false },
+  { "id": "18-open-craft", "js": "window.__openCraft ? window.__openCraft() : null", "waitMs": 600, "capture": true },
+  {
+    "id": "19-submit-craft",
+    "js": "window.__submitCraft ? window.__submitCraft('六道轮回杖，青花瓷纹理，锋利威猛', [{ id: 'demon_soul', qty: 5 }, { id: 'silver_ore', qty: 3 }]) : null",
+    "waitMs": 500,
+    "capture": true
+  },
+  {
+    "id": "20-craft-wait",
+    "js": "window.__craftState ? window.__craftState() : null",
+    "waitMs": 1500,
+    "capture": false,
+    "pollUntil": "!window.__craftState || window.__craftState().pending === false",
+    "pollTimeoutMs": 25000,
+    "pollIntervalMs": 1000
+  },
+  { "id": "21-craft-result", "js": "window.__craftState ? window.__craftState() : null", "waitMs": 300, "capture": true },
+  { "id": "22-equip-crafted", "js": "window.__equip ? window.__equip() : null", "waitMs": 400, "capture": true },
+  {
+    "id": "23-clear-grunts-loop",
+    "js": "window.__killGrunts ? window.__killGrunts() : null",
+    "waitMs": 700,
+    "capture": false,
+    "repeat": 6,
+    "repeatIntervalMs": 700
+  },
+  { "id": "24-level-state-pre-boss", "js": "window.__levelState ? window.__levelState() : null", "waitMs": 300, "capture": true },
+  { "id": "25-kill-boss", "js": "window.__killBoss ? window.__killBoss() : null", "waitMs": 800, "capture": true },
+  { "id": "26-use-portal", "js": "window.__usePortal ? window.__usePortal() : null", "waitMs": 1200, "capture": true },
+  { "id": "27-final-level-state", "js": "window.__levelState ? window.__levelState() : null", "waitMs": 300, "capture": true },
+  { "id": "28-final-world-state", "js": "window.__worldState ? window.__worldState() : null", "waitMs": 100, "capture": false }
+]

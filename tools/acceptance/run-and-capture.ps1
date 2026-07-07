@@ -1,10 +1,18 @@
 # Home-side half of the packaging acceptance chain (mac-side: build-and-ship.sh / acceptance.sh).
 # Produces two independent pieces of evidence per run:
 #
-#   1. CAPTURE_OK <path>   — capturePage() self-capture, the load-bearing proof that the
-#      packaged game renders correctly. Reads the renderer's frame buffer directly, so it
-#      doesn't depend on what's happening on the screen-presentation path. This is what
-#      gates the script's exit code.
+#   1. A scripted playthrough (menu -> new game -> select 悟空 -> battle -> combo attack ->
+#      skill cast -> pick up a drop -> talk to 太上老君 -> craft + equip a real item via the
+#      agent-server round trip -> clear level 1's boss and walk through the portal), driving
+#      the game through its own `window.__*` acceptance hooks (BattleScene.exposeDebugHooks)
+#      rather than simulated OS input — those hooks exist specifically for this and are more
+#      reliable than trying to get real keystrokes into a window that may not even be
+#      visible/focused in this launch session (see the isolated-vs-interactive split below).
+#      Each step captures via `capturePage()`, which reads the renderer's own frame buffer
+#      directly, independent of the window's screen-presentation path (packaging-spike.md
+#      section 7) — this is what gates the script's exit code (PLAYTHROUGH_OK/PARTIAL/TIMEOUT).
+#      The step sequence lives in tools/acceptance/playthrough-script.json, not in this file,
+#      so it can be edited without touching the runner.
 #   2. DESKTOP_SHOT <path> — a real desktop screenshot via the ZmxyScreenshot scheduled
 #      task (another session's tooling, reused here rather than rebuilt — see
 #      docs/research/home-setup.md). Honest current on-screen state: as of 2026-07-07 this
@@ -22,15 +30,18 @@
 # empty 0x0 image from THAT launch path (also repro'd multiple times) — so the two capture
 # methods each need their own launch of the exe, run one at a time.
 #
-# Prints "CAPTURE_OK <path>" / "CAPTURE_FAILED: ..." / "CAPTURE_EMPTY: ..." / "CAPTURE_TIMEOUT: ..."
-# (grepped by acceptance.sh for CAPTURE_OK) and "DESKTOP_SHOT <path>" / "DESKTOP_SHOT_SKIPPED: ...".
+# Output contract (parsed by acceptance.sh):
+#   "PLAYTHROUGH_OK" / "PLAYTHROUGH_PARTIAL_FAIL" / "PLAYTHROUGH_TIMEOUT: ..."
+#   "STEP <id> OK [<capturedFileName>]" / "STEP <id> FAIL <error>"  (one per script step)
+#   "DESKTOP_SHOT <path>" / "DESKTOP_SHOT_SKIPPED: ..."
 
 param(
   [string]$ExePath = "$env:USERPROFILE\zmxy3-spike\unpacked\win-unpacked\ZMXY3RemakeSpike.exe",
   [string]$UserDataDir = "$env:USERPROFILE\AppData\Roaming\zmxy3-desktop-spike",
+  [string]$ScriptPath = "$env:USERPROFILE\zmxy3-spike\playthrough-script.json",
   [string]$RunAsUser = "zyl\Yilin Zhang",
   [int]$BootWaitSeconds = 8,
-  [int]$CaptureTimeoutSeconds = 20
+  [int]$ScriptTimeoutSeconds = 60
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,42 +52,53 @@ function Stop-Game {
   Start-Sleep -Milliseconds 500
 }
 
-# ---------- Phase 1: capturePage proof (isolated session) ----------
+# ---------- Phase 1: scripted playthrough (isolated session) ----------
 
-Write-Output "==> [capturePage] stopping any previous run"
+Write-Output "==> [playthrough] stopping any previous run"
 Stop-Game
-Remove-Item "$UserDataDir\CAPTURE_NOW" -ErrorAction SilentlyContinue
-Remove-Item "$UserDataDir\captured-frame.png" -ErrorAction SilentlyContinue
-Remove-Item "$UserDataDir\capture-result.json" -ErrorAction SilentlyContinue
+Remove-Item "$UserDataDir\RUN_SCRIPT" -ErrorAction SilentlyContinue
+Remove-Item "$UserDataDir\SCRIPT_RESULT.json" -ErrorAction SilentlyContinue
+Remove-Item "$UserDataDir\step-*.png" -ErrorAction SilentlyContinue
 
-Write-Output "==> [capturePage] launching (isolated session)"
+Write-Output "==> [playthrough] launching (isolated session)"
 Start-Process -FilePath $ExePath
 
-Write-Output "==> [capturePage] waiting ${BootWaitSeconds}s for the scene to settle"
+Write-Output "==> [playthrough] waiting ${BootWaitSeconds}s for boot"
 Start-Sleep -Seconds $BootWaitSeconds
 
-Write-Output "==> [capturePage] triggering capture"
-New-Item -ItemType File -Force -Path "$UserDataDir\CAPTURE_NOW" | Out-Null
+Write-Output "==> [playthrough] shipping script + triggering run"
+Copy-Item -LiteralPath $ScriptPath -Destination "$UserDataDir\playthrough-script.json" -Force
+Set-Content -LiteralPath "$UserDataDir\RUN_SCRIPT" -Value "$UserDataDir\playthrough-script.json" -NoNewline
 
-$resultPath = "$UserDataDir\capture-result.json"
-$deadline = (Get-Date).AddSeconds($CaptureTimeoutSeconds)
-$captureOutcome = $null
+$resultPath = "$UserDataDir\SCRIPT_RESULT.json"
+$deadline = (Get-Date).AddSeconds($ScriptTimeoutSeconds)
+$scriptResult = $null
 while ((Get-Date) -lt $deadline) {
   if (Test-Path $resultPath) {
-    $result = Get-Content $resultPath -Raw | ConvertFrom-Json
-    if ($result.ok -and $result.size -gt 0) {
-      $captureOutcome = "CAPTURE_OK $UserDataDir\captured-frame.png"
-    } elseif ($result.ok) {
-      $captureOutcome = "CAPTURE_EMPTY: capturePage resolved but returned a 0-byte/0x0 image (dims=$($result.dims | ConvertTo-Json -Compress))"
-    } else {
-      $captureOutcome = "CAPTURE_FAILED: $($result.error)"
-    }
+    $scriptResult = Get-Content $resultPath -Raw | ConvertFrom-Json
     break
   }
-  Start-Sleep -Milliseconds 500
+  Start-Sleep -Seconds 1
 }
-if (-not $captureOutcome) {
-  $captureOutcome = "CAPTURE_TIMEOUT: no result after ${CaptureTimeoutSeconds}s"
+
+$playthroughOutcome = $null
+$stepLines = @()
+if ($null -eq $scriptResult) {
+  $playthroughOutcome = "PLAYTHROUGH_TIMEOUT: no SCRIPT_RESULT.json after ${ScriptTimeoutSeconds}s"
+} else {
+  $playthroughOutcome = if ($scriptResult.ok) { "PLAYTHROUGH_OK" } else { "PLAYTHROUGH_PARTIAL_FAIL" }
+  foreach ($step in $scriptResult.steps) {
+    if ($step.ok) {
+      if ($step.capture) {
+        $fileName = Split-Path $step.capture.file -Leaf
+        $stepLines += "STEP $($step.id) OK $fileName"
+      } else {
+        $stepLines += "STEP $($step.id) OK"
+      }
+    } else {
+      $stepLines += "STEP $($step.id) FAIL $($step.error)"
+    }
+  }
 }
 Stop-Game
 
@@ -122,13 +144,17 @@ if (-not $consoleUser) {
   Stop-Game
 }
 
-Write-Output $captureOutcome
+Write-Output $playthroughOutcome
+foreach ($line in $stepLines) { Write-Output $line }
 Write-Output $desktopOutcome
 
-if ($captureOutcome -like "CAPTURE_OK*") {
+if ($playthroughOutcome -eq "PLAYTHROUGH_OK") {
   exit 0
 }
 
 Write-Output "--- recent spike.log ---"
-Get-Content "$UserDataDir\spike.log" -Tail 15 -ErrorAction SilentlyContinue
+Get-Content "$UserDataDir\spike.log" -Tail 25 -ErrorAction SilentlyContinue
+if ($playthroughOutcome -eq "PLAYTHROUGH_PARTIAL_FAIL") {
+  exit 1
+}
 exit 2

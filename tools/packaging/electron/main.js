@@ -112,6 +112,90 @@ function createWindow() {
   }, 500)
   win.on('closed', () => clearInterval(capturePoll))
 
+  // Scripted-playthrough protocol: tools/acceptance/run-and-capture.ps1 ships
+  // playthrough-script.json into userData and drops RUN_SCRIPT to kick it off. Each step
+  // can inject JS into the renderer (the game's own `window.__*` acceptance hooks — see
+  // BattleScene.exposeDebugHooks — not raw OS input, since those hooks already exist
+  // specifically for this purpose and are far more reliable than simulating keystrokes
+  // into a window that may not even be visible/focused in this launch session), wait, and
+  // optionally capturePage(). This replaces the old "wait a fixed time then take one boot
+  // screenshot" flow with an actual scripted playthrough (menu -> battle -> combat -> NPC
+  // craft -> level clear), still using capturePage() as the evidence mechanism per step so
+  // it inherits the same screen-presentation-independent guarantee as the single-frame
+  // protocol above.
+  const runScriptTrigger = path.join(userDataDir, 'RUN_SCRIPT')
+  const scriptResultPath = path.join(userDataDir, 'SCRIPT_RESULT.json')
+  let scriptRunning = false
+
+  async function captureStep(stepId) {
+    const image = await win.webContents.capturePage()
+    const buf = image.toPNG()
+    const outPath = path.join(userDataDir, `step-${stepId}.png`)
+    fs.writeFileSync(outPath, buf)
+    return { file: outPath, size: buf.length, dims: image.getSize() }
+  }
+
+  async function runStep(step) {
+    const record = { id: step.id, ok: true }
+    try {
+      if (step.repeat) {
+        const results = []
+        for (let i = 0; i < step.repeat; i++) {
+          if (step.js) results.push(await win.webContents.executeJavaScript(step.js))
+          await new Promise((r) => setTimeout(r, step.repeatIntervalMs ?? 500))
+        }
+        record.jsResult = results
+      } else if (step.js) {
+        record.jsResult = await win.webContents.executeJavaScript(step.js)
+      }
+      if (step.pollUntil) {
+        const deadline = Date.now() + (step.pollTimeoutMs ?? 15000)
+        let met = false
+        while (Date.now() < deadline) {
+          met = await win.webContents.executeJavaScript(step.pollUntil)
+          if (met) break
+          await new Promise((r) => setTimeout(r, step.pollIntervalMs ?? 1000))
+        }
+        record.pollMet = met
+        if (!met) record.pollTimedOut = true
+      }
+      if (step.waitMs) await new Promise((r) => setTimeout(r, step.waitMs))
+      if (step.capture) record.capture = await captureStep(step.id)
+    } catch (e) {
+      record.ok = false
+      record.error = String(e && e.stack ? e.stack : e)
+      log(`script step ${step.id} error: ${record.error}`)
+    }
+    return record
+  }
+
+  async function runScript(scriptPath) {
+    scriptRunning = true
+    const steps = JSON.parse(fs.readFileSync(scriptPath, 'utf8'))
+    const results = []
+    for (const step of steps) {
+      log(`script step start: ${step.id}`)
+      results.push(await runStep(step))
+    }
+    const ok = results.every((r) => r.ok)
+    fs.writeFileSync(scriptResultPath, JSON.stringify({ ok, at: new Date().toISOString(), steps: results }, null, 2))
+    log(`script finished ok=${ok}`)
+    scriptRunning = false
+  }
+
+  const scriptPoll = setInterval(() => {
+    if (scriptRunning || win.isDestroyed() || !fs.existsSync(runScriptTrigger)) return
+    let scriptPath
+    try {
+      scriptPath = fs.readFileSync(runScriptTrigger, 'utf8').trim()
+      fs.unlinkSync(runScriptTrigger)
+    } catch (e) {
+      return
+    }
+    runScript(scriptPath).catch((e) => log(`runScript threw: ${e && e.stack ? e.stack : e}`))
+  }, 500)
+  win.on('closed', () => clearInterval(scriptPoll))
+
   win.loadFile(indexPath).catch((e) => log(`loadFile threw: ${e}`))
 }
 
