@@ -1,0 +1,34 @@
+import { describe, it, expect } from 'vitest'
+import { spawnDrop, stepDrops, DropEntity, PickupConfig } from '../src/systems/pickup'
+import type { Item } from '../src/systems/items'
+
+const item: Item = { id: 'yaocao', name: '妖草', kind: 'material', rarity: 1 }
+const cfg: PickupConfig = { gravity: 2, groundY: 400, pickupRadius: 70, tickMs: 1000 / 30 }
+
+describe('pickup drop physics + auto-pickup (掉落拾取)', () => {
+  it('spawns a drop above the monster', () => {
+    const d = spawnDrop(item, 2, 500, 400)
+    expect(d).toMatchObject({ x: 500, y: 300, grounded: false, qty: 2 })
+  })
+
+  it('falls under gravity and settles on the ground', () => {
+    const drops: DropEntity[] = [spawnDrop(item, 1, 500, 400)]
+    let state = { remaining: drops, picked: [] as Item[] }
+    for (let i = 0; i < 60 && !state.remaining[0]?.grounded; i++) {
+      state = stepDrops(state.remaining, 9999, 400, cfg) // hero far away
+    }
+    expect(state.remaining[0].grounded).toBe(true)
+    expect(state.remaining[0].y).toBe(400)
+  })
+
+  it('is auto-collected when the hero is within the pickup radius', () => {
+    const drop: DropEntity = { item, qty: 3, x: 500, y: 400, vy: 0, grounded: true }
+    const far = stepDrops([drop], 620, 400, cfg) // 120px away
+    expect(far.picked).toHaveLength(0)
+    expect(far.remaining).toHaveLength(1)
+
+    const near = stepDrops([drop], 550, 400, cfg) // 50px away < 70
+    expect(near.picked).toEqual([{ item, qty: 3 }])
+    expect(near.remaining).toHaveLength(0)
+  })
+})

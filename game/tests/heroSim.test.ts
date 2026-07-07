@@ -86,6 +86,17 @@ describe('heroSim integration (fixed-timestep 组合)', () => {
     expect(s.vertical.grounded).toBe(true)
   })
 
+  it('bumps the attack id on every new combo stage for hit dedup', () => {
+    const s = initHeroState(cfg, 480)
+    expect(s.attackId).toBe(0)
+    advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg) // hit1
+    expect(s.attackId).toBe(1)
+    advanceHero(s, NO_EDGES, 300, cfg) // finish hit1 swing
+    advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg) // chain hit2
+    expect(s.combo.stage).toBe(2)
+    expect(s.attackId).toBe(2) // new swing -> new id
+  })
+
   it('cannot start a combo while airborne', () => {
     const s = initHeroState(cfg, 480)
     advanceHero(s, edges({ pressJump: true }), TICK_MS, cfg)
