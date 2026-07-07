@@ -70,10 +70,51 @@ export interface PlayerSayMessage {
   text: string;
 }
 
+/** A single material lot the player is spending in a furnace craft. Mirrors
+ * game/src/systems/furnace.ts CraftMaterialRef (the two copies are kept in sync
+ * by hand, same as the rest of this protocol file). */
+export interface CraftMaterialRef {
+  id: string;
+  name: string;
+  rarity: 1 | 2 | 3;
+  qty: number;
+}
+
+/** Attribute budget the game computed from the spent materials. Sent as a hint
+ * so the forge can aim within it; the game re-derives and hard-enforces it on
+ * the returned item regardless. Mirrors furnace.ts AttributeBudget. */
+export interface AttributeBudget {
+  points: number;
+  caps: {
+    atk: number;
+    def: number;
+    hp: number;
+    mp: number;
+    crit: number;
+    onHitChance: number;
+    onHitPower: number;
+  };
+  maxEffects: number;
+}
+
+/** Structured furnace craft request (distinct from the free-form `player_say`
+ * crafting chat): materials are already chosen and the budget already computed,
+ * so it's a single request/response round keyed by `requestId`. */
+export interface CraftRequestMessage {
+  type: "craft_request";
+  npcId: string;
+  requestId: string;
+  playerId?: string;
+  description: string;
+  materials: CraftMaterialRef[];
+  budget: AttributeBudget;
+}
+
 export type InboundMessage =
   | HelloMessage
   | WorldEventMessage
-  | PlayerSayMessage;
+  | PlayerSayMessage
+  | CraftRequestMessage;
 
 // ---------- server -> game ----------
 
@@ -111,6 +152,26 @@ export interface CraftItemMessage {
   item: CraftedItem;
 }
 
+/** Response to a `craft_request`: a server-forged, statically-clamped item plus
+ * 太上老君's line quoting the materials/description. Still re-clamped game-side
+ * against the request budget before it enters the bag. */
+export interface CraftResultMessage {
+  type: "craft_result";
+  npcId: string;
+  requestId: string;
+  item: CraftedItem;
+  flavor: string;
+}
+
+/** Server-side refusal to forge (unforgeable request / internal failure). The
+ * game refunds the locked materials. */
+export interface CraftRejectMessage {
+  type: "craft_reject";
+  npcId: string;
+  requestId: string;
+  reason: string;
+}
+
 export interface ErrorMessage {
   type: "error";
   message: string;
@@ -123,4 +184,6 @@ export type OutboundMessage =
   | GiveItemMessage
   | SetGoalMessage
   | CraftItemMessage
+  | CraftResultMessage
+  | CraftRejectMessage
   | ErrorMessage;
