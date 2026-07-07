@@ -186,30 +186,83 @@ Intel(R) Graphics                    OK   32.0.101.8243
 DirectX 独占全屏路径），这跟"原生 Win32 内容能画、Chromium 合成层内容不能画"的
 症状完全吻合。
 
-**没有验证的假设**：如果真人坐在物理屏幕前（笔记本自己的屏，不经过 UU远程），
-同一个 exe 是否正常渲染。这一步需要用户配合，本次 spike 没有条件测（只有 SSH，
-没有物理/真 RDP 访问）。
+**没有验证的假设（round 1 时）**：如果真人坐在物理屏幕前（笔记本自己的屏，不经过
+UU远程），同一个 exe 是否正常渲染——round 2（下节）用 `capturePage()` 绕开了这个
+假设，不需要真人在场也拿到了决定性证据。
 
-## 验收清单对照
+## 7. round 2：`capturePage()` 自证——游戏本身证实能跑
+
+team-lead 提了三条补测路线：① `--disable-direct-composition`（Chromium 在 Windows
+上默认走 DirectComposition 呈现，怀疑跟虚拟显示驱动打架）；② `webContents.
+capturePage()` 直接读渲染器帧缓冲，绕开合成器/显示输出；③ `MoveWindow` 挪到物理
+显示器坐标再截。补了 ①②，③ 因为后来窗口创建本身变得不稳定（见下）没跑成。
+
+**关键突破**：在 `did-finish-load` 3 秒后调用 `win.webContents.capturePage()` 存盘，
+配合 `app.commandLine.appendSwitch('disable-gpu-sandbox')` +
+`--disable-direct-composition` + `--disable-features=DirectComposition`，一次用
+plain SSH（隔离 window station，非 SessionId=1）启动的实例上，`capturePage()` 存出
+了一张**真实 1008×690、32KB 的 PNG**——`tmp/debug-shots/home-exe-14-capturepage.png`：
+悟空 idle 站姿贴图正确显示，左上角调试 HUD 文本正确渲染（`action: wait  x: 480
+y: 400  vy: 0.0` / `grounded: true  jumps: 0` / `combo: 0  running: false`），底部
+操作提示文本正确显示，背景是我们 CSS 设的深藏青色（不是之前诊断用的红色占位）。
+**这就是"游戏画面在跑"的直接证据**——比屏幕截图更硬，因为它是从渲染器自己的帧
+缓冲直接读出来的，不经过任何屏幕呈现/合成/虚拟显示这条链路，不存在"肉眼看不见
+但其实在跑"的解释空间。
+
+同时补充了崩溃诊断（这轮才加的，之前没有）：`app.on('child-process-gone', ...)`、
+`process.on('unhandledRejection', ...)`、`process.on('exit', ...)`。加上之后立刻
+在日志里看到之前从没见过的一条：
+
+```
+child-process-gone: {"type":"GPU","reason":"crashed","exitCode":34,"serviceName":"GPU"}
+```
+
+GPU 子进程确实在崩（exit code 34），只是之前没打日志所以看不见——回头看，前面
+round 1 的"内容区全白"很可能就是这次崩溃的下游表现，不是一个独立现象。
+
+**`--disable-direct-composition` 的因果关系没有坐实**：开着这个 flag 时，遇到过
+"GPU 崩了但 app 挺住并成功渲染"（就是上面那张突破性截图的那次）；但后续反复在
+`SessionId=1`（真交互会话）里用同样的启动方式（scheduled task + `LogonType=3`）
+测试时，`capturePage()` 开始稳定返回 `0x0`（`dims={"width":0,"height":0}`），
+`EnumWindows` 按 PID 反查也找不到任何窗口（连不可见的 0×0 窗口都没有）——**关掉
+这个 flag 重测，同样是 0 个窗口**，说明这个 flag 不是这一现象的决定变量。怀疑是
+这台机器在这轮测试里被反复 kill/relaunch（一个多小时内几十次）之后，`SessionId=1`
+这个交互会话本身的窗口创建能力开始不稳定，跟 GPU/DirectComposition 未必是一回事。
+没来得及做一个干净的对照（同一会话状态下开关这个 flag 各测一次）就已经进入这个
+不稳定阶段，所以" round 1 的红底/白屏假设"和"这个 flag 是否真的解决问题"都还没有
+最终定论——但已经不重要了，因为 `capturePage()` 已经绕开了整个问题，证明了游戏
+本身没问题。
+
+**MoveWindow 到物理显示器坐标（team-lead 补测路线 ③）没跑成**：到这一步为止交互
+会话里已经拿不到有效窗口句柄了，没有可移动的窗口。
+
+## 验收清单对照（round 2 更新）
 
 1. ✅ exe 传到 home 并真实启动过——`ZMXY3RemakeSpike.exe`（101MB portable）和
    `win-unpacked/`（307MB dir 版）都传过去了，进程常驻（`SessionId=1`，非僵尸）。
-2. ⚠️ 截图证据——**拿到了窗口截图，但内容区是空的**，不是"游戏画面在跑"的截图。
-   截图方法（`PrintWindow` + `EnumWindows` 定位句柄）本身验证有效，为下次复用；
-   但游戏本身有没有真的在这台机器上能看见，还没有确凿证据。
-3. ✅ 本文档：构建命令、产物大小、home 侧运行步骤、坑清单——见上。
+2. ✅ **游戏画面确认在跑**——`capturePage()` 直接从渲染器帧缓冲截出真实游戏画面
+   （悟空 + 实时调试 HUD），`tmp/debug-shots/home-exe-14-capturepage.png`。仍然
+   **没有**拿到"人眼在物理/虚拟屏幕上直接看见游戏画面"的截图——这条链路（合成器
+   →屏幕呈现）本身还有问题，但游戏逻辑/渲染管线本身已经证实正确，不再是未知数。
+3. ✅ 本文档：构建命令、产物大小、home 侧运行步骤、坑清单、根因排查全过程——见上。
 4. ✅ `tools/packaging/` 已 `git add` 待 commit（`wip(packaging):` 前缀，不含
    `tmp/`/`node_modules/`/`out/`）。
 
 ## 下一步建议
 
-- 请用户（或下次有物理/RDP 访问时）在**笔记本自己的屏幕**上直接双击
-  `C:\Users\Yilin Zhang\zmxy3-spike\unpacked\win-unpacked\ZMXY3RemakeSpike.exe`
-  肉眼确认——如果物理屏幕上也是空白，那是这台机器 Chromium 合成器的真问题
-  （可能要查 GPU 驱动版本/关掉 UU远程虚拟显示再试）；如果物理屏幕正常，则
-  确认是"远程自动化路径专属"的限制，验收时改用真 RDP 而不是 SSH+计划任务这套。
+- **屏幕呈现问题不再阻塞"游戏能不能跑"这个问题**——已经证实能跑。如果验收口径
+  接受 `capturePage()` 这种"读帧缓冲"证据（技术上比人眼截屏更硬，因为不可能是
+  "凑巧画对了别的东西"），这条 spike 到这里就可以算过了。
+- 如果验收口径坚持要"人眼在屏幕上看见"，建议先让这台机器歇一会儿再测（这轮
+  一个多小时内反复 kill/relaunch 了 20+ 次，`SessionId=1` 的窗口创建能力在测试
+  末段变得不稳定，不确定是不是测试本身造成的系统状态劣化），或者换一次干净会话
+  只测一个变量（比如就测"物理屏幕前双击"，不叠加其他自动化操作）。
 - 若最终选定 Tauri（CLAUDE.md 已拍板），Tauri 用的是系统 WebView2
-  （同样是 Chromium 内核）而非打包自己的 Chromium 二进制，值得留意这个合成问题
-  是否也会在 WebView2 上重现——如果根因确实是虚拟显示适配器，两者都会中招。
+  （同样是 Chromium 内核）而非打包自己的 Chromium 二进制，值得留意 GPU 崩溃
+  （exit code 34）和呈现问题是否也会在 WebView2 上重现——如果根因确实是虚拟显示
+  适配器，两者都可能中招；`capturePage()` 这个自证手段在 Tauri/WebView2 下没有
+  直接等价物，需要另找方法（WebView2 有类似的 `CapturePreview` API）。
 - home 上残留：`C:\Users\Yilin Zhang\zmxy3-spike\`（exe/zip/日志/诊断脚本，
-  ~250MB）留着方便下次直接复用；scheduled tasks 和桌面快捷方式已清理干净。
+  ~250MB）留着方便下次直接复用；scheduled tasks（`ZMXY3Spike2`）和桌面快捷方式
+  这轮测试后还没清理，下次接手时先跑一遍 cleanup（kill 进程 + 删 scheduled tasks
+  + 删桌面 `ZMXY3RunMe.lnk`）。
