@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { drawInkBackdrop } from '../ui/menu/inkBackdrop'
+import { drawPalaceBackdrop, PALACE_BG_TEX, PALACE_BG_URL } from '../ui/menu/inkBackdrop'
 import { MenuButton } from '../ui/menu/MenuButton'
 import { SCENE, REG, shellStorage } from './shellShared'
 import { createNewSlotEnvelope, writeSlot, type SlotId } from '../systems/saveSlots'
@@ -36,6 +36,7 @@ export class CharacterSelectScene extends Phaser.Scene {
   }
 
   preload(): void {
+    if (!this.textures.exists(PALACE_BG_TEX)) this.load.image(PALACE_BG_TEX, PALACE_BG_URL)
     if (!this.textures.exists(BG_TEX)) {
       this.load.image(BG_TEX, 'assets/extracted/menu/select_role_bg.png')
     }
@@ -51,7 +52,7 @@ export class CharacterSelectScene extends Phaser.Scene {
   }
 
   create(): void {
-    drawInkBackdrop(this)
+    drawPalaceBackdrop(this)
     this.add
       .text(480, 44, '选择角色', {
         fontSize: '36px',

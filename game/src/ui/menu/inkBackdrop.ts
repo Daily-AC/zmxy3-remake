@@ -28,3 +28,31 @@ export function drawInkBackdrop(scene: Phaser.Scene): Phaser.GameObjects.Graphic
   g.strokeRoundedRect(10, 10, W - 20, H - 20, 14)
   return g
 }
+
+export const PALACE_BG_TEX = 'title_palace_bg'
+export const PALACE_BG_URL = 'assets/extracted/menu/title_palace_bg.png'
+
+/**
+ * Shared backdrop for the slot / character scenes using the ORIGINAL 南天门 palace
+ * loading art (main SWF chid 354), dimmed so foreground cards/panels stay
+ * legible. Ties the shell scenes visually to the title screen. Falls back to the
+ * warm-ink backdrop if the texture isn't loaded (host scene must preload
+ * `PALACE_BG_TEX` from `PALACE_BG_URL`).
+ */
+export function drawPalaceBackdrop(scene: Phaser.Scene): void {
+  if (!scene.textures.exists(PALACE_BG_TEX)) {
+    drawInkBackdrop(scene)
+    return
+  }
+  // Dark base so the lower area (behind cards) stays legible.
+  const base = scene.add.graphics().setScrollFactor(0).setDepth(-101)
+  base.fillGradientStyle(0x14100a, 0x14100a, 0x070505, 0x070505, 1).fillRect(0, 0, W, H)
+  // Palace/sky art top-anchored (the crop excludes the baked loading text).
+  const bg = scene.add.image(W / 2, 0, PALACE_BG_TEX).setOrigin(0.5, 0).setScrollFactor(0).setDepth(-100)
+  bg.setScale(W / bg.width)
+  // Fade the palace down into the dark base + a warm dim over everything.
+  const g = scene.add.graphics().setScrollFactor(0).setDepth(-99)
+  g.fillStyle(0x0d0a06, 0.5).fillRect(0, 0, W, H)
+  g.fillGradientStyle(0x0d0a06, 0x0d0a06, 0x14100a, 0x14100a, 0, 0, 0.9, 0.9).fillRect(0, bg.displayHeight - 80, W, 160)
+  g.lineStyle(2, 0xd9b45a, 0.4).strokeRoundedRect(10, 10, W - 20, H - 20, 14)
+}
