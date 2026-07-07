@@ -224,13 +224,49 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
     expect(parsed).toEqual(save)
   })
 
-  it('pets/skills placeholders are present but inert', () => {
+  it('pets placeholder is present but inert; skills/soul default when omitted', () => {
     const save = createGameSave({
       progression: createProgression(1),
       equipment: createEquipment(),
       inventory: createInventory(4),
     })
     expect(save.pets).toEqual([])
-    expect(save.skills).toBeNull()
+    // S5: skills defaults to createDefaultSkillTreeState() (not null) when the
+    // caller doesn't pass one -- see save.ts header re: this field's history.
+    expect(save.skills).not.toBeNull()
+    expect(save.skills?.bindings).toEqual({ Y: 'slz', U: 'lys', I: 'hytj', O: 'lyfb', L: 'jdy' })
+    expect(save.soul).toBe(0)
+  })
+
+  it('round-trips a real skillTree + soul through save/load (S5)', () => {
+    const skillTree = {
+      schools: [
+        { level: 2, learned: [{ skillName: 'slz' as const, level: 3 }] },
+        { level: 0, learned: [] },
+      ] as [import('../src/systems/skillTree').SchoolState, import('../src/systems/skillTree').SchoolState],
+      bindings: { Y: 'slz' as const, U: null, I: null, O: null, L: null },
+    }
+    const save = createGameSave({
+      progression: createProgression(1),
+      equipment: createEquipment(),
+      inventory: createInventory(4),
+      skillTree,
+      soul: 1234,
+    })
+    saveGame(storage, save)
+    const loaded = restoreGameState(parseGameSave(storage.getItem(GameSaveStorageKey)!)!)
+    expect(loaded.skillTree).toEqual(skillTree)
+    expect(loaded.soul).toBe(1234)
+  })
+
+  it('restoreGameState falls back to the default skillTree when skills is null (legacy save)', () => {
+    const legacy: GameSave = {
+      ...createGameSave({ progression: createProgression(1), equipment: createEquipment(), inventory: createInventory(4) }),
+      skills: null,
+      soul: undefined as unknown as number,
+    }
+    const loaded = restoreGameState(legacy)
+    expect(loaded.skillTree.bindings).toEqual({ Y: 'slz', U: 'lys', I: 'hytj', O: 'lyfb', L: 'jdy' })
+    expect(loaded.soul).toBe(0)
   })
 })

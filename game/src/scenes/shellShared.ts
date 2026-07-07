@@ -13,6 +13,7 @@ export const SCENE = {
   characterSelect: 'charselect',
   worldMap: 'worldmap',
   battle: 'battle',
+  skillTree: 'skilltree',
 } as const
 
 /**

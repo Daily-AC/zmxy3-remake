@@ -94,11 +94,20 @@ const ONLINE = 'assets/online/'
 
 /** Role1 skill-icon keys (`skill_<id>`), symbol-matched to heroSkill.ts Role1SkillId. */
 export const ROLE1_SKILL_IDS = ['slz', 'lys', 'hytj', 'lyfb', 'jdy', 'qsez', 'zz', 'hmz', 'hyjj'] as const
+/** The 9 actives plus `sx`, matching skillTree.ts's Role1TreeSkillId -- the
+ * full set of skill-tree table rows (S5). */
+export const ROLE1_TREE_SKILL_IDS = [...ROLE1_SKILL_IDS, 'sx'] as const
 
 export const ONLINE_TEXTURES: TextureRef[] = [
   // Dock icons use the brighter RoleSkillInterface skill-tree icons (sb_*, 66px,
   // edge-to-edge fire, no baked frame) rather than the darker framed ss_* set.
   ...ROLE1_SKILL_IDS.map((id) => ({ key: `skill_${id}`, url: `${ONLINE}skill-icons/sb_${id}.png` })),
+  // sx has no sb_* (bright dock) variant in the extracted set -- only the
+  // darker framed ss_* one -- so the S5 skill-tree table (which needs an icon
+  // for all 10 school-tree rows, not just the 9 dockable actives) uses ss_sx
+  // for this one row. Asset-gap note, not a fidelity regression: sx never
+  // renders on the battle dock anyway (it's a passive, see skillTree.ts).
+  { key: 'skill_sx', url: `${ONLINE}skill-icons/ss_sx.png` },
   { key: 'result_success', url: `${ONLINE}results/challenge-success.png` },
   { key: 'result_fail', url: `${ONLINE}results/challenge-fail.png` },
   { key: 'result_my', url: `${ONLINE}results/my-results-banner.png` },

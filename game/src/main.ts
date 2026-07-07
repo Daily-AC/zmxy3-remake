@@ -3,6 +3,7 @@ import { MainMenuScene } from './scenes/MainMenuScene'
 import { SlotSelectScene } from './scenes/SlotSelectScene'
 import { CharacterSelectScene } from './scenes/CharacterSelectScene'
 import { WorldMapScene } from './scenes/WorldMapScene'
+import { SkillTreeScene } from './scenes/SkillTreeScene'
 import { BattleScene } from './scenes/BattleScene'
 
 // Milestone 2 combat slice: ground physics, jump/double-jump, five-hit combo.
@@ -22,5 +23,5 @@ new Phaser.Game({
   // Enables `scene.add.dom(...)` so the dialogue input can live inside the
   // canvas (kept aligned to game coords by Phaser across scaling/letterboxing).
   dom: { createContainer: true },
-  scene: [MainMenuScene, SlotSelectScene, CharacterSelectScene, WorldMapScene, BattleScene],
+  scene: [MainMenuScene, SlotSelectScene, CharacterSelectScene, WorldMapScene, SkillTreeScene, BattleScene],
 })

@@ -18,6 +18,12 @@
 //     that spends it) -- SoulPurse is a standalone counter that only grows via
 //     sellCommonEquipment. It is NOT persisted across saves (see
 //     BattleScene wiring) -- a placeholder display, not a wired economy.
+//   - S5 (skilltree-report.md) upgrades this from "not persisted" to a real
+//     persisted wallet (save.ts's GameSaveV1.soul) once school-upgrade / skill
+//     level-up (SkillControl.upGradeSkillFunc / skillupgradeFunc, both spend
+//     lhValue) needed a currency that survives a scene change. trySpendSoul
+//     below is new for that -- this file previously had no "spend" primitive
+//     because nothing spent souls yet.
 //   - AS3's quality is a 5-tier string ("普通"/"优秀"/"精良"/"史诗"/"邪灵");
 //     this project's Item.rarity is a narrower 1|2|3 scale whose floor (1) is
 //     already documented (rarity.ts) as standing in for the original's tiers.
@@ -44,6 +50,17 @@ export function createSoulPurse(initial = 0): SoulPurse {
 
 export function addSoul(purse: SoulPurse, amount: number): void {
   purse.value = Math.max(0, purse.value + Math.floor(amount))
+}
+
+/** Spend `amount` souls if affordable; returns false (no-op) if not enough.
+ * Mirrors every AS3 spend site's shape (SkillControl.as upGradeSkillFunc /
+ * skillupgradeFunc: `if (getLhValue() >= cost) { ...; setLhValue(get - cost) }
+ * else { trace/toast "not enough" }`) as one reusable guarded debit. */
+export function trySpendSoul(purse: SoulPurse, amount: number): boolean {
+  if (amount <= 0) return true
+  if (purse.value < amount) return false
+  purse.value -= amount
+  return true
 }
 
 export interface SellCommonEquipResult {
