@@ -266,3 +266,45 @@ round 1 的"内容区全白"很可能就是这次崩溃的下游表现，不是�
   ~250MB）留着方便下次直接复用；scheduled tasks（`ZMXY3Spike2`）和桌面快捷方式
   这轮测试后还没清理，下次接手时先跑一遍 cleanup（kill 进程 + 删 scheduled tasks
   + 删桌面 `ZMXY3RunMe.lnk`）。
+
+## 8. round 3：把配方固化成一键工具（`tools/acceptance/`），顺带纠正 round 2 一个错误猜测
+
+team-lead 收尾单：把 build→ship→launch→capture 这套配方固化成 `tools/acceptance/
+acceptance.sh` 一条命令入口（`build-and-ship.sh` + `run-and-capture.ps1`），main.js
+补两件事——① 截帧触发从"固定 3 秒计时器"改成"轮询信号文件"（调用方控制时机）；
+② GPU 崩溃时自动 `disableHardwareAcceleration()` 重启一次（写标记文件避免死循环）。
+详见 `tools/acceptance/README.md`。**真实跑通了完整链路**（不是 mock），最终产出
+`tmp/debug-shots/acceptance-20260707-132104.png`——里程碑 2 的完整战斗画面（天庭
+视差背景、悟空对战云头妖鸟带血条、背包 UI、NPC"闭关中"状态、连击/拾取提示），
+比 round 2 那张纯 idle 站姿的图信息量大得多，因为 game/ 这几个小时里已经并行推进
+到这个程度。
+
+**纠正 round 2 的一个错误结论**：round 2 末尾我把"交互会话里 capturePage 返回
+0x0"归因于"测试机器被反复 kill/relaunch 搞劣化了"。round 3 用全新脚本、干净
+状态重跑，**同样的 0x0 又出现了**——connect 3 次复现，不是偶发。这排除了"机器
+累了"的解释，坐实是一个**跟启动方式绑定的确定性差异**：
+
+- Scheduled Task + `LogonType=3`（交互令牌，真 SessionId=1 会话）：窗口本身
+  `getBounds()` 完全正常（`{x:213,y:109,width:1281,height:801}`，加了
+  `screen.getPrimaryDisplay()` 诊断日志确认显示器信息也正常：`1707×1067`），
+  但 `capturePage()` 稳定返回 `{width:0,height:0}`，3/3 复现。窗口尺寸不是原因
+  （已用 `win.setBounds()` 强制过，无效）。
+- 纯 SSH `Start-Process`（隔离 window station，非交互会话）：`capturePage()`
+  稳定拿到正确内容（round 2 一次、round 3 这次，2/2）。
+
+也就是说，**"真人能看见的那个会话"恰恰是 capturePage 拿不到画面的那个会话**，
+反过来"capturePage 能拿到画面的会话"人眼永远看不见（隔离 window station）。这
+两件事在这台机器上像是互斥的，进一步支持"根因在 GameViewer 虚拟显示适配器只
+attach 到 SessionId=1、并在那个会话里连累了 Chromium 的帧读回路径"这个猜测，
+但没有再深挖底层原因（时间成本 vs 价值不划算——两条路都不通向"人眼截屏"这个
+目标，一条通向 capturePage 证据，够用）。
+
+**设计取舍**：`run-and-capture.ps1` 因此选择用纯 `Start-Process`（隔离会话），
+因为这是唯一能可靠拿到 `capturePage()` 证据的方式——工具的目标是稳定复现"游戏
+渲染正确"这个已被 team-lead 验收的证据形式，不是死磕"人眼看见"这个仍然 open
+的问题（后者见上面"下一步建议"，需要真人到场或真 RDP）。
+
+**另一个坑**：`build-and-ship.sh` 首次没在传 `app.asar` 前杀掉 home 上还在跑的
+旧进程，scp 报 `Broken pipe`（不是网络问题，是 Windows 文件锁——运行中的 exe
+把 `app.asar` 内存映射住了，覆盖写入把传输流弄坏，报错信息完全不指向真实原因）。
+修复：`build-and-ship.sh` 传文件前先 `Stop-Process`。
