@@ -158,7 +158,7 @@ export const WORLDMAP_BUTTONS: WorldMapButton[] = [
     texture: 'wm_btn_skills',
     action: 'skills',
     label: '学习技能',
-    enabled: false,
+    enabled: true, // S5: SkillTreeScene lands (tasks/skilltree-report.md).
   },
   {
     id: 'huodongbtn',

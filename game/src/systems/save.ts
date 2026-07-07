@@ -11,16 +11,27 @@
 //    self-contained plain data (id/name/kind/rarity/effects) -- there is no
 //    registry, so equipment and inventory items are serialized inline and
 //    validated in place instead of resolved against a passed-in catalog.
-//  - We have no pet/skill systems yet. Their save fields are kept as inert
-//    placeholders (always an empty array / null) so a save written today
-//    needs no migration once those systems land -- kagami's version-bump
-//    pattern, applied preemptively instead of retroactively.
+//  - We have no pet system yet. Its save field is kept as an inert placeholder
+//    (always an empty array) so a save written today needs no migration once
+//    that system lands -- kagami's version-bump pattern, applied preemptively
+//    instead of retroactively.
+//  - S5 (skilltree-report.md) is the first real use of the `skills` field this
+//    comment used to describe as a placeholder: it's now `SkillTreeSaveState`
+//    (systems/skillTree.ts), decoded defensively exactly like every other
+//    field below. A pre-S5 save has `skills: null`, which `decodeSkillTree`
+//    treats the same as any other missing/invalid shape -- falls back to
+//    `createDefaultSkillTreeState()` (the decided "无绑定的旧存档回退默认5技"
+//    behavior) -- so this stayed a same-version, no-migration change exactly
+//    as this file predicted. `soul` (soulPurse.ts) is new for the same reason:
+//    S5's skill costs need a currency that survives a scene change (see
+//    soulPurse.ts's header), so the previously-ephemeral wallet is persisted
+//    here too.
 //  - Version starts at 1, not kagami's 2. Kagami's "2" is the result of a
 //    real v1->v2 migration already shipped in their game; we've never
 //    shipped a v1, so calling ours "2" would document a migration that
 //    never happened. The migration *mechanism* -- a `version` discriminant
 //    plus one decode path per version -- is kept and ready for whenever a
-//    real v2 (pets, skills, ...) is needed; see `parseGameSave`.
+//    real v2 is needed; see `parseGameSave`.
 //  - Defensive decoding (isRecord/clampInteger/nonNegativeNumber guards)
 //    mirrors kagami's tolerance for missing fields and stale/hand-edited
 //    saves, applied to our smaller schema.
@@ -32,6 +43,8 @@ import type { Equipment } from './equipment'
 import { createEquipment } from './equipment'
 import type { Inventory } from './inventory'
 import { createInventory, addItem } from './inventory'
+import type { SkillTreeState, SchoolState, LearnedSkillEntry, BindKey, Role1TreeSkillId } from './skillTree'
+import { BIND_KEYS, ROLE1_SCHOOLS, MAX_SCHOOL_LEVEL, MAX_SKILL_LEVEL, createDefaultSkillTreeState } from './skillTree'
 
 export const GameSaveVersion = 1 as const
 export const GameSaveStorageKey = 'zmxy3-remake.save.v1'
@@ -58,8 +71,12 @@ export type GameSaveV1 = {
   inventory: InventorySaveState
   /** Not implemented yet -- reserved so a future pet system needs no migration. */
   pets: unknown[]
-  /** Not implemented yet -- reserved so a future skill system needs no migration. */
-  skills: unknown
+  /** S5: SkillTreeState (systems/skillTree.ts). A pre-S5 save has this as
+   * `null`; decodeSkillTree treats that (and any other invalid shape) as
+   * "no data" and falls back to createDefaultSkillTreeState(). */
+  skills: SkillTreeState | null
+  /** S5: soulPurse.ts's wallet. See save.ts header re: newly-persisted. */
+  soul: number
 }
 
 export type GameSave = GameSaveV1
@@ -68,6 +85,10 @@ export type CreateGameSaveInput = {
   progression: HeroProgressionState
   equipment: Equipment
   inventory: Inventory
+  /** Defaults to createDefaultSkillTreeState() (fresh-character bootstrap). */
+  skillTree?: SkillTreeState
+  /** Defaults to 0. */
+  soul?: number
   now?: Date
 }
 
@@ -75,6 +96,8 @@ export type LoadedGameState = {
   progression: HeroProgressionState
   equipment: Equipment
   inventory: Inventory
+  skillTree: SkillTreeState
+  soul: number
 }
 
 export function createGameSave(input: CreateGameSaveInput): GameSave {
@@ -93,7 +116,8 @@ export function createGameSave(input: CreateGameSaveInput): GameSave {
       stacks: input.inventory.stacks.map((stack) => ({ item: stack.item, qty: stack.qty })),
     },
     pets: [],
-    skills: null,
+    skills: input.skillTree ?? createDefaultSkillTreeState(),
+    soul: Math.max(0, Math.floor(input.soul ?? 0)),
   }
 }
 
@@ -143,6 +167,8 @@ export function restoreGameState(save: GameSave): LoadedGameState {
     progression: decodeProgression(save.progression),
     equipment: decodeEquipment(save.equipment),
     inventory: decodeInventory(save.inventory),
+    skillTree: decodeSkillTree(save.skills),
+    soul: nonNegativeNumber((save as unknown as Record<string, unknown>).soul),
   }
 }
 
@@ -185,6 +211,76 @@ function decodeInventory(saved: unknown): Inventory {
     addItem(inv, item, qty)
   }
   return inv
+}
+
+/**
+ * Decode a saved `skills` blob (systems/skillTree.ts's SkillTreeState). Any
+ * shape mismatch -- most commonly a pre-S5 save's literal `null` -- falls
+ * back to `createDefaultSkillTreeState()`, which is the decided "无绑定的
+ * 旧存档回退默认5技" behavior (skilltree-brief.md). A validly-shaped but
+ * genuinely empty state (a post-S5 character who hasn't learned anything)
+ * decodes as empty, not defaulted -- only unreadable data gets the fallback.
+ */
+function decodeSkillTree(saved: unknown): SkillTreeState {
+  if (!isRecord(saved) || !Array.isArray(saved.schools) || saved.schools.length !== 2) {
+    return createDefaultSkillTreeState()
+  }
+  const schools = [decodeSchool(saved.schools[0], 0), decodeSchool(saved.schools[1], 1)] as [
+    SchoolState,
+    SchoolState,
+  ]
+  // A skill can only legitimately be learned once, in the school it actually
+  // belongs to (decodeSchool already filters to that school's own list) --
+  // drop any cross-school or duplicate re-appearance from a hand-edited save.
+  const learnedNames = new Set<Role1TreeSkillId>()
+  for (const school of schools) {
+    school.learned = school.learned.filter((e) => {
+      if (learnedNames.has(e.skillName)) return false
+      learnedNames.add(e.skillName)
+      return true
+    })
+  }
+  const bindings = decodeBindings(saved.bindings, learnedNames)
+  return { schools, bindings }
+}
+
+function decodeSchool(raw: unknown, schoolIndex: 0 | 1): SchoolState {
+  if (!isRecord(raw)) return { level: 0, learned: [] }
+  const level = clampInteger(raw.level, 0, MAX_SCHOOL_LEVEL)
+  const validNames = new Set<string>(ROLE1_SCHOOLS[schoolIndex].skills)
+  const learned: LearnedSkillEntry[] = []
+  if (Array.isArray(raw.learned)) {
+    for (const entry of raw.learned) {
+      if (!isRecord(entry)) continue
+      if (typeof entry.skillName !== 'string' || !validNames.has(entry.skillName)) continue
+      learned.push({
+        skillName: entry.skillName as Role1TreeSkillId,
+        level: clampInteger(entry.level, 1, MAX_SKILL_LEVEL),
+      })
+    }
+  }
+  return { level, learned }
+}
+
+function decodeBindings(
+  raw: unknown,
+  learnedNames: Set<Role1TreeSkillId>,
+): Record<BindKey, Role1TreeSkillId | null> {
+  const bindings: Record<BindKey, Role1TreeSkillId | null> = { Y: null, U: null, I: null, O: null, L: null }
+  if (!isRecord(raw)) return bindings
+  const usedSkills = new Set<Role1TreeSkillId>()
+  for (const key of BIND_KEYS) {
+    const v = raw[key]
+    // Only a currently-learned, not-already-bound-elsewhere skill may occupy
+    // a key -- guards against a hand-edited save binding an unlearned skill
+    // or double-binding one skill to two keys.
+    if (typeof v !== 'string' || !learnedNames.has(v as Role1TreeSkillId) || usedSkills.has(v as Role1TreeSkillId)) {
+      continue
+    }
+    bindings[key] = v as Role1TreeSkillId
+    usedSkills.add(v as Role1TreeSkillId)
+  }
+  return bindings
 }
 
 const ITEM_KINDS = new Set<Item['kind']>(['material', 'equip', 'consumable'])

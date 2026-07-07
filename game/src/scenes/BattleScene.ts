@@ -88,7 +88,7 @@ import {
   computeBudget,
 } from '../systems/furnace'
 import type { LoadedGameState } from '../systems/save'
-import { createGameSave } from '../systems/save'
+import { createGameSave, restoreGameState } from '../systems/save'
 import type { SlotId } from '../systems/saveSlots'
 import { buildSlotEnvelope, writeSlot, readSlot, heroName } from '../systems/saveSlots'
 import { readCampaignIndex, writeCampaignIndex, advanceCampaignFrontier } from '../systems/campaignProgress'
@@ -105,6 +105,8 @@ import {
   tryCastRole1Skill,
   getRole1SkillMpCost,
 } from '../systems/heroSkill'
+import type { SkillTreeState, BindKey, Role1TreeSkillId } from '../systems/skillTree'
+import { BIND_KEYS, createDefaultSkillTreeState, getLearnedLevel } from '../systems/skillTree'
 import {
   NpcClient,
   ConnStatus,
@@ -214,12 +216,6 @@ const NPC_X = 1380
 const DIALOGUE_RANGE = 120
 
 // --- skills (Role1 悟空) ---
-// Demo loadout: every active + sx at level 1 (cheap enough to cast, MP costs
-// ~30-40 each). TODO: source real levels from the skill tree once its UI is
-// wired (skill-tree-port-report §遗留 — syncRole1SkillLevels reads a levels obj).
-const SKILL_DEMO_LEVELS: Partial<Role1SkillLevels> = {
-  slz: 1, lys: 1, hytj: 1, lyfb: 1, jdy: 1, qsez: 1, zz: 1, hmz: 1, hyjj: 1, sx: 1,
-}
 // heroSkill damage is in kagami's original scale (hundreds–thousands) while this
 // slice's monster has 150 hp. Scale it down so skills read against current
 // numbers. TODO-verify: temporary — remove once the hero-scale pass unifies the
@@ -238,15 +234,12 @@ const REAL_SKILL_BY_ACTION: Record<string, RealSkillId> = {
 // Skill dock hotkeys Y U I O L -- the real 造梦西游 player-1 layout. Source: the
 // Online 实机 battle-HUD screenshot (docs/reference/zmxy-online-screens/
 // battle-hud.png shows five slots keyed Y U I O L, left to right, after the 无双
-// ult icon) and kagami SkillUISystem (SkillSlotKeyLabels.p1 / P1_BINDING_ORDER =
-// ['Y','U','I','O','L']). The original docks only FIVE actives at once; the other
-// four (qsez/zz/hmz/hyjj) live off-dock until a skill-binding UI exists (skill
-// tree, future work) -- they stay castable via __castSkill for tests. Default
-// loadout = the five 基本技能 in canonical order. Rationale + off-dock note in
-// tasks/ui-finish-report.md; do NOT invent extra keys to re-dock the other four.
-const SKILL_KEYS: [keyof typeof Phaser.Input.Keyboard.KeyCodes, Role1SkillId][] = [
-  ['Y', 'slz'], ['U', 'lys'], ['I', 'hytj'], ['O', 'lyfb'], ['L', 'jdy'],
-]
+// ult icon), User.as's findWhichSkillBtnNoneSet controlPlayer-0 order, and
+// kagami SkillUISystem (SkillSlotKeyLabels.p1 / P1_BINDING_ORDER, matching).
+// S5 (skilltree-report.md) replaced the fixed 5-skill loadout this constant
+// used to hold with `this.skillTreeState.bindings` (systems/skillTree.ts) --
+// which of the 9 actives sits on which key is now player-chosen in
+// SkillTreeScene and persisted; BIND_KEYS is just the physical key order.
 // Skill -> a hero animation that exists in role1.json (the SkillHitbox.actionName
 // includes sub-variant labels like 'hit8_2' that aren't standalone hero actions).
 const SKILL_ACTION: Record<Role1SkillId, string> = {
@@ -370,6 +363,12 @@ export class BattleScene extends Phaser.Scene {
   // Skills / MP
   private mp!: MpModel
   private skillRuntime!: Role1SkillRuntime
+  // S5: learned skills + Y/U/I/O/L dock bindings (systems/skillTree.ts),
+  // player-edited in SkillTreeScene and persisted to the slot -- read fresh
+  // from storage in seedFromSave (not the shell registry snapshot, which is
+  // only ever set once at CharacterSelect/SlotSelect time and would go stale
+  // the moment a skill-tree visit changes it).
+  private skillTreeState: SkillTreeState = createDefaultSkillTreeState()
   // While set, the hero holds a skill cast pose instead of heroSim's action.
   private skillAnim: { action: string; untilMs: number } | null = null
   // Monotonic ids for skill/burn hits, kept clear of combo (from 1). Each
@@ -385,9 +384,9 @@ export class BattleScene extends Phaser.Scene {
   private identity!: HeroIdentityState
   private burnAttackId = 100000 // kept clear of hero attackIds (which start at 1)
   private simClockMs = 0
-  // S4 个人资料/背包: 灵魂 wallet (soulPurse.ts -- placeholder economy, see its
-  // header) + a once-per-load 幸运 roll (heroGrowth.rollDailyLuck, display-only:
-  // not wired into combat math, see combatPower.ts / report).
+  // S4 个人资料/背包: 灵魂 wallet (soulPurse.ts; persisted since S5 -- see that
+  // file's header) + a once-per-load 幸运 roll (heroGrowth.rollDailyLuck,
+  // display-only: not wired into combat math, see combatPower.ts / report).
   private soulPurse: SoulPurse = createSoulPurse()
   private displayLuck = 0
 
@@ -501,9 +500,11 @@ export class BattleScene extends Phaser.Scene {
     kb.on('keydown-E', () => this.equipFirstFromBag())
     // B: toggle the backpack window.
     kb.on('keydown-B', () => this.toggleBackpack())
-    // Y U I O L: cast the five docked Role1 active skills.
-    for (const [code, skillId] of SKILL_KEYS) {
-      kb.on('keydown-' + code, () => this.castSkill(skillId))
+    // Y U I O L: cast whatever skill is currently bound to that dock slot
+    // (systems/skillTree.ts, player-set in SkillTreeScene; empty/passive
+    // slots no-op -- see castBoundSkill).
+    for (const key of BIND_KEYS) {
+      kb.on('keydown-' + key, () => this.castBoundSkill(key))
     }
 
     this.heroConfig = makeHeroConfig({
@@ -565,19 +566,30 @@ export class BattleScene extends Phaser.Scene {
     }
     // Fold the equipped gear's hp/mp affixes into the live pools.
     syncHeroEquipment(this.identity, this.equipment)
-    this.soulPurse = createSoulPurse()
     this.displayLuck = rollDailyLuck(this.identity.progression.level)
 
     // Continue accruing from the slot's stored playtime (lives only in slot meta).
     this.playtimeAccMs = 0
-    this.playtimeSec =
-      this.activeSlot !== null ? readSlot(window.localStorage, this.activeSlot)?.meta.playtimeSec ?? 0 : 0
+    // S5: skillTree bindings/learned levels + soul are read fresh from the
+    // slot's storage here (not `loaded`/the registry snapshot above) because
+    // WorldMapScene's "学习技能" button and SkillTreeScene both write straight
+    // to storage after the shell registry snapshot was taken -- reading the
+    // snapshot would show whatever the player's loadout was at CharacterSelect/
+    // SlotSelect time, silently ignoring anything changed since. One extra
+    // readSlot() is cheap and keeps this the single source of truth.
+    const freshEnv = this.activeSlot !== null ? readSlot(window.localStorage, this.activeSlot) : undefined
+    const fresh = freshEnv ? restoreGameState(freshEnv.save) : undefined
+    this.playtimeSec = freshEnv?.meta.playtimeSec ?? 0
+    this.skillTreeState = fresh?.skillTree ?? createDefaultSkillTreeState()
+    this.soulPurse = createSoulPurse(fresh?.soul ?? 0)
 
-    // MP (full) sized to the hero's level; skill runtime with the demo loadout.
-    // MP isn't persisted (save.ts has no mp field) — it refills on load/level.
+    // MP (full) sized to the hero's level; skill runtime synced to the real
+    // learned levels from skillTreeState (S5 -- replaces the old fixed demo
+    // loadout). MP isn't persisted (save.ts has no mp field) — it refills on
+    // load/level.
     this.mp = createMp(getRole1MaxMp(this.identity.progression.level) + this.identity.equipMaxMpBonus)
     this.skillRuntime = createRole1SkillRuntime()
-    syncRole1SkillLevels(this.skillRuntime, SKILL_DEMO_LEVELS)
+    syncRole1SkillLevels(this.skillRuntime, this.learnedSkillLevels())
 
     // Campaign level index: WorldMapScene passes the exact node clicked
     // (entryCampaignIndex); a direct/debug boot with no shell falls back to the
@@ -592,6 +604,20 @@ export class BattleScene extends Phaser.Scene {
           : 0
   }
 
+  /** Builds the Partial<Role1SkillLevels> heroSkill.ts's syncRole1SkillLevels
+   * wants, from skillTreeState's learned entries (S5). `sx` is included even
+   * though it's not a `tryCastRole1Skill` id -- heroSkill.ts's own
+   * `calculateRole1LifeSteal` reads `runtime.levels.sx` independently. */
+  private learnedSkillLevels(): Partial<Role1SkillLevels> {
+    const ids: Role1TreeSkillId[] = ['slz', 'lys', 'hytj', 'lyfb', 'jdy', 'qsez', 'zz', 'hmz', 'hyjj', 'sx']
+    const levels: Partial<Role1SkillLevels> = {}
+    for (const id of ids) {
+      const lvl = getLearnedLevel(this.skillTreeState, id)
+      if (lvl > 0) (levels as Record<string, number>)[id] = lvl
+    }
+    return levels
+  }
+
   /** Write the current live state back to the active slot (no-op without a slot). */
   private saveToSlot(): void {
     if (this.activeSlot === null) return
@@ -599,6 +625,8 @@ export class BattleScene extends Phaser.Scene {
       progression: this.identity.progression,
       equipment: this.equipment,
       inventory: this.inventory,
+      skillTree: this.skillTreeState,
+      soul: this.soulPurse.value,
     })
     writeSlot(window.localStorage, this.activeSlot, buildSlotEnvelope(save, this.playtimeSec))
     writeCampaignIndex(window.localStorage, this.activeSlot, this.campaignIndex)
@@ -682,6 +710,16 @@ export class BattleScene extends Phaser.Scene {
     const delta = target - this.mp.maxMp
     setMaxMp(this.mp, target)
     if (delta > 0) this.mp.mp = Math.min(this.mp.maxMp, this.mp.mp + delta)
+  }
+
+  /** Y/U/I/O/L keydown entry point: look up the skill currently bound to
+   * `key` (systems/skillTree.ts, player-set in SkillTreeScene) and cast it.
+   * An empty slot or `sx` (a passive -- no tryCastRole1Skill id, see
+   * heroSkill.ts) is a silent no-op, matching AS3 pressing an unbound key. */
+  private castBoundSkill(key: BindKey): void {
+    const skillId = this.skillTreeState.bindings[key]
+    if (!skillId || skillId === 'sx') return
+    this.castSkill(skillId)
   }
 
   private castSkill(skillId: Role1SkillId): void {
@@ -1740,7 +1778,7 @@ export class BattleScene extends Phaser.Scene {
     })
     // Skill dock cooldown sweep (shared busy-lock, normalized to a nominal cast).
     const cdFrac = this.skillRuntime.cooldownMs > 0 ? Math.min(1, this.skillRuntime.cooldownMs / 1000) : 0
-    for (let i = 0; i < SKILL_KEYS.length; i++) this.skillBar.setCooldown(i, cdFrac)
+    for (let i = 0; i < BIND_KEYS.length; i++) this.skillBar.setCooldown(i, cdFrac)
     // Rebuild slot affordability/level a few times a second (MP regens/drains).
     this.skillBarAccMs += this.game.loop.delta
     if (this.skillBarAccMs >= 300) {
@@ -1757,13 +1795,19 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  /** (Re)build the bottom-left skill dock from the current loadout/MP. */
+  /** (Re)build the bottom-left skill dock from the current bindings/MP (S5:
+   * bindings are player-chosen in SkillTreeScene, not a fixed loadout). */
   private refreshSkillBar(): void {
-    const slots: SkillSlotData[] = SKILL_KEYS.map(([code, skillId]) => {
+    const slots: SkillSlotData[] = BIND_KEYS.map((key) => {
+      const skillId = this.skillTreeState.bindings[key]
+      if (!skillId || skillId === 'sx') {
+        // Empty slot, or sx (a passive that never sits on the dock as a
+        // castable action -- see castBoundSkill).
+        return { hotkey: key, disabled: true }
+      }
       const level = this.skillRuntime.levels[skillId]
       const mpCost = level > 0 ? getRole1SkillMpCost(skillId, level) : 0
-      // Hotkey label is the key code itself now (Y U I O L).
-      return { skillId, hotkey: code, mpCost, level, disabled: level <= 0 || this.mp.mp < mpCost }
+      return { skillId, hotkey: key, mpCost, level, disabled: level <= 0 || this.mp.mp < mpCost }
     })
     this.skillBar.setSlots(slots)
   }
@@ -2093,6 +2137,28 @@ export class BattleScene extends Phaser.Scene {
         mpAfter: Math.round(this.mp.mp),
         cooldownMs: Math.round(this.skillRuntime.cooldownMs),
         monsterHpBefore,
+      }
+    }
+    // S5 acceptance hook: exercises the exact keydown-Y/U/I/O/L production path
+    // (dock-binding lookup -> castSkill), for headless verification that the
+    // player-chosen skillTree binding is what actually fires -- real DOM
+    // KeyboardEvents are unreliable to route into Phaser's keyboard plugin from
+    // an automated driver without a live focused canvas, so this calls the
+    // same private method the real keydown-<key> listener calls (see the
+    // `kb.on('keydown-'+key, ...)` loop in create()), not a re-implementation.
+    w.__castBoundSkill = (key: BindKey) => {
+      const mpBefore = Math.round(this.mp.mp)
+      const monsterHpBefore = Math.round(this.aliveMonsters()[0]?.state.hp ?? 0)
+      const boundSkill = this.skillTreeState.bindings[key]
+      this.castBoundSkill(key)
+      return {
+        key,
+        boundSkill,
+        cast: this.skillAnim?.action ?? null,
+        mpBefore,
+        mpAfter: Math.round(this.mp.mp),
+        monsterHpBefore,
+        monsterHpAfter: Math.round(this.aliveMonsters()[0]?.state.hp ?? 0),
       }
     }
     w.__skillState = () => ({

@@ -42,8 +42,9 @@ import { Toast } from '../ui/hud/Toast'
 //     (systems/campaignProgress, save-driven -- see that module's header for
 //     why this differs from the AS3's own curBigStage debug-override branch),
 //   - and wires the seven bottom buttons to real handlers where the milestone
-//     has one (save/furnace/back), else a "敬请期待" toast (screen-fidelity-
-//     spec.md S1: 商城/学习技能/活动/任务 置灰 this milestone).
+//     has one (save/furnace/back/skills -- skills lands in S5, see
+//     tasks/skilltree-report.md), else a "敬请期待" toast (screen-fidelity-
+//     spec.md S1: 商城/活动/任务 still 置灰 this milestone).
 //
 // The 炼丹炉 forge lives here now (moved from BattleScene's dialogue -- see
 // DialogueBox.ts / BattleScene.buildDialogue), reading/writing the PERSISTED
@@ -259,7 +260,13 @@ export class WorldMapScene extends Phaser.Scene {
     }
     if (btn.action === 'save') this.doSave()
     else if (btn.action === 'furnace') this.openFurnace()
+    else if (btn.action === 'skills') this.openSkillTree()
     else if (btn.action === 'back') this.goToMainMenu()
+  }
+
+  private openSkillTree(): void {
+    this.npcClient?.dispose()
+    this.scene.start(SCENE.skillTree)
   }
 
   private doSave(): void {
