@@ -59,6 +59,17 @@ import type { LoadedGameState } from '../systems/save'
 import { createGameSave } from '../systems/save'
 import type { SlotId } from '../systems/saveSlots'
 import { buildSlotEnvelope, writeSlot, readSlot } from '../systems/saveSlots'
+import { MpModel, createMp, getRole1MaxMp, setMaxMp, tickMpRegen } from '../systems/mp'
+import {
+  Role1SkillRuntime,
+  Role1SkillId,
+  Role1SkillLevels,
+  SkillHitbox,
+  createRole1SkillRuntime,
+  syncRole1SkillLevels,
+  tickRole1SkillRuntime,
+  tryCastRole1Skill,
+} from '../systems/heroSkill'
 import {
   NpcClient,
   ConnStatus,
@@ -122,6 +133,33 @@ const NPC_NAME = '太上老君'
 const NPC_X = 1380
 const DIALOGUE_RANGE = 120
 const MONSTER_DISPLAY_NAME = '云头妖鸟'
+
+// --- skills (Role1 悟空) ---
+// Demo loadout: every active + sx at level 1 (cheap enough to cast, MP costs
+// ~30-40 each). TODO: source real levels from the skill tree once its UI is
+// wired (skill-tree-port-report §遗留 — syncRole1SkillLevels reads a levels obj).
+const SKILL_DEMO_LEVELS: Partial<Role1SkillLevels> = {
+  slz: 1, lys: 1, hytj: 1, lyfb: 1, jdy: 1, qsez: 1, zz: 1, hmz: 1, hyjj: 1, sx: 1,
+}
+// heroSkill damage is in kagami's original scale (hundreds–thousands) while this
+// slice's monster has 150 hp. Scale it down so skills read against current
+// numbers. TODO-verify: temporary — remove once the hero-scale pass unifies the
+// damage economy (team-lead directive, 2026-07-07). Source of the mismatch:
+// skill-tree-port-report.md 数值出处表 (kagami 口径).
+const SKILL_DAMAGE_SCALE = 0.06
+const MP_REGEN_PER_SEC = 2 // gentle passive regen (TODO-verify, see mp.ts header)
+// Number keys 1-9 -> the nine actives (no original keymap survives in the RE
+// docs; digits chosen to avoid the A/D/J/K/W/E/U bindings already in use).
+const SKILL_KEYS: [keyof typeof Phaser.Input.Keyboard.KeyCodes, Role1SkillId][] = [
+  ['ONE', 'slz'], ['TWO', 'lys'], ['THREE', 'hytj'], ['FOUR', 'lyfb'], ['FIVE', 'jdy'],
+  ['SIX', 'qsez'], ['SEVEN', 'zz'], ['EIGHT', 'hmz'], ['NINE', 'hyjj'],
+]
+// Skill -> a hero animation that exists in role1.json (the SkillHitbox.actionName
+// includes sub-variant labels like 'hit8_2' that aren't standalone hero actions).
+const SKILL_ACTION: Record<Role1SkillId, string> = {
+  slz: 'hit6', lys: 'hit9', hytj: 'hit7', lyfb: 'hit8', jdy: 'hit11_1',
+  qsez: 'hit13', zz: 'hit14', hmz: 'hit10', hyjj: 'hit12',
+}
 
 // Item kind coming from the NPC brain -> the game's item kind vocabulary.
 function npcKindToGameKind(k: NpcItem['kind'] | 'equip'): Item['kind'] {
@@ -191,6 +229,17 @@ export class BattleScene extends Phaser.Scene {
   // Esc pause menu (continue / save & quit to main menu).
   private paused = false
   private pauseMenu?: Phaser.GameObjects.Container
+
+  // Skills / MP
+  private mp!: MpModel
+  private skillRuntime!: Role1SkillRuntime
+  // While set, the hero holds a skill cast pose instead of heroSim's action.
+  private skillAnim: { action: string; untilMs: number } | null = null
+  // Skill hits drain one-per-frame through the same incoming-hit channel as the
+  // combo, so monsterSim resolves dedup/hurt/death exactly as for a melee hit.
+  private skillHitQueue: { attackId: number; damage: number }[] = []
+  private skillAttackId = 200000 // kept clear of combo (from 1) and burn (from 100000)
+  private mpBar!: Phaser.GameObjects.Graphics
 
   // Equipment / hero combat state
   private equipment: Equipment = createEquipment()
@@ -287,6 +336,10 @@ export class BattleScene extends Phaser.Scene {
     // E: equip the first equippable item in the bag. U: take the weapon off.
     kb.on('keydown-E', () => this.equipFirstFromBag())
     kb.on('keydown-U', () => this.doUnequip('weapon'))
+    // Number keys 1-9: cast the nine Role1 active skills.
+    for (const [code, skillId] of SKILL_KEYS) {
+      kb.on('keydown-' + code, () => this.castSkill(skillId))
+    }
 
     this.heroConfig = makeHeroConfig({
       groundY: GROUND_Y,
@@ -345,6 +398,12 @@ export class BattleScene extends Phaser.Scene {
     this.playtimeAccMs = 0
     this.playtimeSec =
       this.activeSlot !== null ? readSlot(window.localStorage, this.activeSlot)?.meta.playtimeSec ?? 0 : 0
+
+    // MP (full) sized to the hero's level; skill runtime with the demo loadout.
+    // MP isn't persisted (save.ts has no mp field) — it refills on load/level.
+    this.mp = createMp(getRole1MaxMp(this.identity.progression.level))
+    this.skillRuntime = createRole1SkillRuntime()
+    syncRole1SkillLevels(this.skillRuntime, SKILL_DEMO_LEVELS)
   }
 
   /** Write the current live state back to the active slot (no-op without a slot). */
@@ -415,6 +474,81 @@ export class BattleScene extends Phaser.Scene {
     this.paused = false
     this.pauseMenu?.setVisible(false)
     this.scene.start('mainmenu')
+  }
+
+  // ---------- skills / MP ----------
+
+  /** Keep MP's cap on the hero's level curve; grow current MP by any increase. */
+  private syncMpMax(): void {
+    const target = getRole1MaxMp(this.identity.progression.level)
+    if (target === this.mp.maxMp) return
+    const delta = target - this.mp.maxMp
+    setMaxMp(this.mp, target)
+    if (delta > 0) this.mp.mp = Math.min(this.mp.maxMp, this.mp.mp + delta)
+  }
+
+  private castSkill(skillId: Role1SkillId): void {
+    if (this.paused || isHeroDead(this.identity) || this.dialogue?.isOpen) return
+    // Combo <-> skill mutual exclusion: don't cast mid-combo, and the shared
+    // busy-lock (collectEdges blocks input while cooldownMs > 0) keeps the combo
+    // from interrupting a cast.
+    if (this.heroState.combo.stage !== 0) return
+
+    const monsterAlive = this.monsterState.mode !== 'dead' && this.monsterState.mode !== 'gone'
+    const ctx = {
+      sourcePower: heroTotalAtk(this.identity, this.equipment),
+      x: this.heroState.x,
+      y: GROUND_Y,
+      facingX: this.heroState.facing,
+      targets: monsterAlive
+        ? [{ id: 'monster30', x: this.monsterState.x, y: GROUND_Y, isAlive: true }]
+        : [],
+    }
+    const result = tryCastRole1Skill(this.skillRuntime, this.mp, skillId, ctx)
+    if (!result.ok) {
+      this.showSkillFail(result.reason)
+      return
+    }
+    // Hold the cast pose for the skill's action duration (shared busy-lock).
+    const action = result.reentered && skillId === 'jdy' ? 'hit11_2' : SKILL_ACTION[skillId]
+    this.skillAnim = { action, untilMs: this.simClockMs + Math.max(200, this.skillRuntime.cooldownMs) }
+    this.playSfx(this.hitSfxKey(5), 0.5)
+    this.showToast(`${skillId.toUpperCase()}${result.reentered ? '·二段' : ''}`, '#9fd8ff')
+    for (const hb of result.hitboxes) this.scheduleSkillHit(hb)
+  }
+
+  private showSkillFail(reason: string): void {
+    const msg =
+      reason === 'mp' ? '法力不足' :
+      reason === 'cooldown' ? '招式未收' :
+      reason === 'not-learned' ? '未习得' :
+      '无目标'
+    this.showToast(msg, '#e0b060')
+  }
+
+  /**
+   * Turn one SkillHitbox descriptor into a real hit: after its activeAfterMs,
+   * check overlap with the monster and, if it connects, float the (scaled)
+   * damage and queue it onto the shared incoming-hit channel. Multi-hit
+   * (hitIntervalFrames/maxHits) is simplified to a single application per box —
+   * enough to show the skill deals damage; full multi-tick is a later pass.
+   */
+  private scheduleSkillHit(hb: SkillHitbox): void {
+    if (hb.visualOnly || hb.damage <= 0) return
+    const fire = (): void => {
+      if (this.monsterState.mode === 'dead' || this.monsterState.mode === 'gone') return
+      const facing = this.heroState.facing
+      const hx = this.heroState.x + facing * hb.offsetX
+      const hy = GROUND_Y + hb.offsetY
+      const box = centeredBox(hx, hy, hb.width, hb.height)
+      const mBox = centeredBox(this.monsterState.x, GROUND_Y, 120, 140)
+      if (!overlaps(box, mBox)) return
+      const dmg = Math.max(1, Math.round(hb.damage * SKILL_DAMAGE_SCALE))
+      this.skillHitQueue.push({ attackId: ++this.skillAttackId, damage: dmg })
+      this.floatText(this.monsterState.x, GROUND_Y - 90, `-${dmg}`, '#7ac7ff')
+    }
+    if (hb.activeAfterMs > 0) this.time.delayedCall(hb.activeAfterMs, fire)
+    else fire()
   }
 
   private buildBackground(): void {
@@ -514,7 +648,7 @@ export class BattleScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(100)
     this.add
-      .text(480, 520, 'A/D 走　K 跳　J 五段连击　W/↑ 对话　E 穿戴 U 卸下　F1 调试', {
+      .text(480, 520, 'A/D 走　K 跳　J 连击　1-9 技能　W/↑ 对话　E 穿戴 U 卸下　Esc 菜单', {
         fontSize: '13px',
         color: '#c8cfe6',
       })
@@ -522,11 +656,12 @@ export class BattleScene extends Phaser.Scene {
       .setDepth(100)
       .setOrigin(0.5)
 
-    // Hero stat panel (top-left): level/exp + HP bar + attack + equipped weapon.
-    this.add.rectangle(12, 10, 280, 84, 0x0c0d12, 0.5).setOrigin(0, 0).setScrollFactor(0).setDepth(99)
+    // Hero stat panel (top-left): level/exp + HP bar + MP bar + attack + weapon.
+    this.add.rectangle(12, 10, 280, 100, 0x0c0d12, 0.5).setOrigin(0, 0).setScrollFactor(0).setDepth(99)
     this.heroHpBar = this.add.graphics().setScrollFactor(0).setDepth(100)
+    this.mpBar = this.add.graphics().setScrollFactor(0).setDepth(100)
     this.statsText = this.add
-      .text(22, 42, '', { fontSize: '13px', color: '#e8ecff', lineSpacing: 3 })
+      .text(22, 52, '', { fontSize: '13px', color: '#e8ecff', lineSpacing: 3 })
       .setScrollFactor(0)
       .setDepth(100)
 
@@ -752,6 +887,11 @@ export class BattleScene extends Phaser.Scene {
       this.playtimeAccMs -= whole * 1000
     }
     this.simClockMs += delta
+    tickRole1SkillRuntime(this.skillRuntime, delta)
+    // Slow passive MP regen (kagami wires no fixed rate; small value for play
+    // feel, TODO-verify — see mp.ts header). maxMp tracks the hero's level.
+    tickMpRegen(this.mp, MP_REGEN_PER_SEC, delta)
+    this.syncMpMax()
     const edges = this.collectEdges()
     const jumped = edges.pressJump && this.heroState.vertical.grounded
     advanceHero(this.heroState, edges, delta, this.heroConfig)
@@ -761,6 +901,11 @@ export class BattleScene extends Phaser.Scene {
     // A single incoming-hit channel: prefer the hero's melee hit; otherwise let
     // a due burn tick ride it (deferred a frame when they collide).
     let incomingHit = this.resolveHeroHit()
+    // Skill hits ride the same channel as the combo (one per frame), so
+    // monsterSim resolves them with its normal dedup/hurt/death path.
+    if (!incomingHit && monsterAlive && this.skillHitQueue.length > 0) {
+      incomingHit = this.skillHitQueue.shift()!
+    }
     if (!incomingHit && monsterAlive && this.burn && this.simClockMs >= this.burn.nextAtMs) {
       incomingHit = { attackId: ++this.burnAttackId, damage: this.burn.power }
       this.burn.ticksLeft -= 1
@@ -962,7 +1107,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private collectEdges(): HeroEdges {
-    if (this.dialogue.isOpen || isHeroDead(this.identity)) {
+    // Block input while a dialogue is up, the hero is dead, or a skill's shared
+    // busy-lock is active (the latter enforces the skill<->combo exclusion).
+    if (this.dialogue.isOpen || isHeroDead(this.identity) || this.skillRuntime.cooldownMs > 0) {
       this.injected = { ...NO_EDGES }
       return { ...NO_EDGES }
     }
@@ -990,7 +1137,11 @@ export class BattleScene extends Phaser.Scene {
       this.hero.setAlpha(1)
       this.hero.setTint(0x777777)
     } else {
-      if (this.hero.anims.currentAnim?.key !== action) this.hero.play(action)
+      // A skill cast holds its pose for the busy-lock duration, overriding the
+      // heroSim action underneath.
+      if (this.skillAnim && this.simClockMs >= this.skillAnim.untilMs) this.skillAnim = null
+      const effective = this.skillAnim ? this.skillAnim.action : action
+      if (this.hero.anims.currentAnim?.key !== effective) this.hero.play(effective)
       this.hero.setAngle(0)
       // Flicker while the per-hit / meter i-frames are up (clear read that the
       // hero is briefly untargetable after a hit).
@@ -1055,21 +1206,29 @@ export class BattleScene extends Phaser.Scene {
     const body = stacks.length ? stacks.map((st) => `${st.item.name} ×${st.qty}`).join('\n') : '(空)'
     this.invText.setText('背包\n' + body)
 
-    // Hero HP bar + stats.
+    // Hero HP bar + MP bar + stats.
     const c = this.identity.combat
     const hp = Math.round(c.hp)
     const bar = this.heroHpBar
     bar.clear()
-    bar.fillStyle(0x2a1414, 1).fillRoundedRect(22, 20, 200, 16, 4)
+    bar.fillStyle(0x2a1414, 1).fillRoundedRect(22, 18, 200, 14, 4)
     const frac = c.maxHp > 0 ? c.hp / c.maxHp : 0
     const barColor = isHeroDead(this.identity) ? 0x555555 : 0xd94a4a
-    bar.fillStyle(barColor, 1).fillRoundedRect(22, 20, Math.max(2, 200 * frac), 16, 4)
-    bar.lineStyle(1, 0xd9b45a, 0.8).strokeRoundedRect(22, 20, 200, 16, 4)
+    bar.fillStyle(barColor, 1).fillRoundedRect(22, 18, Math.max(2, 200 * frac), 14, 4)
+    bar.lineStyle(1, 0xd9b45a, 0.8).strokeRoundedRect(22, 18, 200, 14, 4)
+    // MP bar (blue), just under HP.
+    const mpBar = this.mpBar
+    mpBar.clear()
+    mpBar.fillStyle(0x141a2a, 1).fillRoundedRect(22, 36, 200, 9, 3)
+    const mpFrac = this.mp.maxMp > 0 ? this.mp.mp / this.mp.maxMp : 0
+    mpBar.fillStyle(0x4a7ad9, 1).fillRoundedRect(22, 36, Math.max(2, 200 * mpFrac), 9, 3)
+    mpBar.lineStyle(1, 0x6a8fd9, 0.7).strokeRoundedRect(22, 36, 200, 9, 3)
     const atk = heroTotalAtk(this.identity, this.equipment)
     const weaponName = this.equipment.weapon ? this.equipment.weapon.name : '空手'
     const p = this.identity.progression
     this.statsText.setText(
-      `Lv.${p.level}  EXP ${p.exp}/${p.expToNext}\nHP ${hp}/${c.maxHp}　攻击 ${atk}　武器: ${weaponName}`,
+      `Lv.${p.level}  EXP ${p.exp}/${p.expToNext}　MP ${Math.round(this.mp.mp)}/${this.mp.maxMp}\n` +
+        `HP ${hp}/${c.maxHp}　攻击 ${atk}　武器: ${weaponName}`,
     )
   }
 
@@ -1319,6 +1478,32 @@ export class BattleScene extends Phaser.Scene {
       return this.paused
     }
     w.__returnToMenu = () => this.returnToMainMenu()
+    // Skill / MP acceptance hooks.
+    w.__castSkill = (skillId: Role1SkillId) => {
+      const mpBefore = Math.round(this.mp.mp)
+      const monsterHpBefore = this.monsterState.hp
+      this.castSkill(skillId)
+      return {
+        cast: this.skillAnim?.action ?? null,
+        mpBefore,
+        mpAfter: Math.round(this.mp.mp),
+        cooldownMs: Math.round(this.skillRuntime.cooldownMs),
+        queuedHits: this.skillHitQueue.length,
+        monsterHpBefore,
+      }
+    }
+    w.__skillState = () => ({
+      mp: Math.round(this.mp.mp),
+      maxMp: this.mp.maxMp,
+      cooldownMs: Math.round(this.skillRuntime.cooldownMs),
+      levels: this.skillRuntime.levels,
+      monsterHp: this.monsterState.hp,
+      queuedHits: this.skillHitQueue.length,
+    })
+    w.__setSkillLevels = (levels: Partial<Role1SkillLevels>) => {
+      syncRole1SkillLevels(this.skillRuntime, levels)
+      return this.skillRuntime.levels
+    }
     w.__toggleDebug = () => {
       this.debugVisible = !this.debugVisible
       for (const t of this.debugTexts) t.setVisible(this.debugVisible)
