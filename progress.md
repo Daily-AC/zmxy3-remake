@@ -86,6 +86,25 @@
   - **integration-batch（ff2c7bb 已推）：主线骨架全接活。** heroIdentity.ts 统一宿主，死亡/复活/升级/装备数值/武器视觉/onHit procs 全部进 BattleScene。截图亲验：HP 0/80 灰化倒地复活、赤炎噬血杖上手攻击 10→55（一击 82 毙命 vs 空手 37）、Lv.2 升级材料入包。遗留：tsc 两处报错在 meta-shell 在建文件（saveSlots.ts:125 cast、MenuButton.ts 未用变量），记为其验收项；伤害飘字截图未定格（机制已数值实证）。
   - BattleScene 笔已传下一棒：integration-batch 接**炼丹炉场景接线**（掉料→老君对话炼宝→入包穿上，demo 核心面）。移植协议三条已写入项目 CLAUDE.md（疑点落 report 不落代码、基线后场景 A/B、真 bug 与平台适配可当场改）。
 
+- 16:45 **三线验收通过**（全部已上 remote）：
+  - level-pipeline 阶段1+2：第 2 关天王关（fc44497）——6 怪動作表/数值 SWF 原值逐字（多闻天王 16000/广目 12000/增长 7874），预览截图亲验；playbook 落盘（3c4f239）。接口缺口上报→我拍方案(a)亲手落地：MonsterSpeciesId 开放 string + 内部 BuiltinSpeciesId 保拼写检查（6cf311e）。阶段3已放行：worker 铺 L3（Boss 二郎神 HP_REJECT）/L4。
+  - audio（b6fa1bf）：mp3 提取实为 session1 已完成（84 枚），本棒做独立对账（84/84 零缺口，Music.swf 唯一音源已排他验证）+ MANIFEST（置信度标注）+ soundMap.ts 纯数据映射（测试断言 key→磁盘真实文件）。真实缺口记档：wait/walk/levelup/ui_click 等原版无音效。
+  - furnace 收尾（3f1e44a）：home 部署新版 agent-server（ff 到 faab9ba + systemd 重启，key 未落盘）+ mac→wss://zm-dev→真实 DeepSeek 远端往返炼出「赤焰噬魂枪」入库。真实 shape 与 mock 一致；行为差异记档：真实模型基本不触发 clamp，"威力已收敛"提示多数不出现。
+  - 测试基线 235。BattleScene 接线棒队列：炼丹炉（在途）→ 关卡（LEVELS+sprite 预加载）→ 技能/MP → 音效(soundMap)/手感。
+
+- 16:50 **再两线验收通过（已推）**：monster-behavior（cb190c6）——Monster3(kagami逐字)/7/13(SWF自逆向) 数据驱动行为库，选型有据（扫 85 个 monster 类分辨真弹道 EnemyMoveBullet，仅 Monster13 既真弹道又在 2~4 关表内）；SWF 版本分歧（Monster3 def）与 Monster7 空技能槽如实记档不实现。meta-shell（bd93d12）——主菜单/存档槽(3槽含删除确认)/选人壳全走通，**挖到真原版选人素材 SelectRole（五格墨迹立绘）**，tsc 欠账已清；读档播种/存回/游戏时间/回菜单四个接口留给 BattleScene 棒（report §3 有代码级示例）。
+- **BattleScene 接线棒队列（更新）**：炼丹炉（在途）→ 壳存档播种/存回（小，report 有现成示例）→ 关卡接线（LEVELS+sprite 预加载+新怪行为消费）→ 技能/MP → 音效(soundMap)/手感。测试基线 235，tsc 全清。
+
+- 17:10 **主线两大棒合龙（已推）**：炼丹炉场景接线（26043fa）——掉料→老君炼宝→穿上变强浏览器真机走通（材料消耗/超预算退料/999 攻双层 clamp 数值实证）；壳存档接线（a9c57b7）——选槽→打怪升级炼宝→存档回主菜单→继续档等级/背包/装备原样恢复 + Esc 暂停菜单 + 自动存（升级/炼成/穿脱/退出）。**"登录选人开档变强存档"童年链全真实闭环。**
+- 关卡线收官：L3 二郎神关（b195b10，二郎神 hp45137+哮天犬伴生+HP_REJECT 实为对英雄 30s 禁回血 debuff，逐行验证）、L4 邪念之境（81cbe45，邪四圣 Boss 链）、cast 清理+FFDec headless 坑单（2b581f3）。L5+ 暂停待赛后。**平衡断层立项**：关卡怪血是原版口径（万级）vs 英雄小数值口径——hero-scale 单已派（heroScale.ts + 可赢性核算表），是关卡接线前置。
+- **UI 两次用户打回（重要教训）**：主菜单 + 炼宝面板均为"脚手架审美"，与原版无对比。纠偏：meta-shell 优先重做主菜单（穷尽挖原版标题素材，"没有"须附证据）、炼丹炉/对话框素材加入挖掘清单；**UI 验收新标准：与原版并排对比图 + 用户点头，主会话不再代打视觉分**。FFDec 裸跑弹 GUI 事故已归因（level-pipeline 认领）+ 坑单落 playbook。
+- 笔队列：技能/MP 接线（在途）→ 关卡接线（等 hero-scale）→ 音效(soundMap) → 手感 → UI 换装。
+
+- 17:40 **原版口径弹药全部齐装（已推）**：heroScale（41318ac，普攻真公式 0.707/1.183/1.304×Hurt——kagami 普攻实为写死 30-34 的占位符；防御公式确认现行=原版；可赢性瓶颈修正为"站不住"：二郎神 hit2=1299 > L20 全血）；heroGrowth（b1c9175，成长曲线确认 kagami 忠实=原版，二郎神禁疗精确语义：回血整笔丢弃）；skillDamageReal（d7bf1a5，真技能公式=每技能四系数指数式，与 kagami 差 1.4~663x 非单调，筋斗云被 kagami 错放大 500x+；带分歧守护测试）；furnace 上限 atk/def→200、hp/mp→800 两侧镜像（edf378b，e2e 复验）。**源优先级教训入 CLAUDE.md：数值以原版 AS3 为真源，kagami 仅结构参考。**
+- 技能/MP 接线验收（6cdf759）：数字键九技+MP 条+busy-lock 互斥+拒放 toast，临时 SKILL_DAMAGE_SCALE 待换装删。发现多 agent 共享 playwright 浏览器互踩（MP/位置被外部改），后续浏览器验收需独立 tab/context。
+- 素材战线（用户情报驱动）：造梦 Online 客户端（home，疑似 Electron）= 全系列合集含官方造3 入口——vendor 0.72 是魔改版，Online 内造3 是官方真源候选。用户已登录进造3 主页缓存已热；acceptance 在挖（app.asar + Chromium cache 的 CDN URL 清单，产物落 docs/reference/zmxy3-official/）。Online 六屏真机截图已入库 docs/reference/zmxy-online-screens/（UI 语言参考，非复刻真源）。
+- 在途：integration-batch 合龙大棒（口径统一换装+关卡链接线，判据=预期等级炼装真实击杀多闻天王且秒数落核算区间）、level-pipeline 真·L1 移植（1.swf）、skill-tree-port 丹药表、meta-shell UI 组件+炼丹炉素材、acceptance home 挖掘。
+
 ### 赛后路线图（终包后）
 - **NPC Agent 能力架构**（游戏作为 MCP、每 NPC 受限工具集=权限边界、动态权限；炼丹炉照配方合成 / 老君概率交易以贱换尊）：用户 2026-07-07 提出的拓展构想，是"agent 驱动 NPC"愿景的完全体，需深入设计再做，**暂缓**。完整记录见 docs/design/npc-agent-mcp.md。
 - 关卡流水线：16 个同构关卡包可多 agent 并行移植（导包→抠怪物动作表→接波次→对 kagami 文档验数值）；每关 Boss 专属机制（HP_REJECT/弹幕MC）是硬骨头逐个啃。
