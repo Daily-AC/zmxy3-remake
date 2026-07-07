@@ -80,7 +80,9 @@ const ONLINE = 'assets/online/'
 export const ROLE1_SKILL_IDS = ['slz', 'lys', 'hytj', 'lyfb', 'jdy', 'qsez', 'zz', 'hmz', 'hyjj'] as const
 
 export const ONLINE_TEXTURES: TextureRef[] = [
-  ...ROLE1_SKILL_IDS.map((id) => ({ key: `skill_${id}`, url: `${ONLINE}skill-icons/ss_${id}.png` })),
+  // Dock icons use the brighter RoleSkillInterface skill-tree icons (sb_*, 66px,
+  // edge-to-edge fire, no baked frame) rather than the darker framed ss_* set.
+  ...ROLE1_SKILL_IDS.map((id) => ({ key: `skill_${id}`, url: `${ONLINE}skill-icons/sb_${id}.png` })),
   { key: 'result_success', url: `${ONLINE}results/challenge-success.png` },
   { key: 'result_fail', url: `${ONLINE}results/challenge-fail.png` },
   { key: 'result_my', url: `${ONLINE}results/my-results-banner.png` },
