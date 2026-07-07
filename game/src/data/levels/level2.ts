@@ -35,19 +35,14 @@
 // difficulty ordering that matters (grunt < 增长 7874 < 广目 12000 < 多闻 16000)
 // is preserved regardless.
 //
-// INTERFACE GAP (reported to team-lead): `MonsterSpeciesId` and
-// `MONSTER_SPECIES_STATS` in systems/level.ts are a closed union / Record over
-// only level-1's seven sprites. Level 2 introduces monster6/9/10/15/16/19,
-// none of which are in that union. We can't extend it without editing
-// systems/level.ts (off-limits: shared across teams), so the six species
-// below are cast to MonsterSpeciesId at the `king`/`grunt` helpers. This is
-// runtime-safe — level.ts's state machine treats `species` as an opaque label
-// and only reads `stats` — but it won't type-check into level.ts's `LEVELS`
-// array until the union is widened (proposed: make MonsterSpeciesId `string`
-// and move the stats presets to the data layer).
+// Species outside level 1's roster (monster6/9/10/15/16/19) are plain string
+// ids: `MonsterSpeciesId` is now `string` in systems/level.ts (the closed
+// union was reopened by the lead so data-layer level packs can carry their own
+// species; level.ts keeps a private `BuiltinSpeciesId` union only for level
+// 1's own preset table). No casts needed.
 
 import type { MonsterStats } from '../../systems/monsterSim'
-import type { LevelDef, MonsterSpawnSpec, MonsterSpeciesId, WaveSpec } from '../../systems/level'
+import type { LevelDef, MonsterSpawnSpec, WaveSpec } from '../../systems/level'
 
 /** Real recovered per-species stats for level 2 (see file header). */
 export const LEVEL2_MONSTER_STATS: Record<string, MonsterStats> = {
@@ -68,10 +63,8 @@ export const LEVEL2_MONSTER_NAMES: Record<string, string> = {
   monster15: '多闻天王',
 }
 
-// See INTERFACE GAP note: `as MonsterSpeciesId` is the single documented cast
-// point until level.ts's union is widened.
 function unit(species: string): MonsterSpawnSpec {
-  return { species: species as MonsterSpeciesId, stats: LEVEL2_MONSTER_STATS[species] }
+  return { species, stats: LEVEL2_MONSTER_STATS[species] }
 }
 
 function wave(...species: string[]): WaveSpec {
@@ -106,7 +99,7 @@ export const LEVEL_2_TIANWANG: LevelDef = {
     wave('monster9', 'monster10', 'monster19'),
   ],
   boss: {
-    species: 'monster15' as MonsterSpeciesId,
+    species: 'monster15',
     stats: LEVEL2_MONSTER_STATS.monster15,
     label: LEVEL2_MONSTER_NAMES.monster15, // 多闻天王
   },

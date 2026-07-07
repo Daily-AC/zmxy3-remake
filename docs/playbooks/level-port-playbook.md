@@ -135,3 +135,4 @@ pkill -f "http.server 8791"
 5. **`setFrameCount` length can exceed the sheet's row count** (e.g. Monster10 has 6 entries, 5 rows). `setFrameStopCount` + sheet dims are authoritative for row count; record the extra `frameCount` value faithfully but don't invent a row.
 6. **`probability` ≠ `normalAttackRate`.** Grunts set `probability=0` (they melee on contact); mapping that literally makes them inert in the sim. Use a documented stand-in.
 7. **Pick the right stat branch** (§4) — the elite `gc.curStage==9` numbers are for a later level, not yours.
+8. **Never run FFDec headless-less.** `java -jar tools/ffdec/ffdec-cli.jar` with **no** action arg pops the desktop GUI onto the user's screen (a real incident happened). Every invocation MUST carry a CLI action (`-export`, `-selectclass`, `-dumpSWF`, `-format ...`, `-selectid ...`). Don't leave a bare `java -jar ...ffdec-cli.jar` anywhere — not even as a no-op / accidental leftover in a shell loop.
