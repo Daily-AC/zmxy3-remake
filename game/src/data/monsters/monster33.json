@@ -1,0 +1,14 @@
+{
+  "source": "export.monster.Monster33.initBBDC()+setAction() in 打开我开始玩.swf; sheet 4.swf chid3 Monster33. 邪.八戒 (Evil Bajie), 2nd link in level-4's sequential boss chain (Monster32.destroy() spawns this; this.destroy() spawns Monster31 next). Single unbranched constructor, isBoss=true unconditional. Highest hp of the whole chain (67612) despite not being the level's terminal boss species (that's Monster34, per its destroy()'s exclusive transferDoor-reveal check). Cell is 300x200 (5*60 arithmetic in initBBDC, like Role3/八戒 elsewhere in this game per the playbook's pitfall #2). Row4 is a shared pose bank (jump1 col0/jump3 col1/hurt col2/hit6 col3/hit5+hit11Frame2+hit12 col5); only hurt is encoded (1 frame). No dedicated dead row (alpha-fade only) — omitted. Recovered stats in data/levels/level4.ts.",
+  "sheet": { "cols": 6, "rows": 14, "cellW": 300, "cellH": 200, "facing": "left" },
+  "offset": { "x": -15, "y": 0 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 36 },
+    "walk": { "col": 0, "row": 3, "frames": 4, "stopCounts": [2, 2, 2, 2], "frameCount": 4 },
+    "hurt": { "col": 2, "row": 4, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "hit1": { "col": 0, "row": 6, "frames": 3, "stopCounts": [2, 2, 6], "frameCount": 3 },
+    "hit2": { "col": 0, "row": 7, "frames": 3, "stopCounts": [2, 2, 6], "frameCount": 3 },
+    "hit3": { "col": 0, "row": 8, "frames": 4, "stopCounts": [2, 2, 2, 10], "frameCount": 4 },
+    "hit4": { "col": 0, "row": 9, "frames": 3, "stopCounts": [24, 2, 8], "frameCount": 3 }
+  }
+}

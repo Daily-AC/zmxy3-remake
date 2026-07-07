@@ -1,0 +1,14 @@
+{
+  "source": "export.monster.Monster34.initBBDC()+setAction() in 打开我开始玩.swf; sheet 4.swf chid1 Monster34. 邪.悟空 (Evil Wukong), 4th/final link in level-4's sequential boss chain (Monster31.destroy() spawns this). This is the level's true boss: its destroy() is the only one of the four with `if(this.isBoss){ ...transferDoorArray visible=true }`, revealing the exit regardless of it not having the chain's highest hp (67612 belongs to Monster33; this one is 54423) — confirmed from AS3, not guessed. Single unbranched constructor, isBoss=true unconditional. Unlike 31/32/33, this monster has a genuinely distinct walk row (row2) separate from run (row3). Row4 is a shared pose bank (jump1 col0/jump3 col1/hit9 col2/hit10 col3/hit11_1 col4/hit11_2 col5); row12 is a second pose bank (hit12 col0/hit7 col1/hurt col2/hit13 col3) — only hurt is encoded from it (1 frame). No dedicated dead row (alpha-fade only) — omitted. Recovered stats in data/levels/level4.ts.",
+  "sheet": { "cols": 6, "rows": 14, "cellW": 200, "cellH": 200, "facing": "left" },
+  "offset": { "x": 5, "y": -15 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 36 },
+    "walk": { "col": 0, "row": 2, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 2, "row": 12, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "hit1": { "col": 0, "row": 6, "frames": 5, "stopCounts": [2, 2, 1, 1, 3], "frameCount": 5 },
+    "hit3": { "col": 0, "row": 7, "frames": 5, "stopCounts": [1, 1, 1, 1, 5], "frameCount": 5 },
+    "hit4": { "col": 0, "row": 8, "frames": 5, "stopCounts": [1, 1, 1, 1, 12], "frameCount": 5 },
+    "hit6": { "col": 0, "row": 10, "frames": 4, "stopCounts": [2, 2, 1, 6], "frameCount": 4 }
+  }
+}
