@@ -83,14 +83,12 @@
 // in-engine until the hero's original-scale damage is ported; kept real here
 // because fidelity is the mandate.
 //
-// INTERFACE NOTE: MonsterSpeciesId was widened to `string` in systems/level.ts
-// (commit 6cf311e, "open MonsterSpeciesId to string for data-layer level
-// packs") since level 2's pilot reported the closed-union gap — the
-// `as MonsterSpeciesId` cast below is now a no-op assertion, kept only for
-// consistency with level2.ts's pattern and because it costs nothing.
+// Species are plain string ids: MonsterSpeciesId is `string` in
+// systems/level.ts (widened in commit 6cf311e so data-layer level packs carry
+// their own species). No casts needed.
 
 import type { MonsterStats } from '../../systems/monsterSim'
-import type { LevelDef, MonsterSpawnSpec, MonsterSpeciesId, WaveSpec } from '../../systems/level'
+import type { LevelDef, MonsterSpawnSpec, WaveSpec } from '../../systems/level'
 
 /** Real recovered per-species stats for level 3 (see file header). */
 export const LEVEL3_MONSTER_STATS: Record<string, MonsterStats> = {
@@ -118,10 +116,8 @@ export const LEVEL3_MONSTER_NAMES: Record<string, string> = {
   monster23: '哮天犬',
 }
 
-// See INTERFACE NOTE above: `as MonsterSpeciesId` is now a no-op cast
-// (MonsterSpeciesId = string) kept for pattern consistency with level2.ts.
 function unit(species: string): MonsterSpawnSpec {
-  return { species: species as MonsterSpeciesId, stats: LEVEL3_MONSTER_STATS[species] }
+  return { species, stats: LEVEL3_MONSTER_STATS[species] }
 }
 
 function wave(...species: string[]): WaveSpec {
@@ -158,7 +154,7 @@ export const LEVEL_3_ERLANGSHEN: LevelDef = {
     wave('monster14', 'monster1', 'monster23', 'monster11', 'monster12', 'monster13'),
   ],
   boss: {
-    species: 'monster22' as MonsterSpeciesId,
+    species: 'monster22',
     stats: LEVEL3_MONSTER_STATS.monster22,
     label: LEVEL3_MONSTER_NAMES.monster22, // 二郎神
   },

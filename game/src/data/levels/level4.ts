@@ -51,17 +51,12 @@
 // unit, and 八戒 > 悟空 > 沙僧 > 唐僧 in raw hp even though 悟空 is the true
 // gate) is preserved and asserted in the test.
 //
-// INTERFACE GAP (reported to team-lead, same as level 2): `MonsterSpeciesId`
-// and `MONSTER_SPECIES_STATS` in systems/level.ts are a closed union/Record
-// over level-1's seven sprites only. Level 4 introduces monster31/32/33/34,
-// none of which are in that union. Cast to MonsterSpeciesId at the single
-// documented `unit()` helper below (runtime-safe, species is an opaque
-// label) — still blocked from joining `LEVELS`/BattleScene until the union
-// is widened or stats presets move to the data layer. Both files remain
-// off-limits to this team.
+// Species (monster31/32/33/34) are plain string ids: MonsterSpeciesId is
+// `string` in systems/level.ts (widened in commit 6cf311e so data-layer level
+// packs carry their own species). No casts needed.
 
 import type { MonsterStats } from '../../systems/monsterSim'
-import type { LevelDef, MonsterSpawnSpec, MonsterSpeciesId, WaveSpec } from '../../systems/level'
+import type { LevelDef, MonsterSpawnSpec, WaveSpec } from '../../systems/level'
 
 /** Real recovered per-species stats for level 4 (see file header). Every
  * species here is a full isBoss=true unit — there is no grunt tier in this
@@ -81,10 +76,8 @@ export const LEVEL4_MONSTER_NAMES: Record<string, string> = {
   monster34: '邪.悟空',
 }
 
-// See INTERFACE GAP note: `as MonsterSpeciesId` is the single documented cast
-// point until level.ts's union is widened.
 function unit(species: string): MonsterSpawnSpec {
-  return { species: species as MonsterSpeciesId, stats: LEVEL4_MONSTER_STATS[species] }
+  return { species, stats: LEVEL4_MONSTER_STATS[species] }
 }
 
 function wave(...species: string[]): WaveSpec {
@@ -117,7 +110,7 @@ export const LEVEL_4_XIENIAN: LevelDef = {
     wave('monster31'), // 邪.唐僧, third
   ],
   boss: {
-    species: 'monster34' as MonsterSpeciesId,
+    species: 'monster34',
     stats: LEVEL4_MONSTER_STATS.monster34,
     label: LEVEL4_MONSTER_NAMES.monster34, // 邪.悟空
   },
