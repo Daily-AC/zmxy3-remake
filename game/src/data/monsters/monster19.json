@@ -1,0 +1,12 @@
+{
+  "source": "export.monster.Monster19.initBBDC()+setAction() in 打开我开始玩.swf; sheet 2.swf chid5 Monster19. Level-2 grunt (else-branch, hp 1200). Only wait/walk/hurt/dead/hit1 (no hit2).",
+  "sheet": { "cols": 6, "rows": 5, "cellW": 200, "cellH": 200, "facing": "left" },
+  "offset": { "x": -35, "y": -30 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 5, "stopCounts": [2, 2, 2, 2, 7], "frameCount": 5 },
+    "hit1": { "col": 0, "row": 4, "frames": 6, "stopCounts": [2, 2, 2, 1, 1, 8], "frameCount": 6 }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "source": "export.monster.Monster6.initBBDC()+setAction() in 打开我开始玩.swf; sheet 2.swf chid4 Monster6. 增长天王 (Heavenly King, level-2 scene-1 sub-boss). Recovered stats in data/levels/level2.ts.",
+  "sheet": { "cols": 7, "rows": 7, "cellW": 300, "cellH": 400, "facing": "left" },
+  "offset": { "x": 0, "y": -55 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 7, "stopCounts": [2, 2, 2, 2, 2, 2, 18], "frameCount": 7 },
+    "hit1": { "col": 0, "row": 4, "frames": 4, "stopCounts": [2, 2, 2, 9], "frameCount": 4 },
+    "hit2": { "col": 0, "row": 5, "frames": 4, "stopCounts": [2, 2, 19, 50], "frameCount": 4 },
+    "hit3": { "col": 0, "row": 6, "frames": 6, "stopCounts": [2, 2, 2, 2, 7, 17], "frameCount": 6 }
+  }
+}

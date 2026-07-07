@@ -1,0 +1,15 @@
+{
+  "source": "export.monster.Monster16.initBBDC()+setAction() in 打开我开始玩.swf; sheet 2.swf chid6 Monster16. 广目天王 (Heavenly King, level-2 scene-2 sub-boss). Four attack rows (hit1-hit4). Recovered stats in data/levels/level2.ts.",
+  "sheet": { "cols": 6, "rows": 8, "cellW": 300, "cellH": 300, "facing": "left" },
+  "offset": { "x": 0, "y": -20 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 5, "stopCounts": [2, 2, 2, 2, 7], "frameCount": 5 },
+    "hit1": { "col": 0, "row": 4, "frames": 6, "stopCounts": [2, 2, 2, 2, 2, 10], "frameCount": 6 },
+    "hit2": { "col": 0, "row": 5, "frames": 4, "stopCounts": [2, 2, 2, 30], "frameCount": 4 },
+    "hit3": { "col": 0, "row": 6, "frames": 6, "stopCounts": [2, 2, 2, 2, 2, 20], "frameCount": 6 },
+    "hit4": { "col": 0, "row": 7, "frames": 4, "stopCounts": [2, 2, 2, 25], "frameCount": 4 }
+  }
+}

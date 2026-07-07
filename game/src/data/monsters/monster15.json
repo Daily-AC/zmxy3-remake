@@ -1,0 +1,15 @@
+{
+  "source": "export.monster.Monster15.initBBDC()+setAction() in 打开我开始玩.swf; sheet 2.swf chid7 Monster15. 多闻天王 (Heavenly King, level-2 final boss). Four attack rows (hit1 physical 186, hit2/3/4 magic). Recovered stats in data/levels/level2.ts.",
+  "sheet": { "cols": 6, "rows": 8, "cellW": 300, "cellH": 350, "facing": "left" },
+  "offset": { "x": 0, "y": -60 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 6, "stopCounts": [2, 2, 2, 2, 2, 7], "frameCount": 6 },
+    "hit1": { "col": 0, "row": 4, "frames": 2, "stopCounts": [19, 16], "frameCount": 2 },
+    "hit2": { "col": 0, "row": 5, "frames": 4, "stopCounts": [2, 2, 2, 30], "frameCount": 4 },
+    "hit3": { "col": 0, "row": 6, "frames": 3, "stopCounts": [29, 2, 20], "frameCount": 3 },
+    "hit4": { "col": 0, "row": 7, "frames": 3, "stopCounts": [2, 2, 40], "frameCount": 3 }
+  }
+}
