@@ -39,6 +39,8 @@ import {
   updateHeroIdentity,
   heroTotalAtk,
   heroTotalDef,
+  heroMagicDef,
+  syncHeroEquipment,
   heroStats,
   isHeroDead,
   isHeroInvincible,
@@ -67,6 +69,7 @@ import { LEVEL_1_WUYING, LEVEL1_MONSTER_NAMES } from '../data/levels/level1'
 import { LEVEL_2_TIANWANG, LEVEL2_MONSTER_NAMES } from '../data/levels/level2'
 import { LEVEL_3_ERLANGSHEN, LEVEL3_MONSTER_NAMES } from '../data/levels/level3'
 import { LEVEL_4_XIENIAN, LEVEL4_MONSTER_NAMES } from '../data/levels/level4'
+import { monsterExp } from '../data/monsterExp'
 import type { HeroHit } from '../systems/heroCombat'
 import { rollOnHitProcs } from '../systems/effects'
 import {
@@ -170,9 +173,6 @@ const HERO_TEX = 'role1_0'
 // exist (EQUIP_6/7 are absent in every pack); Stage A uses the default EQUIP_0.
 const WEAPON_TEX = 'role1_equip0'
 const HERO_ID = 1 as const // 悟空 = kagami hero curve #1 (progression.ts)
-// Exp per monster kill. TODO-verify: monster JSON carries no exp field yet
-// (progression.ts note); flat award, demo-visible level-ups.
-const MONSTER_KILL_EXP = 80
 const HERO_START_X = 480
 const BURN_TICKS = 4
 const BURN_INTERVAL_MS = 260
@@ -186,7 +186,10 @@ const NPC_WAIT_FRAMES = 6 // row 0 = idle
 const NPC_IDLE_FRAME_MS = 130
 const NPC_OFFSET = { x: -10, y: -30 }
 const GROUND_Y = 400
-const FLOOR_LINE = GROUND_Y + 70
+// Floor art (floorBgN) is a whole scene; crop off the top rainbow/palace band
+// (already drawn by bg11) and anchor the platform + foreground clouds here.
+const FLOOR_CROP_TOP = 0.27
+const FLOOR_TOP_Y = 356
 const MIN_X = 90
 const MAX_X = 1460
 const WORLD_W = 1560
@@ -539,6 +542,8 @@ export class BattleScene extends Phaser.Scene {
       this.equipment = createEquipment()
       this.inventory = createInventory(24)
     }
+    // Fold the equipped gear's hp/mp affixes into the live pools.
+    syncHeroEquipment(this.identity, this.equipment)
 
     // Continue accruing from the slot's stored playtime (lives only in slot meta).
     this.playtimeAccMs = 0
@@ -547,7 +552,7 @@ export class BattleScene extends Phaser.Scene {
 
     // MP (full) sized to the hero's level; skill runtime with the demo loadout.
     // MP isn't persisted (save.ts has no mp field) — it refills on load/level.
-    this.mp = createMp(getRole1MaxMp(this.identity.progression.level))
+    this.mp = createMp(getRole1MaxMp(this.identity.progression.level) + this.identity.equipMaxMpBonus)
     this.skillRuntime = createRole1SkillRuntime()
     syncRole1SkillLevels(this.skillRuntime, SKILL_DEMO_LEVELS)
 
@@ -587,19 +592,29 @@ export class BattleScene extends Phaser.Scene {
   private buildPauseMenu(): void {
     const scrim = this.add.rectangle(480, 270, 960, 540, 0x05060c, 0.62).setScrollFactor(0)
     const panel = this.add
-      .rectangle(480, 270, 360, 240, 0x1a130c, 0.96)
+      .rectangle(480, 276, 380, 320, 0x1a130c, 0.96)
       .setStrokeStyle(2, 0xd9b45a, 0.9)
       .setScrollFactor(0)
     const title = this.add
-      .text(480, 190, '暂停', { fontSize: '26px', color: '#f0d99a', fontStyle: 'bold' })
+      .text(480, 168, '暂停', { fontSize: '26px', color: '#f0d99a', fontStyle: 'bold' })
       .setOrigin(0.5)
       .setScrollFactor(0)
-    const resume = this.pauseButton(480, 250, '继续', 0xd9b45a, () => this.togglePause())
-    const saveQuit = this.pauseButton(480, 306, '保存并回主菜单', 0x8a7f66, () =>
+    const resume = this.pauseButton(480, 226, '继续', 0xd9b45a, () => this.togglePause())
+    const saveQuit = this.pauseButton(480, 282, '保存并回主菜单', 0x8a7f66, () =>
       this.returnToMainMenu(),
     )
+    // Key-help lives here now (kept off the battlefield).
+    const help = this.add
+      .text(
+        480,
+        356,
+        'A/D 走　K 跳　J 连击\nYUIOL 技能　B 背包\nW/↑ 对话·传送　E 穿戴',
+        { fontSize: '14px', color: '#c8bfa6', align: 'center', lineSpacing: 6 },
+      )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
     this.pauseMenu = this.add
-      .container(0, 0, [scrim, panel, title, ...resume, ...saveQuit])
+      .container(0, 0, [scrim, panel, title, ...resume, ...saveQuit, help])
       .setScrollFactor(0)
       .setDepth(300)
       .setVisible(false)
@@ -645,7 +660,7 @@ export class BattleScene extends Phaser.Scene {
 
   /** Keep MP's cap on the hero's level curve; grow current MP by any increase. */
   private syncMpMax(): void {
-    const target = getRole1MaxMp(this.identity.progression.level)
+    const target = getRole1MaxMp(this.identity.progression.level) + this.identity.equipMaxMpBonus
     if (target === this.mp.maxMp) return
     const delta = target - this.mp.maxMp
     setMaxMp(this.mp, target)
@@ -758,15 +773,36 @@ export class BattleScene extends Phaser.Scene {
       .setDepth(-40)
     for (const [key, depth, factor] of [
       ['bg13', -30, 0.28],
-      ['bg12', -20, 0.5],
+      // bg12 is the lotus FOREGROUND (leaves + flowers + railings); it sits in
+      // front of the floor cloud band so the lotus reads as the ground edge.
+      ['bg12', -8, 0.5],
     ] as [string, number, number][]) {
       const ts = this.add.tileSprite(0, 0, 960, 540, key).setOrigin(0, 0).setScrollFactor(0).setDepth(depth)
       this.bgTiles.push({ img: ts, factor })
     }
-    // Ground band: a covering Image scaled to span the whole world width so it
-    // never wraps at the right edge either.
-    this.floorImg = this.add.image(0, FLOOR_LINE, 'floorBg1').setOrigin(0, 0).setScrollFactor(0.9, 0).setDepth(-10)
-    this.floorImg.scaleX = Math.max(1, (960 + (WORLD_W - 960) * 0.9 + 40) / this.floorImg.width)
+    // Ground band: the level floor art (floorBgN) is a WHOLE scene — palace +
+    // rainbow on top, 雕花石台 platform + foreground clouds below. Showing it
+    // whole re-drew the rainbow at the bottom (the seam). Crop off the top
+    // ~27% (rainbow + palace, already covered by bg11) and place only the
+    // platform + clouds band at the hero's feet.
+    this.floorImg = this.add.image(0, FLOOR_TOP_Y, 'floorBg1').setOrigin(0, 0).setScrollFactor(0.9, 0).setDepth(-10)
+    this.placeFloor('floorBg1')
+  }
+
+  /** Point the floor image at a level's floor art, cropped to its ground band. */
+  private placeFloor(key: string): void {
+    if (!this.floorImg || !this.textures.exists(key)) return
+    const src = this.textures.get(key).getSourceImage() as { width: number; height: number }
+    const frameName = `${key}__ground`
+    const tex = this.textures.get(key)
+    if (!tex.has(frameName)) {
+      const top = Math.round(src.height * FLOOR_CROP_TOP)
+      tex.add(frameName, 0, 0, top, src.width, src.height - top)
+    }
+    this.floorImg.setTexture(key, frameName)
+    this.floorImg.setPosition(0, FLOOR_TOP_Y)
+    this.floorImg.scaleX = Math.max(1, (960 + (WORLD_W - 960) * 0.9 + 40) / src.width)
+    this.floorImg.scaleY = 1
   }
 
   /** Swap the parallax + floor textures to a level's own art (L1 uses bg1x, L2
@@ -780,10 +816,7 @@ export class BattleScene extends Phaser.Scene {
     if (this.textures.exists(base)) this.bgBase?.setTexture(base)
     if (this.bgTiles[0] && this.textures.exists(far)) this.bgTiles[0].img.setTexture(far)
     if (this.bgTiles[1] && this.textures.exists(near)) this.bgTiles[1].img.setTexture(near)
-    if (this.floorImg && this.textures.exists(floor)) {
-      this.floorImg.setTexture(floor)
-      this.floorImg.scaleX = Math.max(1, (960 + (WORLD_W - 960) * 0.9 + 40) / this.floorImg.width)
-    }
+    if (this.textures.exists(floor)) this.placeFloor(floor)
   }
 
   private registerAnimations(data: RoleData, tex: string, loop: Set<string>, prefix: string): void {
@@ -999,7 +1032,8 @@ export class BattleScene extends Phaser.Scene {
     this.roleInfoHud.container.setScrollFactor(0).setDepth(100)
     this.bossBar = new BossHpBar(this)
     this.bossBar.setVisible(false)
-    this.skillBar = new SkillBarHud(this, 20, 470)
+    // Dock chrome (无双 + cluster + 5 slots) flush to the bottom-left corner.
+    this.skillBar = new SkillBarHud(this, 2, 366, { scale: 1.2 })
     this.skillBar.container.setScrollFactor(0).setDepth(100)
     this.backpack = new BackpackWindow(this, {
       iconKeyFor: (item) => (this.textures.exists('icon_' + item.id) ? 'icon_' + item.id : ICON_FALLBACK_KEY),
@@ -1032,14 +1066,7 @@ export class BattleScene extends Phaser.Scene {
       .setVisible(false)
     this.debugTexts = [this.hud]
 
-    this.add
-      .text(480, 522, 'A/D 走　K 跳　J 连击　YUIOL 技能　B 背包　W/↑ 对话/传送　E 穿戴　Esc 菜单', {
-        fontSize: '13px',
-        color: '#c8cfe6',
-      })
-      .setScrollFactor(0)
-      .setDepth(100)
-      .setOrigin(0.5)
+    // (Key-help now lives in the Esc pause menu, not over the battlefield.)
 
     // NPC name tag (world-space, above the NPC).
     this.npcTag = this.add
@@ -1413,7 +1440,7 @@ export class BattleScene extends Phaser.Scene {
       else if (ev.type === 'death') {
         this.spawnDrops(ev.x, ev.y)
         this.npcClient.worldEvent('monster_killed', { monster: MONSTER_NAMES[e.species] ?? e.species })
-        this.awardKillExp(ev.x, ev.y)
+        this.awardKillExp(ev.x, ev.y, e.species)
       }
     }
   }
@@ -1455,8 +1482,8 @@ export class BattleScene extends Phaser.Scene {
 
   // Kill reward: feed the exp through the identity host so a level-up grows the
   // hero's stats. Show light feedback (float text + a level-up toast/flash).
-  private awardKillExp(x: number, y: number): void {
-    const result = gainHeroExp(this.identity, MONSTER_KILL_EXP)
+  private awardKillExp(x: number, y: number, species: string): void {
+    const result = gainHeroExp(this.identity, monsterExp(species))
     this.floatText(x, y - 40, `+${result.appliedExp} EXP`, 'exp')
     if (result.levelsGained > 0) {
       this.showToast(`升级！ Lv.${result.levelAfter}`, '#ffe066')
@@ -1483,7 +1510,7 @@ export class BattleScene extends Phaser.Scene {
           e.attackPower,
           e.attackKind,
           heroTotalDef(this.identity, this.equipment),
-          0,
+          heroMagicDef(this.identity),
         ),
       ),
     )
@@ -1720,6 +1747,7 @@ export class BattleScene extends Phaser.Scene {
 
   private doEquip(item: Item): boolean {
     if (!equip(this.equipment, this.inventory, item)) return false
+    syncHeroEquipment(this.identity, this.equipment) // fold new gear hp/mp into pools
     this.showToast(`装备【${item.name}】`, '#ffd873')
     this.saveToSlot() // autosave: equipment/bag changed
     return true
@@ -1728,6 +1756,7 @@ export class BattleScene extends Phaser.Scene {
   private doUnequip(slot: EquipSlot): boolean {
     const cur = this.equipment[slot]
     if (!unequip(this.equipment, this.inventory, slot)) return false
+    syncHeroEquipment(this.identity, this.equipment) // drop the gear hp/mp from pools
     this.showToast(`卸下【${cur?.name ?? ''}】`, '#c8cfe6')
     this.saveToSlot() // autosave: equipment/bag changed
     return true
