@@ -110,6 +110,9 @@
 - **素材逆向大捷（f1d7b9e + 工具，已推）**：Online 客户端=AIR薄壳+IE缓存流式 SWF，acceptance 抢救 37 SWF、暴力破解出新 byte-swap 参数 PIVOT=300/END=325（异于离线 200/275），解密器 tools/decrypt-zmxyol-swf.py + 参数与坑入 CLAUDE.md。产出 docs/reference/zmxy-online-extracted/：40 技能图标（9 个符号名精确对应我们悟空技能）+ 5 套伤害数字字体 + YUIOL 热键 + 挑战成功/失败横幅，转 UI 线。meta-shell 据 Online 参考微调飘字/连击/存档卡（37f99e2）。
 - 收敛：阶段B 关卡链接线（在跑，主线）→ 体验棒（UI 五件套换装 + 拾取球生成 + 音效 soundMap，待发）→ 终包。UI 三单（存档壳/主菜单/组件+微调）等用户终审。
 
+- 18:25 **官方造3 UI 挖掘（9137ab8，已推 docs/reference/zmxy3-official/）**：入口=Online 客户端「3 大闹天庭篇」=官方造3；用户手动逛界面让资源流入缓存，acceptance 抓 5 新包。**保真验证彩蛋**：官方强化面板"打造"页头就叫「炼丹炉」——我们炼丹炉的命名是原版原词非自造；官方合成配方图（主装备+副装备+神火+神铁→生成物+所需灵魂）是我们"投料合成"的官方视觉原型；一品～五品丹分级证明"丹"分级是原版词汇。**真源结论**：vendor「再续天庭 0.72」作核心系统真源基线（symbol-count diff 证其更全：OtherMat 304 vs 78，带整套 SelectRole/SelectPlace）；Online「大闹天庭篇」furnace/skill UI 作视觉对照。诚实记录反例：MagicWeapon 是 Online 更大（90 vs 36），"vendor 严格超集"不成立。开放项：vendor backpack1.swf export.strength.* 的呈现完整度未与官方 furnace UI 交叉核对（README 记档）。
+- 打包链路冒烟通过（158977e）：干净 master worktree 出 96MB dist，84 音频/四关素材全进包、相对路径无 file:// 陷阱、home 拉起进主菜单渲染正确。缺口：未模拟点击验证进战斗（终包前补交互验收）。UI 全组件交付待用户终审（壳/主菜单/五组件/微调/SkillBar+ResultBanner）。
+
 ### 赛后路线图（终包后）
 - **NPC Agent 能力架构**（游戏作为 MCP、每 NPC 受限工具集=权限边界、动态权限；炼丹炉照配方合成 / 老君概率交易以贱换尊）：用户 2026-07-07 提出的拓展构想，是"agent 驱动 NPC"愿景的完全体，需深入设计再做，**暂缓**。完整记录见 docs/design/npc-agent-mcp.md。
 - 关卡流水线：16 个同构关卡包可多 agent 并行移植（导包→抠怪物动作表→接波次→对 kagami 文档验数值）；每关 Boss 专属机制（HP_REJECT/弹幕MC）是硬骨头逐个啃。
