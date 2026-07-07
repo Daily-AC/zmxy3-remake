@@ -54,6 +54,14 @@ export const HUD_TEXTURES: TextureRef[] = [
   { key: 'furnace_fusion', url: `${UI}furnace_fusion.png` }, // 合成 fusion panel (export.strength.Fusion)
   { key: 'furnace_frame', url: `${UI}furnace_frame.png` }, // 炼丹炉 ink window frame (official StrengthEquipment 打造 tab header)
   { key: 'skilldock', url: `${UI}hud_roleinfo_bottom_skilldock.png` }, // 无双 + 法宝/宠物/技能/青包/设置 + 5 empty slots (export.RoleInfo bottom)
+  // export.RoleInfo sub-parts (FFDec, OtherMat1 chid264/297/300/303) — ink bg
+  // (avatar blob + 3 tapered bar tracks + level ring) and the red/blue/gold bar
+  // fills, assembled at the SWF object-tree coordinates.
+  { key: 'hud_ri_bg', url: `${UI}hud_ri_bg.png` },
+  { key: 'hud_ri_head', url: `${UI}hud_ri_head.png` },
+  { key: 'hud_ri_hp', url: `${UI}hud_ri_hp.png` },
+  { key: 'hud_ri_mp', url: `${UI}hud_ri_mp.png` },
+  { key: 'hud_ri_exp', url: `${UI}hud_ri_exp.png` },
 ]
 
 /** Item icon keys (21 extracted). Host scene loads these; BackpackWindow maps item.id -> key. */

@@ -1037,7 +1037,7 @@ export class BattleScene extends Phaser.Scene {
   private buildHud(): void {
     // Real battle HUD (ui/hud/): top-left RoleInfo (avatar + HP/MP/EXP + atk),
     // top boss bar, bottom-left skill dock, backpack window (toggle B).
-    this.roleInfoHud = new RoleInfoHud(this, 16, 14)
+    this.roleInfoHud = new RoleInfoHud(this, 14, 12, { scale: 1.3 })
     this.roleInfoHud.container.setScrollFactor(0).setDepth(100)
     this.bossBar = new BossHpBar(this)
     this.bossBar.setVisible(false)
