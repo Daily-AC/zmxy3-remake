@@ -66,6 +66,26 @@
 
 **基建**：agent-server 部署 home wss://zm-dev.qmledmq.cn:8443（老君 24h 在线，DeepSeek 驱动，NPC_BRAIN_PROVIDER=claude 可切回 claude 对照）；打包 acceptance.sh；home 依赖链已装（截屏走 ZmxyScreenshot 计划任务，见 docs/research/home-setup.md）。**git push 坑**：环境变量 https_proxy 偶尔不被 git 继承致 SSL_ERROR_SYSCALL，用 `git -c http.proxy=http://127.0.0.1:7897 push` 显式指定 + 失败重试几次。
 
+## 2026-07-07 session 2 接手（16:00）
+
+- 16:05 接手核查：LevelSystem 在工作树是**完成品**（126/126 全绿含 10 个 level 测试），已合入推送（b7a2ced）；combat-slice 阶段A 半成品确认丢失（BattleScene 零改动），并入集成批次重做。kagami 移植源重拉到 `vendor/kagami-phaser`（gitignored，位置从 scratchpad 改为项目内防再丢）。
+- 16:10 三路并行派工，任务书落 `tasks/`（brief/report 均进 git）：
+  - **integration-batch (opus)**：HeroIdentityState + 受伤死亡/升级/装备闭环（含原阶段A）接进 BattleScene，独占 scenes/+ui/。判据：浏览器实测悟空会死会复活、杀怪升级、穿金箍棒伤害变高。
+  - **furnace (opus)**：炼丹炉纯逻辑 + WS 炼器协议 + agent-server 炼制处理（gameplay-anatomy §5：骨中唯一空白 + agent 差异化落点）。独占 net/+agent-server/。安全核心：游戏侧材料→预算 + 返回装备硬 clamp 不信任服务端。场景接线留串行下一棒。
+  - **skill-tree-port (sonnet)**：kagami HeroSkillSystem Role1 子集 + MP 纯逻辑移植，只加新文件。
+- 防互踩纪律：同 checkout 并行，文件集互不相交写死在任务书；commit 只 add 自己的文件、不 push，主会话验收后统一推。
+
+- 16:25 用户拍板"小公司"模式：多 team 并行 + 主理人层级，黑客松叙事本身 =“用 CC 快速构建大型项目”。新开三线（任务书在 tasks/）：**level-pipeline（opus 主理人，唯一真 team：试点第2关→沉淀 docs/playbooks/level-port-playbook.md→自派 sonnet worker 铺第3、4关）**、**meta-shell（opus：登录/选存档槽/选人壳，save.ts 接线，原版素材挖掘）**、**acceptance（sonnet：tools/acceptance/acceptance.sh 一键出包→home 拉起→截屏回传）**。已向 integration-batch 发边界修正：独占范围收窄到 BattleScene.ts + 现有 ui 文件，给壳团队让 scenes/ 新文件。六线并行：integration-batch / furnace / skill-tree-port / level-pipeline / meta-shell / acceptance；串行点守住 BattleScene 单支笔和 main.ts 注册表。
+
+- 16:30 **两线验收通过**（主会话独立验收：真跑测试/亲看截图，非 agent 自述）：
+  - skill-tree-port：悟空 9 主动技+被动+MP 移植（heroSkill.ts 757 行/mp.ts，35 个新测试，182/182 全绿，数值抽查与 kagami 逐字吻合；顺手修了 jdy 二段真 bug）。已推 62ac6ae/7236390。续单：怪物行为库（monsterBehaviors.ts 数据驱动 + Monster3System + 原版 SWF 逆向 2~3 新怪），补关卡线行为真空。
+  - acceptance：一键链路早已存在（build-and-ship.sh，session1 产物），本次真跑全链路 PASSED ~3min，capturePage 截图亲验真实渲染（tmp/debug-shots/acceptance-20260707-162447.png）；HUD 显示 Lv/EXP/HP 56/80/攻击/武器 → integration-batch 接线已实质进构建。报告 65bcae6 已推。已知遗留：home 物理屏呈现路径未解（虚拟显示适配器嫌疑，capturePage 为准不阻塞）；Tauri 化时截屏方案需重写。
+
+- 16:35 **两线再验收通过**：
+  - furnace（2599e68 已推）：furnace.ts 预算模型（材料稀有度→点数，成本表与字段上限共用汇率，单字段顶满恰耗尽预算）+ craft 协议 + agent-server forge（mock/opencode/claude 三 provider）。我亲验 forge-mock e2e：服务端静态 clamp（atk 999→50）与游戏侧预算校验双层真实触发；超预算整件拒收、材料事务防双花有测试。续单在途：真实 DeepSeek e2e + home 部署新版 agent-server（旧版无 craft 协议，不更 demo 会哑）。
+  - **integration-batch（ff2c7bb 已推）：主线骨架全接活。** heroIdentity.ts 统一宿主，死亡/复活/升级/装备数值/武器视觉/onHit procs 全部进 BattleScene。截图亲验：HP 0/80 灰化倒地复活、赤炎噬血杖上手攻击 10→55（一击 82 毙命 vs 空手 37）、Lv.2 升级材料入包。遗留：tsc 两处报错在 meta-shell 在建文件（saveSlots.ts:125 cast、MenuButton.ts 未用变量），记为其验收项；伤害飘字截图未定格（机制已数值实证）。
+  - BattleScene 笔已传下一棒：integration-batch 接**炼丹炉场景接线**（掉料→老君对话炼宝→入包穿上，demo 核心面）。移植协议三条已写入项目 CLAUDE.md（疑点落 report 不落代码、基线后场景 A/B、真 bug 与平台适配可当场改）。
+
 ### 赛后路线图（终包后）
 - **NPC Agent 能力架构**（游戏作为 MCP、每 NPC 受限工具集=权限边界、动态权限；炼丹炉照配方合成 / 老君概率交易以贱换尊）：用户 2026-07-07 提出的拓展构想，是"agent 驱动 NPC"愿景的完全体，需深入设计再做，**暂缓**。完整记录见 docs/design/npc-agent-mcp.md。
 - 关卡流水线：16 个同构关卡包可多 agent 并行移植（导包→抠怪物动作表→接波次→对 kagami 文档验数值）；每关 Boss 专属机制（HP_REJECT/弹幕MC）是硬骨头逐个啃。
