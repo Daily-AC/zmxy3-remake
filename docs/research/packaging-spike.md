@@ -308,3 +308,41 @@ attach 到 SessionId=1、并在那个会话里连累了 Chromium 的帧读回路
 旧进程，scp 报 `Broken pipe`（不是网络问题，是 Windows 文件锁——运行中的 exe
 把 `app.asar` 内存映射住了，覆盖写入把传输流弄坏，报错信息完全不指向真实原因）。
 修复：`build-and-ship.sh` 传文件前先 `Stop-Process`。
+
+## 9. 接上另一 session 装好的桌面截图链路，双证据闭环
+
+team-lead 转来情报：另一个并行 session 把 home 依赖链装完时，顺手装好了一套
+独立的桌面截图工具——`C:\Projects\screenshot.ps1`（`Graphics.CopyFromScreen`
+截整个虚拟屏）+ 计划任务 `ZmxyScreenshot`（Principal "Yilin Zhang"，
+`LogonType Interactive`，按需触发），端到端验证过能拉回 694KB 真实桌面 PNG。
+这条链路本质跟我自己那套 `PrintWindow`/`EnumWindows` 方案是同一个问题的两种
+解法（都要解决"SSH 直接起的 GUI 进程在隔离会话里看不见"），复用现成的而不是
+重造一遍。
+
+已经把它接进 `run-and-capture.ps1`：现在一次 `acceptance.sh` 产出**两张图**——
+capturePage 帧缓冲证据（判定验收是否通过的硬证据）+ 触发 `ZmxyScreenshot` 拿到
+的真实桌面截图（人眼视角的诚实现状，不判定通过与否，纯粹如实记录）。用这台
+机器现成的 `ZmxyScreenshot` 重新验证了一遍第 7/8 节的发现：以交互会话
+（`LogonType=3`）方式拉起 exe 后触发桌面截图，看到的**还是标题栏"造梦西游3
+Remake"+ 原生菜单栏正确渲染，内容区空白**（`tmp/debug-shots/
+interactive-desktop-with-game.png`）——跟我自己那套截图方法拍到的一模一样，
+这是一次独立交叉验证：不是我的截图方法有问题，是这台机器上这个会话下 Chromium
+内容真的画不出来。
+
+**顺手修的两个坑**（都是"file transfer 看起来失败但其实是格式问题，不是连不上"
+类型，容易误判成大问题）：
+
+- `ssh home '...'` 拿回的字符串是 CRLF 结尾（Windows 那头的行尾），脚本里
+  `grep`/字符串比较前必须先 `tr -d '\r'`。忘了处理的后果：从 `DESKTOP_SHOT
+  <path>` 这行摘出来的路径末尾带一个看不见的 `\r`，传给 `scp` 报
+  `protocol error: filename does not match request`——报错完全不提示真实
+  原因，排查了几分钟才想到是行尾字符。
+- `scp -O` 拉取不在 SSH 登录目录（`$HOME`）下的绝对路径文件（比如
+  `C:\Projects\screenshots\foo.png`，这个盘符路径跟 `$HOME`
+  即 `C:\Users\Yilin Zhang\` 不是同一棵树），必须写成
+  `home:/Projects/screenshots/foo.png`（去掉盘符、反斜杠转正斜杠、加前导
+  `/`）——直接抄 Windows 风格路径字符串会报 `No such file or directory`。
+  这跟 team-lead 情报里说的"scp 在这台机器上不工作，要用 base64 管道"结论不
+  一致：实测 `scp -O` 配合正确的路径格式完全能用，之前判定"不工作"大概率是
+  没加 `-O` 或者路径格式没转换对——已经在这条工具链里验证过好几次，不需要退
+  到 base64 方案。
