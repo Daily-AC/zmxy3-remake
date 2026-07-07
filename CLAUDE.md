@@ -15,7 +15,8 @@
 - 游戏本体：Phaser 4（2026-04 正式版，全新 node-based WebGL2 渲染器，API 与 v3 大体兼容）+ TypeScript + Vite（`game/`）
   - 注意：LLM 训练数据里 Phaser 例子多为 v3，给子 agent 派 Phaser 活时提示其先查 v4 迁移差异（渲染管线/tint/FX/Shader 有破坏性变更），纯逻辑模块不受影响
 - 桌面打包：Tauri 2 为终选；黑客松期间（2026-07-07~09）先用 electron-builder 出 spike exe 验证交付链路，赛后再正规化到 Tauri
-- agent NPC 服务端：独立 Node 进程（`agent-server/`），WebSocket 连游戏；桌面包内作 Tauri sidecar
+- agent NPC 服务端：独立 Node 进程（`agent-server/`），WebSocket 连游戏；部署在 home（测试域 zm-dev.qmledmq.cn / 正式域 zm.qmledmq.cn），exe 直连远端 WS，不捆 sidecar
+- NPC 大脑：opencode 驱动 + DeepSeek V4 Flash（2026-07-07 用户拍板；API key 走环境变量，配置里绝不落 key 值；代码保留 provider 开关，claude-agent-sdk 路径留作 A/B）
 - 架构原则（学 kagami）：游戏规则写成 Phaser 无关的纯逻辑模块，可单测；Phaser 只做渲染/输入壳
 
 ## Agent NPC 设计（核心增量）
