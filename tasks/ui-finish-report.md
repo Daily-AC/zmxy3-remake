@@ -161,7 +161,15 @@ FFDec `swf2xml` 导出 `OtherMat1.swf`（vendor 再续天庭），提取 `Define
 
 ## 像素 diff 验收（机器可查，非形容词）
 
-**apples-to-apples 用同版本 vendor 复合图**（`hud_roleinfo_top_avatar_bars.png` = RoleInfo 原始渲染）：`tmp/debug-shots/ui-finish-hud-overlay-vendor.png` 四联（truth / ours / overlay50% / diff）。OVERLAY 里三条血条完全重叠、DIFF 里条身近黑（几何零错位）；DIFF 亮的仅 HP/MP/EXP 标签（复合图烘焙 vs 我文字）+ 9999 数字（动态）+ 边缘AA + 复合图底部白条（我不含）。**几何层零错位，证明按原坐标组装正确。**
+**apples-to-apples 用同版本 vendor 复合图**（`hud_roleinfo_top_avatar_bars.png` = RoleInfo 原始渲染）：`tmp/debug-shots/ui-finish-hud-overlay-vendor.png` 四联 + 标注版 `ui-finish-hud-diff-annotated.png`。OVERLAY 里三条血条完全重叠、DIFF 里条身与头像近黑（几何零错位）。
+
+**DIFF 亮区逐项（像素分类，team-lead 复审纠错后重算）**：
+- HP/MP/EXP 标签 217px（10.8%）——复合图烘焙 vs 我用文字；
+- 9999 数字 316px（15.7%）——动态；
+- **chid262「怒气/无双充能条」1293px（64.1%）——复合图有、我省略（见下）。这是亮区绝对大头，我初版报告把它含糊成"复合图底部白条(我不含)"是不实，被 DIFF 自己揭穿，此处纠正。**
+- 残余几何/边缘AA 192px（9.5%）——条边缘 + 头像 min-diff 偏移的抗锯齿，这才是真几何残差，很小。
+
+即：几何层零错位成立，但亮区最大的是被我漏报的怒气条，不是标签/数字。
 
 **跨版本说明（诚实）**：用户参照 `battle-hud-user2.png` 是 Online「大闹天庭篇」，而 `export.RoleInfo` 对象树**只在 vendor「再续天庭」**——已实测 Online 那批包（OtherMatv3570 等）不导出 RoleInfo，战斗 HUD 运行时渲染不落包。故几何真源是 vendor。强行 pixel-overlay vs Online 参照不会近零，但那是**跨版本差**（血值 19335 vs 34、绝对缩放不同、色差），非几何错位——按 team-lead"版本色差允许、几何错位不允许"的口径，同版本 vendor 复合图是唯一 apples-to-apples 的几何验证源。
 
@@ -171,3 +179,18 @@ RoleInfo 对象树里 5 个坞槽（Yskill..Lskill）都引用 `chid278`——�
 
 ## 第三阶段验证
 tsc `--noEmit` 干净；`vitest run` 401 全绿（HUD 组件无测试，纯渲染）。验收链路仍为独立 playwright-core + 缓存 chromium + 自有 vite 5175。
+
+## 遗漏子件核查：chid262「怒气/无双充能条」（team-lead 复审要求）
+
+DIFF 底部整条白色胶囊件全亮，是 RoleInfo 对象树里我组装时跳过的子件。查实：
+- **chid262 `herobeattacktimes`**，323×11 白色圆角空条，PlaceObject 于 (111.7, 78.0) sx=0.68（在 EXP 条下方）。
+- **语义 = 怒气/无双充能条**：名字"被攻击次数"+ OtherMat1 XML 里 `rage`/`RAGE` 命中 + kagami `DropSystem.ts`/`SaveSystem.ts` 都有 `rage` 字段（掉落给怒气、存档持久化怒气）——是原版真机制，挨打/攻击攒满驱动坞上的「无双」大招。
+- **处置（按 team-lead 规则"没有的系统→暂缺不造假"）**：本项目**没有怒气系统**（坞上无双按钮目前是装饰），故**不渲染**这条（渲染一条永远空的怒气条=给没有的系统造视觉假象）。**暂缺、点名记录于此**。kagami 侧已有 rage 逻辑，将来接怒气/无双系统时可移植，届时按 chid262 原坐标 (111.7,78,sx0.68) 渲染。可选：若要视觉完整，可加一条空 chid262 chrome，一行的事，待 team-lead/用户定。
+
+## 裁决规则（team-lead 2026-07-07 补，写进 report）
+
+参照图 `battle-hud-user2.png` 是 Online 实机，对象树源是 vendor 再续天庭。**若 overlay 出现系统性几何偏差且能证明是版本差异（vendor 对象树自洽、只是与 Online 布局不同），以 vendor 为准**（它是本项目复刻真源，CLAUDE.md 写死），分歧记进 report，**不许为贴 Online 参照回到手调**。像素 diff 硬判据 = 我们的渲染 vs vendor 对象树坐标 diff≈0；vs Online 参照的 overlay 仅作版本差异说明附上。
+
+## vs Online 头像锚定 side-by-side（给用户判版本差的证物）
+
+`tmp/debug-shots/ui-finish-hud-vs-online.png`（按头像同高对齐）：两版头像几乎一致，三条锥形墨条的位置/宽度/叠放几何非常接近——vendor 对象树几何与 Online 参照吻合。可见差异：① 血值（游戏状态，非 HUD）② Online 血条稍亮/饱和一档（版本色差）③ Online 有怒气条、我省略（见上 chid262）④ Online 数字更粗大。按裁决规则，几何以 vendor 为准且已证吻合；上述差异记录在此供用户判版本可否接受。
