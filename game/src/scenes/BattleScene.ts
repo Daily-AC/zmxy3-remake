@@ -495,6 +495,12 @@ export class BattleScene extends Phaser.Scene {
     // A fresh scene (re)entry: no craft in flight, not paused.
     this.craftPending = null
     this.paused = false
+    // Scene shutdown (return to main menu): tear down the NPC socket and close
+    // the dialogue so nothing (DOM input, reconnect timer) leaks into the shell.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.npcClient?.dispose()
+      this.dialogue?.close()
+    })
   }
 
   // ---------- save-slot wiring ----------
@@ -810,6 +816,11 @@ export class BattleScene extends Phaser.Scene {
     this.monsters = []
     this.bossEntity = null
     this.portal?.setVisible(false)
+    this.bossBar?.setVisible(false)
+    // Close any open scene UI so the previous level's overlays (老君 dialogue,
+    // backpack, boss bar) never bleed over the next level's banner.
+    this.dialogue?.close()
+    this.backpack?.close()
     this.swapBackground(this.campaignIndex)
     this.showLevelBanner(def.name)
   }
