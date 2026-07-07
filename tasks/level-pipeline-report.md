@@ -175,3 +175,55 @@ i.e. the real game is a strictly **sequential one-boss-at-a-time chain**, not "g
 - **Balance:** stats are original magnitudes, noticeably higher than level 2's (hp 37k-68k vs level 2's max 16000 boss) — consistent with this being a harder, later level. Hero damage porting is a separate task (unchanged caveat from level 2).
 - Boss mechanics (shadow clone, leap-slam, chained bomb) not wired into monsterSim — TODO-verify, animation/stats-only scope for this pass.
 - Bullet/projectile assets (Role1Bullet*/Role2Bullet*/Role3Bullet*/Role4Bullet* MovieClips) not extracted — same scope decision as level 2's Monster15Bullet1..4, TODO-verify.
+
+---
+
+## 场景接线 — 阶段 B 关卡链合龙（2026-07-07 集成会话）
+
+L1→L4 关卡链已接进 `BattleScene.ts`（只动 BattleScene；level.ts / data/levels/*.ts / monster JSON 均只读）。
+
+### 做了什么
+- **CAMPAIGN 链**：`[LEVEL_1(level.ts), LEVEL_2_TIANWANG, LEVEL_3_ERLANGSHEN, LEVEL_4_XIENIAN]`。
+  单怪硬编码场景重构成 `level.ts` 的波次/BOSS 状态机 + 多怪实体数组 `MonsterEntity[]`：每帧
+  `updateLevelSpawn`→`spawnActiveWave`，全清后 `isBossZoneTriggered`→`spawnBoss`，Boss 死
+  →`revealTransferDoor`→传送门；`↑/W` 站门内 `tryClearArena`→`onAdvanceLevel` 进下一关。
+- **多怪渲染**：species→sheet 用 `import.meta.glob` 载全部 monster JSON（RoleData）+ 按 `SPECIES_SHEET`
+  映射预加载各关 `level{N}/MonsterX.png`，逐 species 注册动画（前缀 `<species>_`，网格从各自 JSON 读）。
+  非 200px cell 的怪按 `scale=(boss?2:1.5)*200/cellH` 归一；缺 `dead` 行的怪（L4）渲染时用
+  `anims.exists` 守卫、保持当前姿势不崩。
+- **背景换装**：`swapBackground(levelIndex)` 换 bg 基底/两层视差 tilesprite/floor 贴图（L4 只有 bg41，
+  两层 detail 回退到它）。
+- **Boss 血条**：顶部条 + `label` 名（多闻天王/二郎神/邪·悟空），调试 HUD 风格。
+- **怪打英雄伤害**：`monsterAttackPower(species,stats,isBoss)` — boss 用真值（heroScale.BOSS_REFERENCE：
+  多闻186/二郎345/邪悟空829 物理），grunt 用 `min(60, 8+def*1.5)` 启发式（TODO-verify，关包未给 grunt
+  攻击力）；走阶段 A 的 `resolveIncomingHeroDamage`。
+- **存档**：关卡进度 `campaignIndex` 存 BattleScene 自持的每槽侧信道 key
+  `zmxy3-remake.slot.v1.<slot>.level`（save.ts 是他队文件、无 level 字段，不擅自 bump 其 schema；
+  TODO：save 属主加 `campaignIndex` 字段后并入 GameSave）。continue 时读回续玩。
+
+### 验收判据逐条
+1. `npx vitest run` 全绿：**387 passed**；BattleScene 过 `tsc`（仓库唯一 tsc 报错仍在他队
+   `ui/hud/RoleInfoHud.ts`，非本棒）。
+2. 浏览器真机端到端（vite dev + 壳流转 + `__levelState/__killGrunts/__killBoss/__usePortal` 钩子），
+   截图落 `game/tmp/debug-shots/`：
+   - `16-level1-waves.png`：L1 波次多怪（monster30+monster2）+ 新 MP 条渲染。
+   - `17-level2-tianwang.png`：打穿 L1→L2 **天王关**：换红殿龙柱背景 + 真怪 monster9/10 进攻 + L1 掉落进包。
+   - `18-level3-erlangshen.png`：**通关 L2 天王关进 L3 二郎神关**：换背景 + 真怪 monster11/12。
+   - **真实击杀多闻天王**：等级 22、`__giveMaterials`+炼一件 cap 装备（服务端静态 clamp 限到 atk+50，
+     故总 atk 165 = 22 级基础 115 + 50）、连招真打——16000→0 击杀，用时约 **37s**，落在 hero-scale-report
+     L2 核算区间（12.9–37.4s；其"20 级仅等级"档=37.4s）。逐波清怪→boss→传送门→下一关全链真跑。
+   - **关卡存档**：L3(index2) 侧信道 key="2"；回主菜单→继续→恢复到「二郎神关」。
+   - 修了两处 re-entry bug：动画重复注册告警（`anims.exists` 守卫）、continue 重进时 `swapBackground`
+     踩已销毁 tilesprite 崩溃（buildBackground 重置 bgTiles 等累加器）。修后 continue 无崩、控制台 0 warning。
+3. 本节即报告追加。
+
+### 遗留 / 注意（阶段 B）
+- **monsterBehaviors.ts（Monster3/7/13 + 弹体）未接**：本棒所有 species 统一走 `monsterSim` 近战默认行为
+  （符合"未覆盖的种回落近战"），covered 的 3 种也回落了——同时驱动两套怪物系统 + 弹体物理超出单棒体量，
+  作为后续单独一棒（接口在 monster-behavior-report，弹体 SpawnedProjectile 需场景侧跑位置模拟）。
+- **二郎神 heal-block（ERLANGSHEN_HP_REJECT）未接**：monsterSim 无 addEffect/禁疗概念；语义已在 level3
+  report 完整逆向，作为后续（需给 heroCombat/identity 加 heal-block 状态）。
+- **grunt 攻击力为启发式**（见上），真值关包未给；boss 用了真值。
+- 承伤口径致命问题仍在（hero-scale-report 已述）：真怪高攻击力 + 现有 maxHp 曲线下英雄在 L2+ 易被秒，
+  验收用 `__setHeroHp` 续命跑通击杀链；根治需放大 progression maxHp/def 曲线（跨文件耦合，非本棒）。
+- 调试钩子 `__levelState/__killGrunts/__killBoss/__usePortal` 及 campaignIndex 侧信道 key 量产前收敛。
