@@ -131,6 +131,47 @@ bug 的服务端永远造不出超过材料所值的装备。
 - DeepSeek key 仍走环境变量 `DEEPSEEK_API_KEY`，配置/代码无 key 值。
 - 两处协议类型定义（game/net 与 agent-server/types）靠手工同步，沿用 repo 既有惯例；未来若嫌易漂移可提取共享包，非本棒范围。
 
+## 10. 场景接线棒（下一棒）— 已完成（2026-07-07 集成会话）
+
+§5/§7 列的接线，本棒已全部接进游戏，玩家流「打怪掉材料 → 找老君 → 炼宝 → 穿上变强」在浏览器
+真机走通。只动了 `game/src/scenes/BattleScene.ts` 和 `game/src/ui/DialogueBox.ts`（既有文件），
+未新增 ui/ 文件，未碰 `net/`、`agent-server/`、`systems/furnace.ts`（只调用）。
+
+**炼宝 UI（DialogueBox 扩展，沿用水墨对话框语言，未开新大 UI）**：
+- 对话框右上角加「炼宝 ✦」按钮 → 进入炼宝模式：材料 chip 行（点击循环选数 0..拥有量）、活预算行
+  （`computeBudget` 实时算「炉火预算 X 点（atk≤ def≤ hp≤）」）、描述输入框复用对话输入、「炼制 ✦」/
+  「返回」按钮。Enter 在炼宝模式=确认炼制，Esc=先退炼宝再退对话。
+
+**接线时序（BattleScene，严格按 §7 建议）**：
+选材+描述 → `buildCraftRequest` → `lockMaterials`（失败 toast「材料不足」）→ `npcClient.craftRequest`
+发出 + 起 20s 超时 → 收 `craft_result`：`validateCraftedEquipment(item, 本地预算)` 通过则
+`consumeMaterials` + `addItem` 入背包 + 打字机展示 `flavor` + toast「炼成【X】」；`over_budget` 则
+`refundMaterials` + toast「材料不足以炼此宝，已退回」→ 收 `craft_reject` 或 20s 超时：`refundMaterials`
++ 提示。全程单件在炼（`craftPending`），锁 UI 防重复提交。crafted 装备走既有 equip 闭环（进 atk、金箍
+棒视觉、onHit procs），即「穿上变强」。
+
+**验收判据逐条**：
+1. `cd game && npx vitest run` 全绿：✅ 243 passed；`tsc --noEmit` 干净（含 net→furnace 类型联动）。
+2. 浏览器真机端到端（vite dev + 本地 `NPC_BRAIN_PROVIDER=mock` agent-server + `?npcServer=` 指向它 +
+   真实 WS），截图落 `game/tmp/debug-shots/`：
+   - `08-craft-mode.png`：炼宝 UI（材料 chip 妖怪残魂/白银矿石、炉火预算、炼制/返回、描述输入）。
+   - `09-craft-result.png`：真 WS 往返——20 妖怪残魂 + 12 白银矿石**消耗**、背包出现「试炉法宝 ×1」、
+     老君 flavor 台词打字机展示（引用材料+描述）。
+   - `10-crafted-weapon-combat.png`：穿上「试炉法宝」→ 面板攻击 10→60、金箍棒上手。
+   - 数值实证：mock 故意回 atk 999（服务端静态 clamp→50）→ 游戏侧 `validateCraftedEquipment` 按 112
+     点预算校验（cost 100≤112）放行；穿上后 hit1 造成 87 伤害（150→63）且**burn onHit 真实触发**
+     （`__worldState().burning=true`）；**over_budget 退料路径**：3 个低阶材料炼火杖 → 成本 100 超 6 点
+     预算 → 游戏侧拒收 → demon_soul 数量 20→20 全额退回。
+3. 本节即报告追加。
+
+**遗留 / 注意（接线棒）**：
+- 材料授予调试钩子 `__giveMaterials` 等（`__openCraft/__submitCraft/__craftState`）为验收用途加在
+  BattleScene 调试钩子区，量产前可清理；掉料本身走既有 `dropRoll`（RNG，单怪场景一杀取材有限，故验收
+  用钩子补足材料模拟多杀）。
+- 炼宝入口现挂主对话框「炼宝 ✦」按钮；后续若做独立炼丹房场景可迁移，接口不变。
+- 真实 LLM forge（opencode/claude provider）本棒未在浏览器联调（另一 agent 部署 home 真 provider），
+  mock provider 已覆盖全部游戏侧分支；真实 provider 只换 flavor/effects 内容，不改接线与安全边界。
+
 ## 附录 A：真实 LLM 端到端 + 字段 shape 差异（收尾单，本项目铁律：mock 通过不算完成）
 
 新增 `agent-server/test/forge-real.ts`（脚本 `npm run test:real`，走**真实** opencode+DeepSeek
