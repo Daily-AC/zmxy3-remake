@@ -8,6 +8,7 @@
 - 澄清过的技术事实：Tauri exe 壳内是 WebView2（Chromium 内核），打包不改变渲染引擎；质量上限在复刻用心度不在容器。
 - Windows 构建机 = home 本身（Tauri 不支持从 macOS 交叉编译 Windows）；验收工具（推包/静默装/拉起/截屏回传/崩溃日志）放 tools/acceptance/。
 - 私有项目，**绝不公开分发含 4399 原版素材的产物**；素材不进 git（走本地提取管线）。
+- **两条独立清洗债，别混**：①造3 原版提取物——private 自用无碍、开源前清洗；②Online（系列后作）逆向素材——**连打包进 exe 都不行**（对外分发红线），只能作占位/参考。占位纪律（可机检，非靠注释自觉）：所有 Online 占位素材集中放 `game/public/assets/placeholder-online/` + 维护 `PLACEHOLDER-MANIFEST.md`（每项：用在哪个组件、造3 替换路径）；终包前跑一遍确认该目录被替换清空。用 Online 占位的组件源码处标 `PLACEHOLDER-ONLINE` 常量便于 grep。
 - kagami 仓库无 LICENSE：其代码只做参考不复制；已决定暂不联系作者（2026-07-07 用户拍板）。
 - 造梦 Online 客户端（home）逆向结论：Adobe AIR 薄壳 + ActiveX IE 控件，游戏 SWF 从 4399 CDN 实时流入 IE 磁盘缓存（`AppData/Local/Microsoft/Windows/INetCache/IE/<rand>/*.swf`），本地无打包资源。加密 SWF 用 byte-swap，**Online 参数 PIVOT=300 END=325**（不同于离线造3 的 200/275、96/165），解密器 `tools/decrypt-zmxyol-swf.py`。产物 `docs/reference/zmxy-online-extracted/`——**系列后作，仅 UI 语言/布局参考，非复刻真源**（复刻真源仍是 vendor 造3 提取物）。坑：PowerShell `Copy-Item -Path` 把缓存名里的 `[1]` 当通配符静默失败，必须 `-LiteralPath`。
 
