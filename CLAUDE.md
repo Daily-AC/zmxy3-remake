@@ -9,6 +9,7 @@
 - Windows 构建机 = home 本身（Tauri 不支持从 macOS 交叉编译 Windows）；验收工具（推包/静默装/拉起/截屏回传/崩溃日志）放 tools/acceptance/。
 - 私有项目，**绝不公开分发含 4399 原版素材的产物**；素材不进 git（走本地提取管线）。
 - kagami 仓库无 LICENSE：其代码只做参考不复制；已决定暂不联系作者（2026-07-07 用户拍板）。
+- 造梦 Online 客户端（home）逆向结论：Adobe AIR 薄壳 + ActiveX IE 控件，游戏 SWF 从 4399 CDN 实时流入 IE 磁盘缓存（`AppData/Local/Microsoft/Windows/INetCache/IE/<rand>/*.swf`），本地无打包资源。加密 SWF 用 byte-swap，**Online 参数 PIVOT=300 END=325**（不同于离线造3 的 200/275、96/165），解密器 `tools/decrypt-zmxyol-swf.py`。产物 `docs/reference/zmxy-online-extracted/`——**系列后作，仅 UI 语言/布局参考，非复刻真源**（复刻真源仍是 vendor 造3 提取物）。坑：PowerShell `Copy-Item -Path` 把缓存名里的 `[1]` 当通配符静默失败，必须 `-LiteralPath`。
 
 ## 技术栈（已拍板，2026-07-07）
 
