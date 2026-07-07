@@ -6,33 +6,68 @@ import {
   listSlotSummaries,
   readSlot,
   deleteSlot,
-  formatPlaytime,
   formatSavedAt,
   type SlotId,
   type SlotSummary,
 } from '../systems/saveSlots'
 import { restoreGameState } from '../systems/save'
 
-// Six-slot save panel laid out after the 造梦西游 大闹天庭篇 save dialog
-// (docs/reference/zmxy-online-screens/save-slots.png): a dark panel over the
-// dimmed title art, 2 columns x 3 rows of cards, each with a big orange slot
-// number + hero + timestamp. Empty card -> character select (new game); occupied
-// card -> continue (load); a small ✕ deletes. Reads localStorage on every entry
-// so a page refresh shows persisted slots. All storage goes through saveSlots.
+// Save panel redone against the 造梦西游 Online "存档记录" dialog
+// (docs/reference/user-flow-refs/saveslots-original.png, spec S3 -- user
+// explicitly picked the Online version over vendor 造3's own save UI, which
+// FFDec can't extract anyway: SaveInter's panel is pure vector+TextField, no
+// baked bitmap exists to pull, see docs/reference/zmxy-online-extracted's
+// README "未收录" note). No matching baked asset for the panel chrome exists
+// in the Online extract either (same reason -- it's a vector dialog), so
+// every layout constant below is "图量": measured off the reference PNG
+// (color samples + proportions), not a symbol matrix. See
+// tasks/selectrole-saveslots-report.md for the sampled hex values and the
+// crop this was measured from.
 //
-// SOURCE NOTE: title-bg is 造梦 Online-sourced art (whole-series usable — CLAUDE.md).
+// Structure: two-tone dark panel (lighter-gray header strip + darker-gray
+// body, no gold border anywhere), "存档记录" centered title, red X close
+// top-right, 2x3 grid of near-black rounded cards (big orange numeral left,
+// two text lines right: hero name(s) / timestamp). Reference shows exactly
+// two text lines per card -- no level, no playtime -- so both are omitted
+// from the card face here (data still lives in SlotSummary, just not
+// rendered; see report Adapted/Dropped). Reference also shows no per-card
+// avatar/portrait; dropped to match. Empty slots keep the same card chrome
+// with "空存档位" instead of name+timestamp.
+//
+// SOURCE NOTE: whole-series Online art is fair game per CLAUDE.md.
 export const ASSET_SOURCE_ONLINE = true
 
 const TITLE_BG = 'title_bg'
 const W = 960
 const H = 540
-// Card grid geometry (2 cols x 3 rows).
-const CARD_W = 400
-const CARD_H = 116
-const GRID_X = 62
-const GRID_Y = 106
-const GAP_X = 26
+
+// Panel (图量, saveslots-original.png crop proportions -- see report).
+const PANEL_X = 30
+const PANEL_Y = 42
+const PANEL_W = 900
+const PANEL_H = 456
+const HEADER_H = 64
+const RADIUS = 16
+
+// Card grid (2 cols x 3 rows), 图量 from the same crop.
+const CARD_W = 411
+const CARD_H = 99
+const GRID_X = PANEL_X + 20
+const GRID_Y = PANEL_Y + HEADER_H + 28
+const GAP_X = 37
 const GAP_Y = 14
+const CARD_RADIUS = 10
+
+// Colors sampled directly off the reference PNG (see report for pixel coords).
+const COLOR_HEADER = 0x6e6e6e // header strip ~#747474
+const COLOR_BODY = 0x242424 // panel body ~#262626
+const COLOR_CARD = 0x0d0d0d // card fill, near-black
+const COLOR_ORANGE = 0xc36a3d // slot numeral ~#c06b41
+const COLOR_CLOSE = 0xe0392a // close X, vivid red
+const COLOR_TITLE = '#f0f0f0'
+const COLOR_NAME = '#f0ede6'
+const COLOR_TIME = '#a8a8a8'
+const COLOR_EMPTY = '#7a7a7a'
 
 export class SlotSelectScene extends Phaser.Scene {
   private cardLayer!: Phaser.GameObjects.Container
@@ -56,20 +91,27 @@ export class SlotSelectScene extends Phaser.Scene {
       this.add.graphics().fillStyle(0x0d0a12, 1).fillRect(0, 0, W, H)
     }
 
-    // Save panel.
+    // Two-tone panel: header strip (lighter gray) over body (darker gray).
+    // Drawn as one rounded rect per tone, header clipped to the top so the
+    // outer silhouette still reads as a single rounded card.
     const panel = this.add.graphics()
-    panel.fillStyle(0x120d16, 0.92).fillRoundedRect(30, 42, W - 60, H - 84, 16)
-    panel.lineStyle(2.5, 0x4a2c12, 1).strokeRoundedRect(30, 42, W - 60, H - 84, 16)
-    panel.lineStyle(1, 0xd9b45a, 0.7).strokeRoundedRect(35, 47, W - 70, H - 94, 12)
+    panel.fillStyle(COLOR_BODY, 0.97).fillRoundedRect(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, RADIUS)
+    panel.fillStyle(COLOR_HEADER, 0.97)
+    panel.fillRoundedRect(PANEL_X, PANEL_Y, PANEL_W, HEADER_H, { tl: RADIUS, tr: RADIUS, bl: 0, br: 0 })
+    // Square off the header's lower corners against the body tone so the
+    // rounded-rect fill doesn't leave a visible seam.
+    panel.fillRect(PANEL_X, PANEL_Y + HEADER_H - RADIUS, PANEL_W, RADIUS)
+
     this.add
-      .text(W / 2, 70, '选择存档', { fontSize: '30px', fontStyle: 'bold', color: '#f2c65a', stroke: '#3a2410', strokeThickness: 5 })
+      .text(W / 2, PANEL_Y + HEADER_H / 2, '存档记录', { fontSize: '26px', fontStyle: 'bold', color: COLOR_TITLE })
       .setOrigin(0.5)
-    // Red ✕ close (top-right) -> main menu.
+
+    // Red ✕ close (top-right of the dialog) -> main menu.
     this.add
-      .text(W - 52, 66, '✕', { fontSize: '26px', fontStyle: 'bold', color: '#e0503a' })
+      .text(PANEL_X + PANEL_W - 10, PANEL_Y - 22, '✕', { fontSize: '26px', fontStyle: 'bold', color: '#ffffff' })
       .setOrigin(0.5)
+      .setTint(COLOR_CLOSE)
       .setInteractive({ useHandCursor: true })
-      .on('pointerover', (): void => {})
       .on('pointerdown', () => this.scene.start(SCENE.mainMenu))
 
     this.cardLayer = this.add.container(0, 0)
@@ -94,87 +136,70 @@ export class SlotSelectScene extends Phaser.Scene {
     const cy = top + CARD_H / 2
 
     const frame = this.add.graphics()
-    frame.fillStyle(0x0d0a06, 0.72).fillRoundedRect(left, top, CARD_W, CARD_H, 10)
-    frame.lineStyle(1.5, 0x6b4a2c, 1).strokeRoundedRect(left, top, CARD_W, CARD_H, 10)
+    frame.fillStyle(COLOR_CARD, 0.94).fillRoundedRect(left, top, CARD_W, CARD_H, CARD_RADIUS)
     this.cardLayer.add(frame)
 
     // Big orange slot numeral (left).
     this.cardLayer.add(
       this.add
-        .text(left + 36, cy, `${summary.slot + 1}`, {
-          fontSize: '46px',
+        .text(left + 34, cy, `${summary.slot + 1}`, {
+          fontSize: '40px',
           fontStyle: 'bold',
-          color: '#ff9a3d',
-          stroke: '#3a1c08',
-          strokeThickness: 5,
+          color: '#ffffff',
         })
-        .setOrigin(0.5),
+        .setOrigin(0.5)
+        .setTint(COLOR_ORANGE),
     )
 
     if (!summary.occupied) {
-      this.buildEmpty(left, top, cy, summary.slot)
+      this.buildEmpty(left, cy)
     } else {
-      this.buildOccupied(left, top, cy, summary)
+      this.buildOccupied(left, cy, summary)
     }
 
-    // Hover highlight on the whole card.
+    // Hover highlight on the whole card (subtle, matches the muted palette --
+    // no gold anywhere per spec).
     const hover = this.add.graphics()
     this.cardLayer.add(hover)
     const hit = this.add
       .rectangle(left + CARD_W / 2, cy, CARD_W, CARD_H, 0xffffff, 0)
       .setInteractive({ useHandCursor: true })
-      .on('pointerover', () => hover.clear().lineStyle(2, 0xffd24a, 0.9).strokeRoundedRect(left, top, CARD_W, CARD_H, 10))
+      .on('pointerover', () => hover.clear().lineStyle(2, 0xffffff, 0.25).strokeRoundedRect(left, top, CARD_W, CARD_H, CARD_RADIUS))
       .on('pointerout', () => hover.clear())
       .on('pointerdown', () => (summary.occupied ? this.continueGame(summary.slot) : this.startNewGame(summary.slot)))
     this.cardLayer.add(hit)
 
-    // Delete ✕ (occupied only) sits above the card hit area.
+    // Delete ✕ (occupied only): a real save-management need this project has
+    // that the reference doesn't show a control for (Online's screenshot has
+    // no visible per-card delete affordance) -- kept small/muted so it doesn't
+    // compete with the reference's own visual language.
     if (summary.occupied) {
       const del = this.add
-        .text(left + CARD_W - 20, top + 16, '✕', { fontSize: '18px', color: '#b06a4a' })
+        .text(left + CARD_W - 18, top + 14, '✕', { fontSize: '15px', color: '#6a6a6a' })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
-        .on('pointerover', () => del.setColor('#e0503a'))
-        .on('pointerout', () => del.setColor('#b06a4a'))
+        .on('pointerover', () => del.setColor('#e0392a'))
+        .on('pointerout', () => del.setColor('#6a6a6a'))
         .on('pointerdown', () => this.askDelete(summary.slot))
       this.cardLayer.add(del)
     }
   }
 
-  private buildEmpty(left: number, _top: number, cy: number, _slot: SlotId): void {
-    this.cardLayer.add(this.add.text(left + 96, cy, '＋', { fontSize: '40px', color: '#5a4a30' }).setOrigin(0.5))
+  private buildEmpty(left: number, cy: number): void {
     this.cardLayer.add(
-      this.add.text(left + 150, cy, '空存档位', { fontSize: '20px', color: '#8a7f68' }).setOrigin(0, 0.5),
+      this.add.text(left + 100, cy, '空存档位', { fontSize: '19px', color: COLOR_EMPTY }).setOrigin(0, 0.5),
     )
   }
 
-  private buildOccupied(left: number, top: number, cy: number, s: Extract<SlotSummary, { occupied: true }>): void {
-    // Round portrait.
-    const px = left + 108
-    const badge = this.add.graphics()
-    badge.fillStyle(0x0e0b07, 0.8).fillCircle(px, cy, 32)
-    badge.lineStyle(2, 0xd9b45a, 0.9).strokeCircle(px, cy, 32)
-    this.cardLayer.add(badge)
-    if (this.textures.exists('role1_0') && s.heroId === 1) {
-      const head = this.add.image(px, cy, 'role1_0', 0).setScale(0.55)
-      const mask = this.make.graphics({}).fillCircle(px, cy, 30)
-      head.setMask(mask.createGeometryMask())
-      this.cardLayer.add(head)
-    } else {
-      this.cardLayer.add(this.add.text(px, cy, s.heroName[0], { fontSize: '30px', color: '#f2c65a' }).setOrigin(0.5))
-    }
-
-    const tx = left + 156
+  private buildOccupied(left: number, cy: number, s: Extract<SlotSummary, { occupied: true }>): void {
+    const tx = left + 100
+    // Two lines only (reference: hero name(s) + timestamp -- no level/playtime
+    // shown on the card face, see file header note).
     this.cardLayer.add(
-      this.add
-        .text(tx, top + 20, `${s.heroName}   Lv.${s.level}`, { fontSize: '21px', fontStyle: 'bold', color: '#f2eddf' })
-        .setOrigin(0, 0),
+      this.add.text(tx, cy - 16, s.heroName, { fontSize: '20px', fontStyle: 'bold', color: COLOR_NAME }).setOrigin(0, 0.5),
     )
     this.cardLayer.add(
-      this.add.text(tx, top + 52, `游戏时间 ${formatPlaytime(s.playtimeSec)}`, { fontSize: '15px', color: '#c8bfa6' }).setOrigin(0, 0),
-    )
-    this.cardLayer.add(
-      this.add.text(tx, top + 76, formatSavedAt(s.savedAt), { fontSize: '15px', color: '#9a8f78' }).setOrigin(0, 0),
+      this.add.text(tx, cy + 14, formatSavedAt(s.savedAt), { fontSize: '15px', color: COLOR_TIME }).setOrigin(0, 0.5),
     )
   }
 
@@ -204,12 +229,11 @@ export class SlotSelectScene extends Phaser.Scene {
     const layer = this.add.container(0, 0).setDepth(300)
     const shade = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.62).setInteractive()
     const panelG = this.add.graphics()
-    panelG.fillStyle(0x1a130b, 0.98).fillRoundedRect(300, 190, 360, 160, 14)
-    panelG.lineStyle(2, 0xb85c3c, 1).strokeRoundedRect(300, 190, 360, 160, 14)
+    panelG.fillStyle(0x1c1c1c, 0.98).fillRoundedRect(300, 190, 360, 160, 14)
     const title = this.add
-      .text(480, 232, `删除存档 ${slot + 1}？`, { fontSize: '22px', fontStyle: 'bold', color: '#f2c65a' })
+      .text(480, 232, `删除存档 ${slot + 1}？`, { fontSize: '22px', fontStyle: 'bold', color: COLOR_TITLE })
       .setOrigin(0.5)
-    const sub = this.add.text(480, 262, '此操作不可撤销', { fontSize: '15px', color: '#c8bfa6' }).setOrigin(0.5)
+    const sub = this.add.text(480, 262, '此操作不可撤销', { fontSize: '15px', color: COLOR_TIME }).setOrigin(0.5)
     layer.add([shade, panelG, title, sub])
 
     const yes = new MenuButton(this, {
