@@ -192,16 +192,23 @@ async function main(): Promise<void> {
     sendMsg({
       type: "player_say",
       npcId: NPC_ID,
-      text: "给你，两块白银矿石都在这儿了，麻烦老君帮我炼一把！",
+      text: "材料都给你备齐了——不管你刚才要的是白银矿石还是别的什么，我都一并带来了，一样不少，麻烦老君现在就帮我炼一把！",
     });
 
     await waitFor((m) => m.type === "npc_thinking" && m.npcId === NPC_ID);
     log("received npc_thinking (craft turn 2: confirm)");
 
-    const [say3, crafted] = await Promise.all([
+    const [say3Result, craftedResult] = await Promise.allSettled([
       waitFor((m) => m.type === "npc_say" && m.npcId === NPC_ID),
       waitFor((m) => m.type === "craft_item" && m.npcId === NPC_ID),
     ]);
+    if (say3Result.status === "rejected" || craftedResult.status === "rejected") {
+      throw new Error(
+        `craft turn 2 incomplete: npc_say ${say3Result.status}, craft_item ${craftedResult.status}`,
+      );
+    }
+    const say3 = say3Result.value;
+    const crafted = craftedResult.value;
     log("received npc_say (craft turn 2):", say3.text);
     log("received craft_item:", JSON.stringify(crafted.item));
 
