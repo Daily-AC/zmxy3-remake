@@ -46,6 +46,12 @@ export interface HeroState {
   x: number
   action: string
   facing: -1 | 1
+  /**
+   * Monotonic id of the current attack swing. Bumped each time a new combo
+   * stage begins, so a struck target can dedup and take each of the five hits
+   * at most once. 0 means no swing has started yet.
+   */
+  attackId: number
   /** Accumulated real time not yet consumed by a full tick. */
   accMs: number
   /** Deterministic sim clock (sum of ticks), used for double-tap timing. */
@@ -79,6 +85,7 @@ export function initHeroState(cfg: HeroConfig, x: number): HeroState {
     x,
     action: 'wait',
     facing: -1,
+    attackId: 0,
     accMs: 0,
     simClockMs: 0,
   }
@@ -112,6 +119,9 @@ function tick(state: HeroState, edges: HeroEdges, cfg: HeroConfig): void {
     { attackPressed: edges.pressAttack, grounded: state.vertical.grounded, dtMs: cfg.tickMs },
     cfg.combo,
   )
+
+  // Each new combo stage is a fresh swing -> a new attack id for hit dedup.
+  if (comboRes.changed && state.combo.stage > 0) state.attackId += 1
 
   // Horizontal movement, suppressed while a combo occupies the character.
   if (!comboRes.attacking) {
