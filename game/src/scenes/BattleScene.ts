@@ -45,6 +45,17 @@ import {
 import type { HeroHit } from '../systems/heroCombat'
 import { rollOnHitProcs } from '../systems/effects'
 import {
+  MaterialLot,
+  AttributeBudget,
+  CraftTransaction,
+  buildCraftRequest,
+  lockMaterials,
+  consumeMaterials,
+  refundMaterials,
+  validateCraftedEquipment,
+  computeBudget,
+} from '../systems/furnace'
+import {
   NpcClient,
   ConnStatus,
   ServerMessage,
@@ -157,6 +168,15 @@ export class BattleScene extends Phaser.Scene {
   private dialogue!: DialogueBox
   private dialogueFresh = true
   private toast?: Phaser.GameObjects.Text
+  // Forge: one in-flight craft at a time. Holds the locked-material transaction,
+  // the budget the return is re-validated against, and a timeout that refunds.
+  private craftPending: {
+    requestId: string
+    tx: CraftTransaction
+    budget: AttributeBudget
+    timer: Phaser.Time.TimerEvent
+  } | null = null
+  private craftSeq = 0
 
   // Equipment / hero combat state
   private equipment: Equipment = createEquipment()
@@ -415,7 +435,125 @@ export class BattleScene extends Phaser.Scene {
       onClose: () => {
         this.input.keyboard!.enabled = true
       },
+      onCraftEnter: () => this.openCraftMode(),
+      onCraftSubmit: (description, lots) => this.submitCraft(description, lots),
+      craftBudgetPreview: (lots) => this.craftBudgetLine(lots),
     })
+  }
+
+  // ---------- forge (炼丹炉) ----------
+
+  private bagMaterials(): MaterialLot[] {
+    return listStacks(this.inventory)
+      .filter((s) => s.item.kind === 'material')
+      .map((s) => ({ item: s.item, qty: s.qty }))
+  }
+
+  private openCraftMode(): void {
+    if (this.craftPending) {
+      this.showToast('老君正在炼制上一件…', '#c8cfe6')
+      return
+    }
+    const mats = this.bagMaterials()
+    if (mats.length === 0) {
+      this.dialogue.pushLog('（囊中空空，先去打些妖怪取材吧）')
+      return
+    }
+    this.dialogue.openCraft(mats.map((m) => ({ item: m.item, owned: m.qty })))
+  }
+
+  private craftBudgetLine(lots: MaterialLot[]): string {
+    if (lots.length === 0) return '炉火预算：0 点（先择材）'
+    const b = computeBudget(lots)
+    return `炉火预算：${b.points} 点（atk≤${b.caps.atk} def≤${b.caps.def} hp≤${b.caps.hp}）`
+  }
+
+  private submitCraft(description: string, lots: MaterialLot[]): void {
+    if (this.craftPending) return
+    if (lots.length === 0) {
+      this.showToast('先择些材料入炉', '#e0b060')
+      return
+    }
+    if (description.length === 0) {
+      this.showToast('说说想要什么法宝', '#e0b060')
+      return
+    }
+    if (!this.npcClient.isOpen()) {
+      this.showToast(`${NPC_NAME}正在闭关…`, '#7a7f95')
+      return
+    }
+    const requestId = `craft-${Date.now()}-${++this.craftSeq}`
+    const tx = lockMaterials(this.inventory, requestId, lots)
+    if (!tx) {
+      this.showToast('材料不足', '#e07a7a')
+      return
+    }
+    const payload = buildCraftRequest(description, lots)
+    const sent = this.npcClient.craftRequest(
+      NPC_ID,
+      requestId,
+      description,
+      payload.materials,
+      payload.budget,
+      'p1',
+    )
+    if (!sent) {
+      refundMaterials(this.inventory, tx)
+      this.showToast(`${NPC_NAME}正在闭关…材料已退回`, '#7a7f95')
+      return
+    }
+    const timer = this.time.delayedCall(20000, () => this.onCraftTimeout(requestId))
+    this.craftPending = { requestId, tx, budget: payload.budget, timer }
+    this.dialogue.setCraftLocked(true)
+    this.dialogue.pushLog(`悟空：${description}`)
+    this.dialogue.pushLog('（老君将材料投入八卦炉，炉火渐炽…）')
+    this.dialogue.clearInput()
+    this.dialogue.closeCraft()
+  }
+
+  private clearCraftPending(): void {
+    if (!this.craftPending) return
+    this.craftPending.timer.remove(false)
+    this.craftPending = null
+    this.dialogue.setCraftLocked(false)
+  }
+
+  private onCraftResult(item: CraftedItem, flavor: string, requestId: string): void {
+    const pending = this.craftPending
+    if (!pending || pending.requestId !== requestId) return
+    const validation = validateCraftedEquipment(item, pending.budget)
+    if (validation.ok) {
+      consumeMaterials(pending.tx)
+      addItem(this.inventory, validation.item, 1)
+      this.dialogue.startTypewriter(`${NPC_NAME}：${flavor}`)
+      this.showToast(`炼成【${validation.item.name}】`, '#ffd873')
+      this.playSfx('pickup', 0.7)
+    } else {
+      refundMaterials(this.inventory, pending.tx)
+      this.dialogue.startTypewriter(
+        `${NPC_NAME}：${flavor || '此宝虚影溃散，材料尚不足以定形。'}`,
+      )
+      this.showToast('材料不足以炼此宝，已退回', '#e0b060')
+    }
+    this.clearCraftPending()
+  }
+
+  private onCraftReject(reason: string, requestId: string): void {
+    const pending = this.craftPending
+    if (!pending || pending.requestId !== requestId) return
+    refundMaterials(this.inventory, pending.tx)
+    this.dialogue.pushLog(`（炼制未成：${reason}，材料已退回）`)
+    this.showToast('炼制未成，材料已退回', '#e07a7a')
+    this.clearCraftPending()
+  }
+
+  private onCraftTimeout(requestId: string): void {
+    const pending = this.craftPending
+    if (!pending || pending.requestId !== requestId) return
+    refundMaterials(this.inventory, pending.tx)
+    this.dialogue.pushLog('（炉火久候无成，材料已退回）')
+    this.showToast('炼制超时，材料已退回', '#e07a7a')
+    this.clearCraftPending()
   }
 
   private connectNpc(): void {
@@ -447,6 +585,12 @@ export class BattleScene extends Phaser.Scene {
         break
       case 'craft_item':
         this.receiveItem(this.craftedToGame(m.item), 1)
+        break
+      case 'craft_result':
+        this.onCraftResult(m.item, m.flavor, m.requestId)
+        break
+      case 'craft_reject':
+        this.onCraftReject(m.reason, m.requestId)
         break
       case 'set_goal':
         this.showToast(`新目标：${m.goal.title}`, '#7ac7ff')
@@ -977,6 +1121,15 @@ export class BattleScene extends Phaser.Scene {
       }
       addItem(this.inventory, it, 1)
     }
+    // Grant a bundle of real monster materials (acceptance shortcut for the
+    // furnace flow, standing in for several kills' drops).
+    w.__giveMaterials = () => {
+      const demonSoul: Item = { id: 'demon_soul', name: '妖怪残魂', kind: 'material', rarity: 1 }
+      const silverOre: Item = { id: 'silver_ore', name: '白银矿石', kind: 'material', rarity: 2 }
+      addItem(this.inventory, demonSoul, 20)
+      addItem(this.inventory, silverOre, 12)
+      return this.bagMaterials().map((m) => ({ id: m.item.id, name: m.item.name, qty: m.qty }))
+    }
     w.__npc = () => ({
       status: this.npcStatus,
       online: this.npcClient.isOpen(),
@@ -992,6 +1145,28 @@ export class BattleScene extends Phaser.Scene {
     }
     w.__npcOpen = () => this.tryOpenDialogue()
     w.__npcClose = () => this.dialogue.close()
+    // Forge acceptance hooks — drive the real craft path (lock/request/validate).
+    w.__openCraft = () => {
+      if (!this.dialogue.isOpen) this.tryOpenDialogue()
+      this.openCraftMode()
+      return this.dialogue.craftMode
+    }
+    w.__submitCraft = (description: string, sel: { id: string; qty: number }[]) => {
+      const stacks = listStacks(this.inventory)
+      const lots: MaterialLot[] = []
+      for (const s of sel) {
+        const stack = stacks.find((st) => st.item.id === s.id)
+        if (stack) lots.push({ item: stack.item, qty: s.qty })
+      }
+      this.submitCraft(description, lots)
+      return { pending: !!this.craftPending, requestId: this.craftPending?.requestId ?? null }
+    }
+    w.__craftState = () => ({
+      pending: !!this.craftPending,
+      requestId: this.craftPending?.requestId ?? null,
+      craftMode: this.dialogue.craftMode,
+      materials: this.bagMaterials().map((m) => ({ id: m.item.id, name: m.item.name, qty: m.qty })),
+    })
     w.__toggleDebug = () => {
       this.debugVisible = !this.debugVisible
       for (const t of this.debugTexts) t.setVisible(this.debugVisible)
