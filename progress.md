@@ -105,6 +105,11 @@
 - 素材战线（用户情报驱动）：造梦 Online 客户端（home，疑似 Electron）= 全系列合集含官方造3 入口——vendor 0.72 是魔改版，Online 内造3 是官方真源候选。用户已登录进造3 主页缓存已热；acceptance 在挖（app.asar + Chromium cache 的 CDN URL 清单，产物落 docs/reference/zmxy3-official/）。Online 六屏真机截图已入库 docs/reference/zmxy-online-screens/（UI 语言参考，非复刻真源）。
 - 在途：integration-batch 合龙大棒（口径统一换装+关卡链接线，判据=预期等级炼装真实击杀多闻天王且秒数落核算区间）、level-pipeline 真·L1 移植（1.swf）、skill-tree-port 丹药表、meta-shell UI 组件+炼丹炉素材、acceptance home 挖掘。
 
+- 17:55 **阶段A 口径统一验收通过（c686fdb，已推）**：BattleScene 三处伤害全换 AS3 真源——普攻 calculateNormalAttackPower（.707/.707/.707/1.183/1.304×Hurt+暴击词条）、承伤 resolveIncomingHeroDamage 桥、技能 calculateRealSkillDamage（删 6.6x 偏差的临时缩放）。tsc 全清（meta-shell 之前报的 9 处正是此单半成品，收口后消失）、387 全绿、真机验证 slz 一击 45.7−def。**游戏内伤害数字从此全是原版公式。** integration-batch 开阶段B（关卡链大重构，波次+boss+多sheet 预加载，费时一棒）。
+- 真·L1 巫鹰关合入（9292f53）：四关战役全原版数值；Monster30 真身=1血速8蜂群（手搓版误给 150）；巫鹰 300 血机制型登顶 Boss 保持原样。丹药真相（3fd6ca5）：原版无背包喝药，回血是杀怪掉落的场上拾取球（小红+100/大红+50%/蓝+100，10s 消失），蒙特卡洛验证掉率；红球走禁疗门控、蓝球不受限——二郎神对抗张力原生成立。
+- **素材逆向大捷（f1d7b9e + 工具，已推）**：Online 客户端=AIR薄壳+IE缓存流式 SWF，acceptance 抢救 37 SWF、暴力破解出新 byte-swap 参数 PIVOT=300/END=325（异于离线 200/275），解密器 tools/decrypt-zmxyol-swf.py + 参数与坑入 CLAUDE.md。产出 docs/reference/zmxy-online-extracted/：40 技能图标（9 个符号名精确对应我们悟空技能）+ 5 套伤害数字字体 + YUIOL 热键 + 挑战成功/失败横幅，转 UI 线。meta-shell 据 Online 参考微调飘字/连击/存档卡（37f99e2）。
+- 收敛：阶段B 关卡链接线（在跑，主线）→ 体验棒（UI 五件套换装 + 拾取球生成 + 音效 soundMap，待发）→ 终包。UI 三单（存档壳/主菜单/组件+微调）等用户终审。
+
 ### 赛后路线图（终包后）
 - **NPC Agent 能力架构**（游戏作为 MCP、每 NPC 受限工具集=权限边界、动态权限；炼丹炉照配方合成 / 老君概率交易以贱换尊）：用户 2026-07-07 提出的拓展构想，是"agent 驱动 NPC"愿景的完全体，需深入设计再做，**暂缓**。完整记录见 docs/design/npc-agent-mcp.md。
 - 关卡流水线：16 个同构关卡包可多 agent 并行移植（导包→抠怪物动作表→接波次→对 kagami 文档验数值）；每关 Boss 专属机制（HP_REJECT/弹幕MC）是硬骨头逐个啃。
