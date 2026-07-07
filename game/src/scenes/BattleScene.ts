@@ -23,6 +23,18 @@ import { createInventory, addItem, listStacks, Inventory } from '../systems/inve
 import { rollDrops } from '../systems/dropRoll'
 import type { Item } from '../systems/items'
 import {
+  Equipment,
+  EquipSlot,
+  createEquipment,
+  equip,
+  unequip,
+  equippedList,
+  slotForItem,
+  heroAtk,
+  comboHitDamage,
+} from '../systems/equipment'
+import { rollOnHitProcs } from '../systems/effects'
+import {
   NpcClient,
   ConnStatus,
   ServerMessage,
@@ -31,6 +43,7 @@ import {
   CraftEffect,
   resolveNpcServerUrl,
 } from '../net/npcClient'
+import { DialogueBox } from '../ui/DialogueBox'
 import roleRaw from '../data/roles/role1.json'
 import monsterRaw from '../data/monsters/monster30.json'
 
@@ -38,6 +51,16 @@ const roleData = roleRaw as unknown as RoleData
 const monsterData = monsterRaw as unknown as RoleData
 
 const HERO_TEX = 'role1_0'
+// Weapon overlay sheet: same 200×200 grid + same action frames as role1_0, with
+// ZERO offset (art-verified: the grip lands in the fist). Only 8 weapon skins
+// exist (EQUIP_6/7 are absent in every pack); Stage A uses the default EQUIP_0.
+const WEAPON_TEX = 'role1_equip0'
+const HERO_MAX_HP = 500
+const HERO_BASE_ATK = 20 // nominal base for the atk readout; combo damage uses STAGE_DAMAGE + equip atk
+const MONSTER_TOUCH_DMG = 14 // light chip so lifesteal has something to heal back
+const BURN_TICKS = 4
+const BURN_INTERVAL_MS = 260
+const FREEZE_MS = 1200
 const NPC_TEX = 'laojun'
 const MON_TEX = 'monster30'
 const HERO_SCALE = 1.5
@@ -91,13 +114,18 @@ export class BattleScene extends Phaser.Scene {
   private heroConfig!: HeroConfig
   private monsterState!: MonsterState
   private monsterConfig!: MonsterConfig
-  private bgLayers: { img: Phaser.GameObjects.TileSprite; factor: number }[] = []
+  // Parallax: tilesprites that scroll via tilePositionX. The far base backdrop
+  // (bg11) and ground are covering Images (auto-parallax via scrollFactor).
+  private bgTiles: { img: Phaser.GameObjects.TileSprite; factor: number }[] = []
   private drops: DropEntity[] = []
   private dropSprites = new Map<DropEntity, Phaser.GameObjects.Container>()
   private pickupCfg!: PickupConfig
   private inventory: Inventory = createInventory(24)
-  private hud!: Phaser.GameObjects.Text
   private invText!: Phaser.GameObjects.Text
+  // Debug telemetry, hidden by default, toggled with F1.
+  private debugTexts: Phaser.GameObjects.Text[] = []
+  private debugVisible = false
+  private hud!: Phaser.GameObjects.Text
   private mhpText!: Phaser.GameObjects.Text
   private playedHitIds = new Set<number>()
   private bgmStarted = false
@@ -108,13 +136,22 @@ export class BattleScene extends Phaser.Scene {
   private npcStatus: ConnStatus = 'closed'
   private npcTag!: Phaser.GameObjects.Text
   private promptText!: Phaser.GameObjects.Text
-  private dialogBg!: Phaser.GameObjects.Rectangle
-  private dialogText!: Phaser.GameObjects.Text
-  private dialogInput!: HTMLInputElement
-  private dialogueOpen = false
-  private npcLog: string[] = []
-  private typing: { idx: number; full: string; shown: number } | null = null
+  private dialogue!: DialogueBox
+  private dialogueFresh = true
   private toast?: Phaser.GameObjects.Text
+
+  // Equipment / hero combat state
+  private equipment: Equipment = createEquipment()
+  private weaponSprite!: Phaser.GameObjects.Sprite
+  private heroHp = HERO_MAX_HP
+  private statsText!: Phaser.GameObjects.Text
+  private heroHpBar!: Phaser.GameObjects.Graphics
+  // onHit effect state, applied scene-side without touching the locked
+  // monsterSim/combo modules.
+  private burn: { ticksLeft: number; nextAtMs: number; power: number } | null = null
+  private burnAttackId = 100000 // kept clear of hero attackIds (which start at 1)
+  private frozenUntilMs = 0
+  private simClockMs = 0
 
   constructor() {
     super('battle')
@@ -122,6 +159,10 @@ export class BattleScene extends Phaser.Scene {
 
   preload(): void {
     this.load.spritesheet(HERO_TEX, 'assets/extracted/role1_0.png', {
+      frameWidth: roleData.sheet.cellW,
+      frameHeight: roleData.sheet.cellH,
+    })
+    this.load.spritesheet(WEAPON_TEX, 'assets/extracted/role1_equip0.png', {
       frameWidth: roleData.sheet.cellW,
       frameHeight: roleData.sheet.cellH,
     })
@@ -136,6 +177,7 @@ export class BattleScene extends Phaser.Scene {
     for (const key of ['bg11', 'bg12', 'bg13', 'floorBg1']) {
       this.load.image(key, `assets/extracted/level1/${key}.png`)
     }
+    this.load.image('ink_panel', 'assets/extracted/ui/dialogue_textpanel_crop.png')
     const audio: Record<string, string> = {
       bgm: 'bg1.mp3',
       hit12: 'Role1_hit1AndHit2.mp3',
@@ -157,6 +199,12 @@ export class BattleScene extends Phaser.Scene {
     this.registerNpcIdle()
 
     this.hero = this.add.sprite(480, GROUND_Y, HERO_TEX).setScale(HERO_SCALE).setDepth(10)
+    // Weapon overlay: frame-perfect mirror of the hero, shown only when armed.
+    this.weaponSprite = this.add
+      .sprite(480, GROUND_Y, WEAPON_TEX)
+      .setScale(HERO_SCALE)
+      .setDepth(11)
+      .setVisible(false)
     this.monster = this.add.sprite(MON_START_X, GROUND_Y, MON_TEX).setScale(MON_SCALE).setDepth(9)
     this.npc = this.add
       .sprite(NPC_X + NPC_OFFSET.x * NPC_SCALE, GROUND_Y + NPC_OFFSET.y * NPC_SCALE, NPC_TEX)
@@ -176,6 +224,14 @@ export class BattleScene extends Phaser.Scene {
     }
     kb.on('keydown-W', () => this.tryOpenDialogue())
     kb.on('keydown-UP', () => this.tryOpenDialogue())
+    kb.on('keydown-F1', (e: KeyboardEvent) => {
+      e.preventDefault()
+      this.debugVisible = !this.debugVisible
+      for (const t of this.debugTexts) t.setVisible(this.debugVisible)
+    })
+    // E: equip the first equippable item in the bag. U: take the weapon off.
+    kb.on('keydown-E', () => this.equipFirstFromBag())
+    kb.on('keydown-U', () => this.doUnequip('weapon'))
 
     this.heroConfig = makeHeroConfig({
       groundY: GROUND_Y,
@@ -190,33 +246,37 @@ export class BattleScene extends Phaser.Scene {
     this.pickupCfg = { gravity: 2, groundY: GROUND_Y, pickupRadius: DEFAULT_PICKUP_RADIUS, tickMs: TICK_MS }
 
     this.buildHud()
-    this.buildDialogueUi()
+    this.buildDialogue()
     this.applyHeroRender('wait')
-    this.applyMonsterRender()
+    this.applyMonsterRender(false)
     this.startAudioOnFirstInput()
     this.connectNpc()
     this.exposeDebugHooks()
   }
 
   private buildBackground(): void {
-    const layers: [string, number, number][] = [
-      ['bg13', -40, 0.15],
-      ['bg12', -30, 0.3],
-      ['bg11', -20, 0.55],
-    ]
-    for (const [key, depth, factor] of layers) {
-      const ts = this.add.tileSprite(0, 0, 960, 540, key).setOrigin(0, 0).setScrollFactor(0).setDepth(depth)
-      this.bgLayers.push({ img: ts, factor })
-    }
-    const floor = this.add
-      .tileSprite(0, FLOOR_LINE, 960, 540 - FLOOR_LINE, 'floorBg1')
+    // Layering (fixing the old right-edge seam): bg11 is the OPAQUE base scene
+    // (palace on clouds, 1132×3051) — the old code tiled it as a narrow front
+    // layer, which wrapped and produced the seam while also hiding the detail
+    // layers. It is now a slow covering Image behind everything. bg13 (南天门
+    // gate panorama) and bg12 (lotus railing) are TRANSPARENT 4900px-wide
+    // panoramas that parallax on top and never wrap within the camera's range.
+    this.add
+      .image(0, 0, 'bg11')
       .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(-10)
-    this.bgLayers.push({ img: floor, factor: 1 })
-    const line = this.add.graphics().setScrollFactor(0).setDepth(-9)
-    line.lineStyle(2, 0x1a2140, 0.6)
-    line.lineBetween(0, FLOOR_LINE, 960, FLOOR_LINE)
+      .setScrollFactor(0.12, 0) // 1132px covers the 960 viewport across the pan
+      .setDepth(-40)
+    for (const [key, depth, factor] of [
+      ['bg13', -30, 0.28],
+      ['bg12', -20, 0.5],
+    ] as [string, number, number][]) {
+      const ts = this.add.tileSprite(0, 0, 960, 540, key).setOrigin(0, 0).setScrollFactor(0).setDepth(depth)
+      this.bgTiles.push({ img: ts, factor })
+    }
+    // Ground band: a covering Image scaled to span the whole world width so it
+    // never wraps at the right edge either.
+    const floor = this.add.image(0, FLOOR_LINE, 'floorBg1').setOrigin(0, 0).setScrollFactor(0.9, 0).setDepth(-10)
+    floor.scaleX = Math.max(1, (960 + (WORLD_W - 960) * 0.9 + 40) / floor.width)
   }
 
   private registerAnimations(data: RoleData, tex: string, loop: Set<string>, prefix: string): void {
@@ -265,26 +325,47 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private buildHud(): void {
+    // Debug telemetry — hidden by default, F1 toggles. Acceptance hooks
+    // (__heroState/__worldState) are unaffected; this is only on-screen text.
     this.hud = this.add
       .text(16, 12, '', { fontSize: '14px', color: '#8a93b8', fontFamily: 'monospace' })
       .setScrollFactor(0)
       .setDepth(100)
+      .setVisible(false)
     this.mhpText = this.add
       .text(16, 92, '', { fontSize: '14px', color: '#e08a8a', fontFamily: 'monospace' })
       .setScrollFactor(0)
       .setDepth(100)
+      .setVisible(false)
+    this.debugTexts.push(this.hud, this.mhpText)
+
+    // Inventory strip: a semi-transparent dark plate so white text reads over
+    // the bright clouds.
+    this.add
+      .rectangle(958, 10, 190, 92, 0x0c0d12, 0.5)
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(99)
     this.invText = this.add
-      .text(760, 12, '', { fontSize: '14px', color: '#c8d0f0', fontFamily: 'monospace' })
+      .text(778, 18, '', { fontSize: '14px', color: '#e8ecff', fontFamily: 'monospace' })
       .setScrollFactor(0)
       .setDepth(100)
     this.add
-      .text(480, 512, 'A/D 走　K 跳　J 五段连击　W/↑ 对话　走近掉落自动拾取', {
-        fontSize: '14px',
-        color: '#8a93b8',
+      .text(480, 520, 'A/D 走　K 跳　J 五段连击　W/↑ 对话　E 穿戴 U 卸下　F1 调试', {
+        fontSize: '13px',
+        color: '#c8cfe6',
       })
       .setScrollFactor(0)
       .setDepth(100)
       .setOrigin(0.5)
+
+    // Hero stat panel (top-left): HP bar + current attack + equipped weapon.
+    this.add.rectangle(12, 10, 260, 68, 0x0c0d12, 0.5).setOrigin(0, 0).setScrollFactor(0).setDepth(99)
+    this.heroHpBar = this.add.graphics().setScrollFactor(0).setDepth(100)
+    this.statsText = this.add
+      .text(22, 46, '', { fontSize: '13px', color: '#e8ecff' })
+      .setScrollFactor(0)
+      .setDepth(100)
 
     // NPC name tag (world-space, above the NPC).
     this.npcTag = this.add
@@ -298,57 +379,21 @@ export class BattleScene extends Phaser.Scene {
       .setVisible(false)
   }
 
-  private buildDialogueUi(): void {
-    this.dialogBg = this.add
-      .rectangle(480, 430, 900, 190, 0x0a0e1a, 0.86)
-      .setStrokeStyle(2, 0x3a4368)
-      .setScrollFactor(0)
-      .setDepth(90)
-      .setVisible(false)
-    this.dialogText = this.add
-      // useAdvancedWrap breaks mid-run, required for CJK text which has no spaces
-      // for the default word-wrap to break on (otherwise long lines overflow).
-      .text(48, 348, '', {
-        fontSize: '16px',
-        color: '#e8ecff',
-        wordWrap: { width: 830, useAdvancedWrap: true },
-        lineSpacing: 4,
-      })
-      .setScrollFactor(0)
-      .setDepth(91)
-      .setVisible(false)
-
-    // A DOM input overlay for text entry (Phaser keyboard is disabled while open).
-    const input = document.createElement('input')
-    input.type = 'text'
-    input.placeholder = '对老君说点什么，回车发送，Esc 关闭'
-    input.maxLength = 200
-    Object.assign(input.style, {
-      position: 'absolute',
-      left: '50%',
-      bottom: '18px',
-      transform: 'translateX(-50%)',
-      width: '820px',
-      padding: '8px 12px',
-      fontSize: '15px',
-      border: '1px solid #3a4368',
-      borderRadius: '6px',
-      background: '#141a2e',
-      color: '#e8ecff',
-      outline: 'none',
-      display: 'none',
-      zIndex: '50',
+  private buildDialogue(): void {
+    this.dialogue = new DialogueBox(this, {
+      npcName: NPC_NAME,
+      avatarTexture: NPC_TEX,
+      avatarSheetFrame: 0,
+      // Head region within 老君's 300×300 idle frame 0.
+      avatarCrop: { x: 96, y: 30, w: 150, h: 150 },
+      onSubmit: (text) => {
+        this.dialogue.pushLog(`悟空：${text}`)
+        this.npcClient.playerSay(NPC_ID, text, 'p1')
+      },
+      onClose: () => {
+        this.input.keyboard!.enabled = true
+      },
     })
-    const parent = this.game.canvas.parentElement ?? document.body
-    if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative'
-    parent.appendChild(input)
-    input.addEventListener('keydown', (e) => {
-      e.stopPropagation()
-      if (e.key === 'Enter') this.submitDialogue()
-      else if (e.key === 'Escape') this.closeDialogue()
-    })
-    this.dialogInput = input
-    this.events.once('shutdown', () => input.remove())
   }
 
   private connectNpc(): void {
@@ -370,10 +415,10 @@ export class BattleScene extends Phaser.Scene {
       case 'welcome':
         break
       case 'npc_thinking':
-        this.pushLog('（老君捻须思索…）')
+        this.dialogue.pushLog('（老君捻须思索…）')
         break
       case 'npc_say':
-        this.startTypewriter(`${NPC_NAME}：${m.text}`)
+        this.dialogue.startTypewriter(`${NPC_NAME}：${m.text}`)
         break
       case 'give_item':
         this.receiveItem(this.npcItemToGame(m.item), m.item.qty ?? 1)
@@ -410,27 +455,40 @@ export class BattleScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    this.simClockMs += delta
     const edges = this.collectEdges()
     const jumped = edges.pressJump && this.heroState.vertical.grounded
     advanceHero(this.heroState, edges, delta, this.heroConfig)
     if (jumped) this.playSfx('heroJump', 0.4)
 
-    const hit = this.resolveHeroHit()
+    const monsterAlive = this.monsterState.mode !== 'dead' && this.monsterState.mode !== 'gone'
+    // A single incoming-hit channel: prefer the hero's melee hit; otherwise let
+    // a due burn tick ride it (deferred a frame when they collide).
+    let incomingHit = this.resolveHeroHit()
+    if (!incomingHit && monsterAlive && this.burn && this.simClockMs >= this.burn.nextAtMs) {
+      incomingHit = { attackId: ++this.burnAttackId, damage: this.burn.power }
+      this.burn.ticksLeft -= 1
+      this.burn.nextAtMs = this.simClockMs + BURN_INTERVAL_MS
+      this.floatText(this.monsterState.x, GROUND_Y - 70, `烧 -${this.burn.power}`, '#ff7a4d')
+      if (this.burn.ticksLeft <= 0) this.burn = null
+    }
+    // Freeze = a heavy slow (keeps hit resolution working, unlike a hard skip).
+    const frozen = this.simClockMs < this.frozenUntilMs
     const events = advanceMonster(
       this.monsterState,
-      { heroX: this.heroState.x, heroAlive: true, incomingHit: hit },
-      delta,
+      { heroX: this.heroState.x, heroAlive: true, incomingHit },
+      frozen ? delta * 0.15 : delta,
       this.monsterConfig,
     )
     this.handleMonsterEvents(events)
     this.stepDropsAndPickup()
 
     this.applyHeroRender(this.heroState.action)
-    this.applyMonsterRender()
+    this.applyMonsterRender(frozen)
     this.updateHud()
     this.updateParallax()
     this.updateNpcUi()
-    this.advanceTypewriter()
+    this.dialogue.advanceTypewriter()
   }
 
   private resolveHeroHit(): { attackId: number; damage: number } | null {
@@ -440,11 +498,30 @@ export class BattleScene extends Phaser.Scene {
     const box = heroAttackBox(s.x, GROUND_Y, s.facing)
     const mBox = centeredBox(this.monsterState.x, GROUND_Y, 120, 140)
     if (!overlaps(box, mBox)) return null
+    // First frame this swing connects: play sfx and roll the weapon's onHit procs.
     if (!this.playedHitIds.has(s.attackId)) {
       this.playedHitIds.add(s.attackId)
       this.playSfx(this.hitSfxKey(s.combo.stage), 0.5)
+      this.rollHitProcs()
     }
-    return { attackId: s.attackId, damage: STAGE_DAMAGE[s.combo.stage] }
+    return { attackId: s.attackId, damage: comboHitDamage(STAGE_DAMAGE[s.combo.stage], this.equipment) }
+  }
+
+  private rollHitProcs(): void {
+    for (const p of rollOnHitProcs(equippedList(this.equipment), Math.random)) {
+      if (p.effect === 'lifesteal') this.applyLifesteal(p.power)
+      else if (p.effect === 'burn') this.burn = { ticksLeft: BURN_TICKS, nextAtMs: this.simClockMs, power: p.power }
+      else if (p.effect === 'freeze') this.frozenUntilMs = this.simClockMs + FREEZE_MS
+    }
+  }
+
+  private applyLifesteal(power: number): void {
+    const before = this.heroHp
+    this.heroHp = Math.min(HERO_MAX_HP, this.heroHp + power)
+    const healed = this.heroHp - before
+    this.floatText(this.heroState.x, GROUND_Y - 90, `+${healed || power}`, '#6ef07a')
+    this.hero.setTint(0xd6ffd6)
+    this.time.delayedCall(120, () => this.hero.clearTint())
   }
 
   private hitSfxKey(stage: number): string {
@@ -456,11 +533,30 @@ export class BattleScene extends Phaser.Scene {
   private handleMonsterEvents(events: { type: string; x: number; y: number }[]): void {
     for (const e of events) {
       if (e.type === 'hurt') this.playSfx('monHurt', 0.6)
+      else if (e.type === 'attack-start') this.monsterHitsHero()
       else if (e.type === 'death') {
         this.spawnDrops(e.x, e.y)
         this.npcClient.worldEvent('monster_killed', { monster: MONSTER_DISPLAY_NAME })
       }
     }
+  }
+
+  // Light chip damage so lifesteal has something to heal back (the full
+  // hero-damage/death pass is a later slice; this just closes the equip loop).
+  private monsterHitsHero(): void {
+    if (Math.abs(this.heroState.x - this.monsterState.x) > MONSTER30_STATS.attackRange) return
+    this.heroHp = Math.max(0, this.heroHp - MONSTER_TOUCH_DMG)
+    this.floatText(this.heroState.x, GROUND_Y - 60, `-${MONSTER_TOUCH_DMG}`, '#ff5a5a')
+    this.hero.setTint(0xff9a9a)
+    this.time.delayedCall(120, () => this.hero.clearTint())
+  }
+
+  private floatText(x: number, y: number, text: string, color: string): void {
+    const t = this.add
+      .text(x, y, text, { fontSize: '18px', color, fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setDepth(30)
+    this.tweens.add({ targets: t, y: y - 34, alpha: 0, duration: 700, onComplete: () => t.destroy() })
   }
 
   private spawnDrops(x: number, y: number): void {
@@ -503,7 +599,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private collectEdges(): HeroEdges {
-    if (this.dialogueOpen) {
+    if (this.dialogue.isOpen) {
       this.injected = { ...NO_EDGES }
       return { ...NO_EDGES }
     }
@@ -524,10 +620,21 @@ export class BattleScene extends Phaser.Scene {
     if (this.hero.anims.currentAnim?.key !== action) this.hero.play(action)
     this.hero.setFlipX(this.heroState.facing === 1)
     const off = roleData.offset
-    this.hero.setPosition(this.heroState.x + off.x * HERO_SCALE, this.heroState.vertical.y + off.y * HERO_SCALE)
+    const px = this.heroState.x + off.x * HERO_SCALE
+    const py = this.heroState.vertical.y + off.y * HERO_SCALE
+    this.hero.setPosition(px, py)
+    // Weapon overlay: frame-perfect mirror of the hero (zero offset), only armed.
+    if (this.equipment.weapon) {
+      this.weaponSprite.setVisible(true)
+      this.weaponSprite.setFrame(this.hero.frame.name)
+      this.weaponSprite.setFlipX(this.heroState.facing === 1)
+      this.weaponSprite.setPosition(px, py)
+    } else {
+      this.weaponSprite.setVisible(false)
+    }
   }
 
-  private applyMonsterRender(): void {
+  private applyMonsterRender(frozen: boolean): void {
     if (this.monsterState.mode === 'gone') {
       this.monster.setVisible(false)
       return
@@ -535,6 +642,10 @@ export class BattleScene extends Phaser.Scene {
     const key = MON_ANIM_PREFIX + this.monsterState.action
     if (this.monster.anims.currentAnim?.key !== key) this.monster.play(key)
     this.monster.setFlipX(this.monsterState.facing === 1)
+    // Elemental tints: freeze = blue, burn = red, otherwise normal.
+    if (frozen) this.monster.setTint(0x8fc7ff)
+    else if (this.burn) this.monster.setTint(0xff8a5a)
+    else this.monster.clearTint()
     const off = monsterData.offset
     this.monster.setPosition(
       this.monsterState.x + off.x * MON_SCALE,
@@ -544,7 +655,7 @@ export class BattleScene extends Phaser.Scene {
 
   private updateParallax(): void {
     const camX = this.cameras.main.scrollX
-    for (const { img, factor } of this.bgLayers) img.tilePositionX = camX * factor
+    for (const { img, factor } of this.bgTiles) img.tilePositionX = camX * factor
   }
 
   private updateHud(): void {
@@ -561,6 +672,39 @@ export class BattleScene extends Phaser.Scene {
     const stacks = listStacks(this.inventory)
     const body = stacks.length ? stacks.map((st) => `${st.item.name} ×${st.qty}`).join('\n') : '(空)'
     this.invText.setText('背包\n' + body)
+
+    // Hero HP bar + stats.
+    const bar = this.heroHpBar
+    bar.clear()
+    bar.fillStyle(0x2a1414, 1).fillRoundedRect(22, 20, 200, 16, 4)
+    const frac = this.heroHp / HERO_MAX_HP
+    bar.fillStyle(0xd94a4a, 1).fillRoundedRect(22, 20, Math.max(2, 200 * frac), 16, 4)
+    bar.lineStyle(1, 0xd9b45a, 0.8).strokeRoundedRect(22, 20, 200, 16, 4)
+    const atk = heroAtk(HERO_BASE_ATK, this.equipment)
+    const weaponName = this.equipment.weapon ? this.equipment.weapon.name : '空手'
+    this.statsText.setText(`HP ${this.heroHp}/${HERO_MAX_HP}　攻击 ${atk}　武器: ${weaponName}`)
+  }
+
+  // ---------- equipment ----------
+
+  private equipFirstFromBag(): void {
+    const equipItem = listStacks(this.inventory)
+      .map((s) => s.item)
+      .find((it) => slotForItem(it) !== null)
+    if (equipItem) this.doEquip(equipItem)
+  }
+
+  private doEquip(item: Item): boolean {
+    if (!equip(this.equipment, this.inventory, item)) return false
+    this.showToast(`装备【${item.name}】`, '#ffd873')
+    return true
+  }
+
+  private doUnequip(slot: EquipSlot): boolean {
+    const cur = this.equipment[slot]
+    if (!unequip(this.equipment, this.inventory, slot)) return false
+    this.showToast(`卸下【${cur?.name ?? ''}】`, '#c8cfe6')
+    return true
   }
 
   private npcStatusLabel(): string {
@@ -572,73 +716,24 @@ export class BattleScene extends Phaser.Scene {
     this.npcTag.setText(online ? NPC_NAME : `${NPC_NAME}（闭关中）`)
     this.npcTag.setColor(online ? '#d9c07a' : '#7a7f95')
     const near = Math.abs(this.heroState.x - NPC_X) < DIALOGUE_RANGE
-    this.promptText.setVisible(near && online && !this.dialogueOpen)
+    this.promptText.setVisible(near && online && !this.dialogue.isOpen)
   }
 
   // ---------- dialogue ----------
 
   private tryOpenDialogue(): void {
-    if (this.dialogueOpen) return
+    if (this.dialogue.isOpen) return
     if (Math.abs(this.heroState.x - NPC_X) >= DIALOGUE_RANGE) return
     if (!this.npcClient.isOpen()) {
       this.showToast(`${NPC_NAME}正在闭关…`, '#7a7f95')
       return
     }
-    this.dialogueOpen = true
-    this.input.keyboard!.enabled = false // free the keyboard for the DOM input
-    this.dialogBg.setVisible(true)
-    this.dialogText.setVisible(true)
-    this.dialogInput.style.display = 'block'
-    this.dialogInput.value = ''
-    this.dialogInput.focus()
-    if (this.npcLog.length === 0) this.pushLog(`${NPC_NAME}：猴头，来炼丹房作甚？`)
-    this.renderDialog()
-  }
-
-  private closeDialogue(): void {
-    if (!this.dialogueOpen) return
-    this.dialogueOpen = false
-    this.input.keyboard!.enabled = true
-    this.dialogBg.setVisible(false)
-    this.dialogText.setVisible(false)
-    this.dialogInput.style.display = 'none'
-    this.dialogInput.blur()
-  }
-
-  private submitDialogue(): void {
-    const text = this.dialogInput.value.trim()
-    if (!text) return
-    this.dialogInput.value = ''
-    this.pushLog(`悟空：${text}`)
-    this.npcClient.playerSay(NPC_ID, text, 'p1')
-  }
-
-  private pushLog(line: string): void {
-    this.npcLog.push(line)
-    if (this.npcLog.length > 30) this.npcLog.shift()
-    this.renderDialog()
-  }
-
-  private startTypewriter(line: string): void {
-    // Replace the trailing "thinking" placeholder if present.
-    if (this.npcLog[this.npcLog.length - 1] === '（老君捻须思索…）') this.npcLog.pop()
-    this.npcLog.push('')
-    this.typing = { idx: this.npcLog.length - 1, full: line, shown: 0 }
-  }
-
-  private advanceTypewriter(): void {
-    if (!this.typing) return
-    this.typing.shown = Math.min(this.typing.full.length, this.typing.shown + 2)
-    this.npcLog[this.typing.idx] = this.typing.full.slice(0, this.typing.shown)
-    this.renderDialog()
-    if (this.typing.shown >= this.typing.full.length) this.typing = null
-  }
-
-  private renderDialog(): void {
-    if (!this.dialogueOpen) return
-    // Cap the shown history so wrapped multi-line replies still fit the box and
-    // the newest line stays visible; older lines scroll off the top.
-    this.dialogText.setText(this.npcLog.slice(-4).join('\n'))
+    this.input.keyboard!.enabled = false // free the keyboard for the input box
+    if (this.dialogueFresh) {
+      this.dialogue.pushLog(`${NPC_NAME}：猴头，来炼丹房作甚？`)
+      this.dialogueFresh = false
+    }
+    this.dialogue.open()
   }
 
   private showToast(text: string, color: string): void {
@@ -686,24 +781,59 @@ export class BattleScene extends Phaser.Scene {
       monster: { x: this.monsterState.x, hp: this.monsterState.hp, mode: this.monsterState.mode },
       drops: this.drops.map((d) => ({ id: d.item.id, x: Math.round(d.x), grounded: d.grounded })),
       inventory: listStacks(this.inventory).map((s) => ({ id: s.item.id, name: s.item.name, qty: s.qty })),
+      heroHp: this.heroHp,
+      atk: heroAtk(HERO_BASE_ATK, this.equipment),
+      weapon: this.equipment.weapon ? this.equipment.weapon.name : null,
+      weaponVisible: this.weaponSprite.visible,
+      frozen: this.simClockMs < this.frozenUntilMs,
+      burning: this.burn !== null,
     })
     w.__teleportTo = (x: number) => {
       this.heroState.x = x
     }
+    // Equipment acceptance hooks.
+    w.__equip = (itemId?: string) => {
+      const item = itemId
+        ? listStacks(this.inventory).map((s) => s.item).find((it) => it.id === itemId)
+        : listStacks(this.inventory).map((s) => s.item).find((it) => slotForItem(it) !== null)
+      return item ? this.doEquip(item) : false
+    }
+    w.__unequip = () => this.doUnequip('weapon')
+    w.__setHeroHp = (hp: number) => {
+      this.heroHp = Math.max(0, Math.min(HERO_MAX_HP, hp))
+    }
+    w.__giveCraftedWeapon = () => {
+      // A test weapon with atk + guaranteed lifesteal, mirroring an NPC craft.
+      const it: Item = {
+        id: 'test_chiyan',
+        name: '赤炎噬血杖',
+        kind: 'equip',
+        rarity: 3,
+        effects: [
+          { type: 'stat', stat: 'atk', value: 45 },
+          { type: 'onHit', effect: 'lifesteal', chance: 1, power: 25 },
+        ],
+      }
+      addItem(this.inventory, it, 1)
+    }
     w.__npc = () => ({
       status: this.npcStatus,
       online: this.npcClient.isOpen(),
-      dialogueOpen: this.dialogueOpen,
-      log: [...this.npcLog],
+      dialogueOpen: this.dialogue.isOpen,
+      log: this.dialogue.logLines(),
     })
     // Drive a real conversation without touching the DOM input.
     w.__npcSay = (text: string) => {
-      if (!this.dialogueOpen) this.tryOpenDialogue()
-      if (!this.dialogueOpen) return false
-      this.pushLog(`悟空：${text}`)
+      if (!this.dialogue.isOpen) this.tryOpenDialogue()
+      if (!this.dialogue.isOpen) return false
+      this.dialogue.pushLog(`悟空：${text}`)
       return this.npcClient.playerSay(NPC_ID, text, 'p1')
     }
     w.__npcOpen = () => this.tryOpenDialogue()
-    w.__npcClose = () => this.closeDialogue()
+    w.__npcClose = () => this.dialogue.close()
+    w.__toggleDebug = () => {
+      this.debugVisible = !this.debugVisible
+      for (const t of this.debugTexts) t.setVisible(this.debugVisible)
+    }
   }
 }
