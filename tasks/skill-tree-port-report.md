@@ -103,3 +103,53 @@
 - `lysGateMs` 门禁未接入（见上）。
 - 移动系统的位移值未搬（见上），需要移动系统落地后单独补一个小任务。
 - 尚未接入 `HeroIdentityState`（等待另一 agent），当前用参数注入占位；集成棒接线时把 `learned` 和 `sourcePower`/`x`/`y`/`facingX` 从真实状态里读出来传给这两个模块即可，`mp.ts`/`heroSkill.ts` 本身不需要再改。
+
+## 技能/MP 场景接线 — 已完成（2026-07-07 集成会话）
+
+`mp.ts` + `heroSkill.ts` 已接进 `BattleScene.ts`（只动 BattleScene，未碰这两个模块）。
+
+**接线**：
+- **MP**：`createMp(getRole1MaxMp(level))` 在 `seedFromSave` 建；`update` 每帧 `syncMpMax()` 让
+  `maxMp` 跟随 hero 等级（升级涨蓝），`tickMpRegen(2/s)` 缓回（TODO-verify，mp.ts 头注说 kagami 无固定
+  回蓝率）。HUD 加蓝色 MP 条 + `MP x/y` 文本（现有调试 HUD 风格，真组件另棒换）。
+- **技能键**：数字键 1-9 → 九主动（RE 文档没留原版键位，数字键避开 A/D/J/K/W/E/U）。`castSkill` 组
+  `Role1CastContext`（`sourcePower=heroTotalAtk`、hero x/y/facing、怪作为 target）调 `tryCastRole1Skill`，
+  返回 `hitboxes` 逐个按 `activeAfterMs` 延时、按 offset/尺寸判定与怪 overlap，命中则把（缩放后）伤害推进
+  与连击共用的 incoming-hit 通道（monsterSim 照常 dedup/hurt/death），并飘蓝色伤害数字。
+- **动画**：技能→role1.json 动作（hit6/hit9/hit7/hit8/hit11_1/hit13/hit14/hit10/hit12；hitbox 里的
+  `hit8_2`/`hit10_2` 等子变体不是独立 hero 动作，故用一张 `SKILL_ACTION` 映射到存在的动作）；`skillAnim`
+  在 busy-lock 时长内压住 heroSim 的动作。
+- **busy-lock ↔ 连击互斥**：`collectEdges` 在 `skillRuntime.cooldownMs > 0` 时返回 NO_EDGES（施法中禁移动/
+  普攻）；`castSkill` 在 `combo.stage !== 0` 时不施法。`tickRole1SkillRuntime` 每帧推进冷却/分身/jdy 二段窗。
+- **lysGateMs / hyjj 地面门控** 遗留项：本接线用共享 busy-lock 已覆盖连发节流；hyjj 无空中态概念（heroSim
+  的 grounded 未接到技能门控），当前 demo 恒地面，标记为后续（移动系统落地时补 lysGateMs 时间戳 + grounded 门）。
+
+**伤害口径**：`SKILL_DAMAGE_SCALE = 0.06` 集中缩放（TODO-verify，就地注释出处）。原因见根 CLAUDE.md
+§移植协议「hero-scale 教训」：kagami 技能公式与原版 AS3 差约 6.6x、普攻是占位值——skill 伤害本就是二手
+口径，故先按表接入 + 临时缩放到当前 150hp 怪的量级，等 hero-scale 棒统一换算后删掉这个常量。
+
+**验收判据逐条**：
+1. `npx vitest run` 全绿：✅ 279 passed（含 mp/heroSkill 的 35 例，未改动）；BattleScene 过 `tsc`
+   （仓库唯一 tsc 报错在他人在建文件 `ui/hud/RoleInfoHud.ts`，非本棒）。
+2. 浏览器真机（vite dev + 壳流转 + `__castSkill/__skillState`），一次 evaluate 内连放三招的原子实测：
+   - slz → 动作 `hit6`、MP 110→74（-36）、怪 150→126（-24）、cooldownMs 650 置位；紧接第二招被
+     busy-lock 拒（MP 74→74 不变）。
+   - lys → `hit9`、MP 76→47、怪 126→106。
+   - hytj → `hit7`、MP 48→9、怪 106→102。
+   - MP 不足：MP 11 放 jdy(66) → 拒（MP 11→11 不变）；另设 slz 到 18 级（cost ~1466）放招 → 满蓝 230
+     也拒（MP 230→230 不变），弹「法力不足」。
+   - 截图落 `game/tmp/debug-shots/`：`14-skill-cast.png` / `15-skill-mp-insufficient.png` 显示 MP 条 +
+     `MP x/230` HUD 与战斗画面。
+   - **注**：招式姿势/飘字/toast 的「定格」帧未能稳定截到——playwright 截图往返（数秒）远长于动作/飘字/
+     toast 生命周期，且验收期这个共享浏览器 tab 有其他并行 agent 同时驱动 `__scene`（观察到 MP 值与 hero
+     位置在我两次调用之间被外部改动、相机被拉回 NPC）。机制正确性由每次 evaluate 的**原子返回值**证明
+     （上列数字），非依赖截图定格。
+3. 本节即报告追加。
+
+**遗留（接线棒）**：
+- 技能等级现为固定 demo loadout（全 1 级，`SKILL_DEMO_LEVELS`），真等级应来自技能树 UI（未做，见本报告
+  「SkillUISystem 后续移植提示」）——接口是 `syncRole1SkillLevels(runtime, learned)`，接上即可，本接线不用改。
+- 多段命中（`hitIntervalFrames`/`maxHits`）简化为每个 hitbox 单次结算，够证明"技能造成伤害"；完整多段 tick
+  留后续。lyfb 的第二弹体/qsez 分身/hyjj 链式多目标已按 hitboxes 生成，但同样单次结算。
+- `SKILL_DAMAGE_SCALE`、`MP_REGEN_PER_SEC`、demo 技能等级、`__castSkill/__skillState/__setSkillLevels`
+  调试钩子均为临时/验收用，hero-scale 与技能树落地后收敛。
