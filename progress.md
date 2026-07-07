@@ -222,3 +222,8 @@
   - 流程闭环实测：选人→地图（节点/按钮状态机正确）→点岛进战斗→通关回地图 frontier 推进（首轮像素 diff 证实台阶变化）；413 测试绿 + build 过。
   - 管线经验固化 playbook：符号 origin 必算（左上锚不可默认）、整屏舞台映射定式（contain+pillarbox）、overlay 先对几何再判读。
 - 遗留（worldmap-report.md 记档）：agent-server 端到端炼器未跑（本地无服务）；huodongbtn 行为拍板；kls ≤4px 残差。
+- 04:1x~04:5x **S2 选人 + S3 存档棒完成并过终审**（e097ea4..d0bac09 共 7 commit，未 push，s2s3-shell/codex 执行）：
+  - S2 五格全屏重做（金框/标题/底按钮全删），真发现：原版灰度=运行时 ColorMatrixFilter 非灰图烘焙（up 态带 filter，over 态同 characterId 无 filter），本棒首次导出真彩五格；AS3 证实第五格"???"纯装饰无变量。带 filter 符号的 analytic origin 会差 ~170px（FFDec 画布 padding），经验互相关兜底——坑记 report §2。两态 overlay 单线对齐过审；"敬请期待"锁定标签为功能性自加（参照无），待用户裁量。
+  - S3 Online 版式重做（Online SaveInter 纯矢量抠不出位图，走"图量"），终审揪出编号 +14px/标题错位双影，返修用加权质心法锁到 <2.3px 残差；红叉考古：参照图红 X 实属右侧常驻菜单条非存档弹窗控件，我方保留对话框级红叉（记档）。6 槽增删读回归绿。
+  - 413 测试全绿 + build 过（主会话复跑）。终审两轮均主会话亲看 diff/blend，量化互证（我方互相关 vs 其质心法，编号偏移两法一致）。
+- 下一棒：S4 个人资料/背包（brief=tasks/profile-backpack-brief.md）。
