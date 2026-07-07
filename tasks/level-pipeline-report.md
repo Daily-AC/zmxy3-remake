@@ -4,6 +4,27 @@ One section per ported level. Appended as levels land.
 
 ---
 
+## Wave-ordering fix (2026-07-07, user-reported)
+
+**Bug (user):** "出怪顺序很迷，有时候直接把 boss 出来了，相当于把 boss 当小兵" — sub-boss/boss-grade monsters were spawning inside ordinary grunt waves (screenshot: several 天王 together in a normal L2 fight).
+
+**Root cause (mine):** the pilot + workers folded sub-bosses into grunt-wave rosters as "heavies." Worst offender was L3's 哮天犬 (hp 9,999,999) sitting in a grunt wave as an effectively-unkillable trash mob.
+
+**Fix:** every level's `stopPoints` restructured to a clean tier split — pure escalating grunt waves first, then each sub-boss as its OWN solo stop point, then the arena boss. Enforced by a new per-level vitest invariant: (1) any wave with a boss-tier species is that species alone, (2) each sub-boss gets exactly one solo wave, (3) all grunt waves precede all sub-boss waves, (4) the arena boss never appears in a wave. All 26 level tests green.
+
+Before → after (roster per stop point; **bold** = boss-tier monster that was mis-mixed):
+
+| Level | Before | After |
+| --- | --- | --- |
+| L1 巫鹰关 | [30,30,30,8] · [7,8,**4**] · [8,7,**2**] · [7,30,**5**] → boss 3 | [8,8,30] · [30,30,30,8] · [7,7,8] · [**4**] · [**2**] · [**5**] → boss 3 |
+| L2 天王关 | [9,10] · [9,19,**6**] · [10,19,9] · [19,10,**16**] · [9,10,19] → boss 15 | [9,10] · [10,19,9] · [19,10,9,19] · [**6**] · [**16**] → boss 15 |
+| L3 二郎神关 | [11,12] · [13,11,**21**] · [12,13,11] · [13,12,**20**] · [14,1,**23**,11,12,13] → boss 22 | [11,12] · [13,11,12] · [14,1,13,11] · [**21**] · [**20**] → boss 22 |
+| L4 邪念之境 | [32] · [33] · [31] → boss 34 (already clean) | unchanged — each disciple already solo |
+
+L3 note: 哮天犬 (monster23) removed from waves entirely — it is 二郎神's auto-spawned companion (`Monster22.__added → createMonster(23)`), never a grunt; belongs with the boss once a companion mechanic exists. Its stats/JSON are retained.
+
+---
+
 ## Level 1 — 巫鹰关 (climb to the demon bird)
 
 **Ported by:** pipeline main (Opus). **Source:** `out_res/1.swf` + `打开我开始玩.swf`. Landed last (2026-07-07) but is campaign level 1: it REPLACES the project's original hand-made level 1, which was the only non-original level left — `systems/level.ts`'s placeholder `LEVEL_1` uses invented small stats (e.g. monster30 hp 150). This pack carries the real recovered numbers so level 1 matches the original once the wiring pen swaps it in as the `LEVELS` chain head.

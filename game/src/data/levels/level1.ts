@@ -16,9 +16,10 @@
 //     `isBoss=true` on `gc.curStage==1 && gc.curLevel==1`).
 //   - Stage 12 roster: grunts Monster8/7 + mini-bosses 千里眼(M4)/顺风耳(M2).
 //   - Stage 13 roster: grunts Monster8/7, Monster30 swarm + 巨灵神(M5).
-// Compressed into level.ts's single-level LevelDef: the Monster30 climb-swarm
-// and the three mini-bosses become escalating stop-point waves, and 巫鹰 is the
-// arena boss.
+// Compressed into level.ts's single-level LevelDef with a clean tier split so
+// boss-grade monsters never spawn as trash: pure escalating grunt/swarm waves
+// first, then each mini-boss as its OWN solo stop point (千里眼→顺风耳→巨灵神),
+// then 巫鹰 as the arena boss. No sub-boss shares a roster with grunts.
 //
 // STATS ARE REAL, recovered verbatim from each export.monster.MonsterN
 // constructor, branch-selected for the level-1 context (`gc.curStage==1 &&
@@ -97,14 +98,14 @@ export const LEVEL_1_WUYING: LevelDef = {
   name: '巫鹰关',
   spawnIntervalMs: 6000,
   stopPoints: [
-    // the climb — Monster30 swarm (hp 1 imps) with a grunt mixed in
-    wave('monster30', 'monster30', 'monster30', 'monster8'),
-    // mini-boss 千里眼
-    wave('monster7', 'monster8', 'monster4'),
-    // mini-boss 顺风耳
-    wave('monster8', 'monster7', 'monster2'),
-    // mini-boss 巨灵神 (heaviest wave)
-    wave('monster7', 'monster30', 'monster5'),
+    // ── grunt waves (escalating), no boss-tier monster mixed in ──
+    wave('monster8', 'monster8', 'monster30'), // weak intro + a swarm imp
+    wave('monster30', 'monster30', 'monster30', 'monster8'), // the climb swarm
+    wave('monster7', 'monster7', 'monster8'), // heavier grunts
+    // ── mini-bosses, each its own solo appearance (escalating hp) ──
+    wave('monster4'), // 千里眼 (1500)
+    wave('monster2'), // 顺风耳 (2000)
+    wave('monster5'), // 巨灵神 (4000, heaviest mini-boss)
   ],
   boss: {
     species: 'monster3',

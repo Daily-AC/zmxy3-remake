@@ -8,24 +8,25 @@
 //     appears as a heavy inside the roster (curStage==3&&curLevel==3 branch:
 //     isBoss=false, hp 20000 — an elite, not "the" boss)
 //   scene 2 (StageListener32, roster Monster11/12/13/20) -> 袁洪 Monster20
-//     appears as a heavy inside the roster (hp 30000; both of Monster20's
-//     stat branches set isBoss=true, but only the curStage==3&&curLevel==3
-//     branch's 30000 hp is used here — the 33000-hp branch is a different
-//     level's tuning)
+//     (hp 30000; both of Monster20's stat branches set isBoss=true, but only
+//     the curStage==3&&curLevel==3 branch's 30000 hp is used here — the
+//     33000-hp branch is a different level's tuning)
 //   scene 3 (StageListener33, roster includes Monster11/12/13/14/20/21/22
 //     plus several OTHER levels' species (Monster2/4/5/6/15/16) that are not
 //     part of this level's asset pack and are excluded) -> Monster22 二郎神
 //     is the arena boss.
-// Monster1 and Monster23 are confirmed level-3 body monsters via symbolclass
-// (3.swf chid9 and chid5) but do not appear in ANY StageListener's
-// waitForRegisterDataArray. Monster1 is folded into the final grunt wave for
-// asset completeness. Monster23 (哮天犬, Erlang Shen's companion dog) is, in
-// the original, auto-spawned by Monster22's __added() override
-// (`MainGame.getInstance().createMonster(23,...)`) rather than wave-spawned
-// at all — folded into the final grunt wave here since LevelDef/BossSpec has
-// no "companion" concept (see INTERFACE NOTE below). Its hp (9999999) is
-// recorded verbatim — it's a scripted, effectively-unkillable companion in
-// the original, not a normal kill target.
+// Compressed into level.ts's single-level LevelDef with a clean tier split so
+// boss-grade monsters never spawn as trash: pure escalating grunt waves
+// (Monster11/12/13/14/1) first, then each elite as its OWN solo stop point
+// (朱子真→袁洪), then 二郎神 as the arena boss. No elite shares a roster with
+// grunts.
+// Monster1 is a confirmed level-3 body monster (3.swf chid9) absent from every
+// StageListener roster; kept as a grunt for asset completeness. Monster23
+// (哮天犬, chid5) is 二郎神's companion, auto-spawned by Monster22.__added()
+// (`createMonster(23,...)`), never wave-spawned in the original. It is NOT in
+// any wave here (its 9999999 hp made it an unkillable "trash mob" — the
+// reported bug); it belongs with the boss once a companion mechanic exists.
+// Its stats/JSON are retained verbatim for that.
 //
 // STATS ARE REAL, recovered verbatim from each export.monster.MonsterN
 // constructor in 打开我开始玩.swf (hp/def/speed/attackRange/alertRange),
@@ -142,17 +143,20 @@ export const LEVEL_3_ERLANGSHEN: LevelDef = {
   name: '二郎神关',
   spawnIntervalMs: 6000,
   stopPoints: [
-    // scene 1 (StageListener31: 11/12/13/21) — opening grunts, then 朱子真 joins
+    // ── grunt waves (escalating), no elite/boss mixed in ──
     wave('monster11', 'monster12'),
-    wave('monster13', 'monster11', 'monster21'),
-    // scene 2 (StageListener32: 11/12/13/20) — grunts, then 袁洪 joins
-    wave('monster12', 'monster13', 'monster11'),
-    wave('monster13', 'monster12', 'monster20'),
-    // scene 3 (StageListener33 approach) — final grunt wave before the arena;
-    // folds in monster1 (asset-pack extra, no scene roster) and monster23
-    // (哮天犬, normally boss-spawned, folded in here — see file header)
-    wave('monster14', 'monster1', 'monster23', 'monster11', 'monster12', 'monster13'),
+    wave('monster13', 'monster11', 'monster12'),
+    wave('monster14', 'monster1', 'monster13', 'monster11'), // heaviest grunt wave
+    // ── elites, each its own solo appearance (escalating hp) ──
+    wave('monster21'), // 朱子真 (20000)
+    wave('monster20'), // 袁洪 (30000)
   ],
+  // NOTE: 哮天犬 (monster23, hp 9999999) is deliberately NOT in any wave. It is
+  // 二郎神's auto-spawned companion (Monster22.__added -> createMonster(23)), not
+  // a grunt — folding its 9999999-hp body into a grunt roster made an
+  // effectively-unkillable "trash mob" (the reported bug). The flat LevelDef has
+  // no companion slot, so it belongs with the boss once the wiring pen adds a
+  // companion mechanic. Its stats/JSON stay for that; it is just not wave-spawned.
   boss: {
     species: 'monster22',
     stats: LEVEL3_MONSTER_STATS.monster22,

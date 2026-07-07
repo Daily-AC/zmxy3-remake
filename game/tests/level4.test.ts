@@ -127,14 +127,22 @@ describe('Level 4 邪念之境 — real 4.swf sequential boss-chain port', () =>
     }
   })
 
-  it('the boss (monster34) appears only in the arena, never in a stop-point wave', () => {
-    const waveSpecies = new Set(
-      LEVEL_4_XIENIAN.stopPoints.flatMap((sp) => sp.roster).map((r) => r.species),
-    )
-    expect(waveSpecies.has(LEVEL_4_XIENIAN.boss.species)).toBe(false)
-    // ...but the other three links of the chain DO appear, one per wave.
-    expect(waveSpecies.has('monster32' as any)).toBe(true)
-    expect(waveSpecies.has('monster33' as any)).toBe(true)
-    expect(waveSpecies.has('monster31' as any)).toBe(true)
+  it('tier separation: every stop point is a single corrupted disciple, 邪.悟空 only in the arena', () => {
+    // Level 4 has no grunts — all four are boss-grade; each of the first three
+    // appears solo in order, and 邪.悟空 is the arena boss.
+    const SUBBOSS = new Set(['monster32', 'monster33', 'monster31'])
+    const waves = LEVEL_4_XIENIAN.stopPoints.map((sp) => sp.roster.map((r) => r.species))
+
+    // (1) each wave is exactly one boss-tier disciple (never a mixed roster)
+    for (const w of waves) {
+      expect(w).toHaveLength(1)
+      expect(SUBBOSS.has(w[0])).toBe(true)
+    }
+    // (2) each disciple gets exactly one solo wave
+    for (const sb of SUBBOSS) {
+      expect(waves.filter((w) => w.length === 1 && w[0] === sb)).toHaveLength(1)
+    }
+    // (3) the arena boss 邪.悟空 never appears in a wave
+    expect(waves.flat()).not.toContain(LEVEL_4_XIENIAN.boss.species)
   })
 })
