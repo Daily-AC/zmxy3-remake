@@ -55,6 +55,10 @@ import {
   validateCraftedEquipment,
   computeBudget,
 } from '../systems/furnace'
+import type { LoadedGameState } from '../systems/save'
+import { createGameSave } from '../systems/save'
+import type { SlotId } from '../systems/saveSlots'
+import { buildSlotEnvelope, writeSlot, readSlot } from '../systems/saveSlots'
 import {
   NpcClient,
   ConnStatus,
@@ -178,6 +182,16 @@ export class BattleScene extends Phaser.Scene {
   } | null = null
   private craftSeq = 0
 
+  // Save-slot wiring (shell -> battle -> shell). activeSlot/origin come from the
+  // registry the shell populated; playtimeSec accrues here (only place it can).
+  private activeSlot: SlotId | null = null
+  private saveOrigin: 'new' | 'continue' = 'new'
+  private playtimeSec = 0
+  private playtimeAccMs = 0
+  // Esc pause menu (continue / save & quit to main menu).
+  private paused = false
+  private pauseMenu?: Phaser.GameObjects.Container
+
   // Equipment / hero combat state
   private equipment: Equipment = createEquipment()
   private weaponSprite!: Phaser.GameObjects.Sprite
@@ -282,18 +296,125 @@ export class BattleScene extends Phaser.Scene {
       comboGraceMs: COMBO_GRACE_MS,
     })
     this.heroState = initHeroState(this.heroConfig, HERO_START_X)
-    this.identity = createHeroIdentity(HERO_ID)
+    this.seedFromSave()
     this.setupMonster()
 
     this.pickupCfg = { gravity: 2, groundY: GROUND_Y, pickupRadius: DEFAULT_PICKUP_RADIUS, tickMs: TICK_MS }
 
     this.buildHud()
     this.buildDialogue()
+    this.buildPauseMenu()
     this.applyHeroRender('wait')
     this.applyMonsterRender(false)
     this.startAudioOnFirstInput()
     this.connectNpc()
     this.exposeDebugHooks()
+
+    kb.on('keydown-ESC', () => this.togglePause())
+    // A fresh scene (re)entry: no craft in flight, not paused.
+    this.craftPending = null
+    this.paused = false
+  }
+
+  // ---------- save-slot wiring ----------
+
+  /**
+   * Seed hero identity / equipment / inventory from the slot the shell loaded
+   * (registry keys set by SlotSelect/CharacterSelect). Falls back to a fresh
+   * level-1 悟空 when launched straight into 'battle' with no shell (debug).
+   */
+  private seedFromSave(): void {
+    const slot = this.registry.get('shell.activeSlot')
+    this.activeSlot = slot === 0 || slot === 1 || slot === 2 ? (slot as SlotId) : null
+    this.saveOrigin = this.registry.get('shell.origin') === 'continue' ? 'continue' : 'new'
+
+    const loaded = this.registry.get('shell.loadedState') as LoadedGameState | undefined
+    if (loaded && this.saveOrigin === 'continue') {
+      this.identity = createHeroIdentity(loaded.progression.heroId, loaded.progression.level)
+      // Exact exp (createProgression already set expToNext + clamped for the level).
+      this.identity.progression = loaded.progression
+      this.equipment = loaded.equipment
+      this.inventory = loaded.inventory
+    } else {
+      this.identity = createHeroIdentity(HERO_ID)
+      this.equipment = createEquipment()
+      this.inventory = createInventory(24)
+    }
+
+    // Continue accruing from the slot's stored playtime (lives only in slot meta).
+    this.playtimeAccMs = 0
+    this.playtimeSec =
+      this.activeSlot !== null ? readSlot(window.localStorage, this.activeSlot)?.meta.playtimeSec ?? 0 : 0
+  }
+
+  /** Write the current live state back to the active slot (no-op without a slot). */
+  private saveToSlot(): void {
+    if (this.activeSlot === null) return
+    const save = createGameSave({
+      progression: this.identity.progression,
+      equipment: this.equipment,
+      inventory: this.inventory,
+    })
+    writeSlot(window.localStorage, this.activeSlot, buildSlotEnvelope(save, this.playtimeSec))
+  }
+
+  // ---------- pause / return to main menu ----------
+
+  private buildPauseMenu(): void {
+    const scrim = this.add.rectangle(480, 270, 960, 540, 0x05060c, 0.62).setScrollFactor(0)
+    const panel = this.add
+      .rectangle(480, 270, 360, 240, 0x1a130c, 0.96)
+      .setStrokeStyle(2, 0xd9b45a, 0.9)
+      .setScrollFactor(0)
+    const title = this.add
+      .text(480, 190, '暂停', { fontSize: '26px', color: '#f0d99a', fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+    const resume = this.pauseButton(480, 250, '继续', 0xd9b45a, () => this.togglePause())
+    const saveQuit = this.pauseButton(480, 306, '保存并回主菜单', 0x8a7f66, () =>
+      this.returnToMainMenu(),
+    )
+    this.pauseMenu = this.add
+      .container(0, 0, [scrim, panel, title, ...resume, ...saveQuit])
+      .setScrollFactor(0)
+      .setDepth(300)
+      .setVisible(false)
+  }
+
+  private pauseButton(
+    cx: number,
+    cy: number,
+    text: string,
+    color: number,
+    onClick: () => void,
+  ): Phaser.GameObjects.GameObject[] {
+    const rect = this.add
+      .rectangle(cx, cy, 280, 44, 0x2a2013, 0.95)
+      .setStrokeStyle(2, color, 1)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+    rect.on('pointerdown', onClick)
+    const label = this.add
+      .text(cx, cy, text, { fontSize: '17px', color: '#f2eddf', fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+    return [rect, label]
+  }
+
+  private togglePause(): void {
+    // Esc inside the dialogue is handled by the dialogue itself (keyboard is
+    // disabled there), so this only fires during normal play.
+    if (this.dialogue?.isOpen) return
+    this.paused = !this.paused
+    this.pauseMenu?.setVisible(this.paused)
+  }
+
+  private returnToMainMenu(): void {
+    this.saveToSlot()
+    this.npcClient?.dispose()
+    this.paused = false
+    this.pauseMenu?.setVisible(false)
+    this.scene.start('mainmenu')
   }
 
   private buildBackground(): void {
@@ -528,6 +649,7 @@ export class BattleScene extends Phaser.Scene {
       this.dialogue.startTypewriter(`${NPC_NAME}：${flavor}`)
       this.showToast(`炼成【${validation.item.name}】`, '#ffd873')
       this.playSfx('pickup', 0.7)
+      this.saveToSlot() // autosave: bag gained a forged item
     } else {
       refundMaterials(this.inventory, pending.tx)
       this.dialogue.startTypewriter(
@@ -621,6 +743,14 @@ export class BattleScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (this.paused) return
+    // Accrue play time (whole seconds) for the slot summary.
+    this.playtimeAccMs += delta
+    if (this.playtimeAccMs >= 1000) {
+      const whole = Math.floor(this.playtimeAccMs / 1000)
+      this.playtimeSec += whole
+      this.playtimeAccMs -= whole * 1000
+    }
     this.simClockMs += delta
     const edges = this.collectEdges()
     const jumped = edges.pressJump && this.heroState.vertical.grounded
@@ -741,6 +871,7 @@ export class BattleScene extends Phaser.Scene {
         if (!isHeroDead(this.identity)) this.hero.clearTint()
       })
     }
+    this.saveToSlot() // autosave: exp/level changed
   }
 
   // A monster swing lands: subtract the hero's def, then run it through the
@@ -768,7 +899,7 @@ export class BattleScene extends Phaser.Scene {
         })
       } else if (e.type === 'death') {
         this.floatText(this.heroState.x, GROUND_Y - 60, `-${mitigated}`, '#ff5a5a')
-        this.showToast(`${'悟空倒地'}…`, '#ff6b6b')
+        this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
       }
     }
   }
@@ -954,6 +1085,7 @@ export class BattleScene extends Phaser.Scene {
   private doEquip(item: Item): boolean {
     if (!equip(this.equipment, this.inventory, item)) return false
     this.showToast(`装备【${item.name}】`, '#ffd873')
+    this.saveToSlot() // autosave: equipment/bag changed
     return true
   }
 
@@ -961,6 +1093,7 @@ export class BattleScene extends Phaser.Scene {
     const cur = this.equipment[slot]
     if (!unequip(this.equipment, this.inventory, slot)) return false
     this.showToast(`卸下【${cur?.name ?? ''}】`, '#c8cfe6')
+    this.saveToSlot() // autosave: equipment/bag changed
     return true
   }
 
@@ -1167,6 +1300,25 @@ export class BattleScene extends Phaser.Scene {
       craftMode: this.dialogue.craftMode,
       materials: this.bagMaterials().map((m) => ({ id: m.item.id, name: m.item.name, qty: m.qty })),
     })
+    // Save-slot acceptance hooks.
+    w.__saveState = () => ({
+      activeSlot: this.activeSlot,
+      origin: this.saveOrigin,
+      playtimeSec: this.playtimeSec,
+      level: this.identity.progression.level,
+      exp: this.identity.progression.exp,
+      weapon: this.equipment.weapon ? this.equipment.weapon.name : null,
+      inventory: listStacks(this.inventory).map((s) => ({ id: s.item.id, name: s.item.name, qty: s.qty })),
+    })
+    w.__saveNow = () => {
+      this.saveToSlot()
+      return this.activeSlot
+    }
+    w.__togglePause = () => {
+      this.togglePause()
+      return this.paused
+    }
+    w.__returnToMenu = () => this.returnToMainMenu()
     w.__toggleDebug = () => {
       this.debugVisible = !this.debugVisible
       for (const t of this.debugTexts) t.setVisible(this.debugVisible)

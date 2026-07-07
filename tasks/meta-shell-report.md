@@ -160,3 +160,42 @@ writeSlot(window.localStorage, slot, buildSlotEnvelope(save, this.playtimeSec))
 4. **无 DOM 名字输入**：原版 SelectRole 有"请输入名字"，本壳暂用 heroId 派生固定名（孙悟空），未做自定义昵称输入
    （避免 headless 截图里 DOM 焦点抖动）。要做的话在 CharacterSelect 加一个 Phaser DOM input，存进 meta 加个 `heroName` 字段即可。
 5. **并行 team 共用同一 checkout**：`BattleScene.ts`/`npcClient.ts` 等在工作树里是他人改动（`git status` 可见），本单 commit 只 add 自己的新文件，未 `git add -A`。
+
+## 7. 壳↔战斗存档接线 — 已完成（2026-07-07 集成会话）
+
+§3 的接口，本棒已全部接进 `BattleScene.ts`（只动 BattleScene，未碰壳场景/saveSlots/save）。玩家流
+「选槽进战斗 → 打怪升级捡装备 → 炼一件 → 存档回主菜单 → 再进继续档 → 等级/背包/装备原样恢复」
+浏览器真机走通。
+
+**接线（严格按 §3.1–3.3）**：
+- `create()` 开头 `seedFromSave()`：读 registry `shell.activeSlot/origin/loadedState`；`origin==='continue'
+  && loadedState` 时用 `createHeroIdentity(heroId, level)` + `identity.progression = loaded.progression`
+  播种，`equipment/inventory = loaded.*`；否则默认满血 Lv.1 悟空（直接进 'battle' 调试仍可跑）。
+- **游戏时间**：`playtimeSec` 在 `update` 里按 delta 累加（整秒进位）；`seedFromSave` 从槽 meta 读回上次
+  时长续累（§3.2 指出只有 BattleScene 能累加，故读 `readSlot` 拿旧值）。
+- **存回**：`saveToSlot()` = `createGameSave` → `buildSlotEnvelope(save, playtimeSec)` → `writeSlot`。
+  自动存触发点：升级/杀怪(`awardKillExp`)、炼成装备(`onCraftResult` ok)、穿脱装备(`doEquip/doUnequip`)、
+  以及回主菜单前。
+- **回主菜单出口**：Esc 开暂停菜单（水墨风，`继续` / `保存并回主菜单`），暂停时 `update` 早返冻结模拟；
+  `保存并回主菜单` = `saveToSlot` + `npcClient.dispose` + `scene.start('mainmenu')`。死亡 toast 提示
+  「Esc 可回主菜单」，暂停菜单在死亡态也可开（键盘在非对话态可用），覆盖 §3.3 的死亡出口。
+
+**验收判据逐条**：
+1. `npx vitest run` 全绿：✅ 248 passed；BattleScene.ts 过 `tsc --noEmit`（仓库当前唯一 tsc 报错在
+   `src/ui/hud/RoleInfoHud.ts`，另一 agent 的在建 HUD 文件，非本棒，未触碰）。
+2. 浏览器真机端到端（vite dev + 壳流转 + `window.__shell*`/`__save*` 钩子），截图落
+   `game/tmp/debug-shots/`：
+   - `11-slot-occupied-after-save.png`：新建档 slot0 打到 Lv.2 + 炼「试炉法宝」+ 回主菜单后，选档界面
+     slot0 显示「孙悟空 Lv.2 游戏时间 00:24 + 日期」。
+   - `12-continue-restored.png`：「继续」slot0 再进战斗，HUD `Lv.2 / HP _/130 / 攻击 65 / 武器：试炉法宝`
+     ——等级、maxHp(130)、装备、attack 全恢复。
+   - `13-pause-menu.png`：Esc 暂停菜单（继续 / 保存并回主菜单），游戏冻结。
+   - 数值实证：存档前 `{level:2, weapon:'试炉法宝', origin:'new'}` → 回主菜单 → `listSlotSummaries`
+     slot0 = `{occupied:true, 孙悟空, level:2, playtimeSec:24}` → 继续 → `{origin:'continue', level:2,
+     weapon:'试炉法宝', atk:65}`，前后一致。
+3. 本节即报告追加。
+
+**遗留（接线棒）**：
+- 存回目前是"事件驱动自动存 + 退出存"，没做定时自动存（够用；要的话在 update 里加节流计时）。
+- `__saveState/__saveNow/__togglePause/__returnToMenu` 为验收调试钩子，量产前可清理。
+- Esc 暂停菜单是程序化水墨面板；后续若壳团队出暂停 UI 素材可替换，接口（saveToSlot/scene.start）不变。
