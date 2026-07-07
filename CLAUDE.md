@@ -51,6 +51,7 @@
 - 基线跑通后，疑点清单在现有场景里 A/B 定改不改——判据是真实手感对比，不是读代码的审美；试了不如原样就保持原样。
 - 理由：保真即验收判据（"像小时候"）；数值是围绕原 gating 调平的，改 gating = 隐式重做平衡；先保真后改便宜、先即兴后回滚贵。
 - **源优先级（2026-07-07 hero-scale 教训）**：数值/公式以原版主逻辑 SWF 反编译 AS3 为真源；kagami 是二手源（已实证含占位符：普攻写死 30-34、技能公式与原版差 6.6x），只作结构参考与对照，移植数值前先对 AS3 验一遍。
+- **成长曲线校验状态（2026-07-07 独立审计，tasks/audit-numbers-report.md）**：progression.ts 中仅 Role1 悟空/Role2 已对原版 AS3（RoleN.upGrade）逐字验证；Role3/Role4 的 atk 曲线 kagami 改过（原版 20+6/16+4 vs 代码 15+8/9+4），Role5 原版根本不存在（kagami 臆造）。放开多角色前必须先对 AS3 重验，别把 progression.ts 当"全体=原版"。monsterBehaviors 的 monster3 数值亦来自 kagami（hp926 vs 原版巫鹰 300），对齐手感时需改回。
 
 ## 工程约定
 

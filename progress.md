@@ -146,6 +146,20 @@
 
 **基建/纪律**:git push 用 `git -c http.proxy=http://127.0.0.1:7897 push`;vite dev 用 nohup(run_in_background 会被环境杀 exit144);agent-server 部署 home wss://zm-dev.qmledmq.cn:8443;真机验收 tools/acceptance/acceptance.sh(28步交互脚本,executeJavaScript驱动__钩子);素材按收益选不按本体/后作教条(用户纠偏"别轴");移植>重写;素材/数值真源=原版AS3反编译,kagami二手仅结构参考。
 
+## 2026-07-07 session 3 接手（20:03，Fable 主持）
+
+- 20:05 接手核账：387 绿/tsc 净；发现 4.8 自述"remote 干净基线"失实——本地尚有 2 个未推 commit（2d72596 切场景残留修复 + 64f9334 docs），核 diff 后已补推。
+- 20:10 派 ui-finish（YUIOL 热键/八卦炉面板/结算横幅，tasks/ui-finish-brief.md）。YUIOL 五格坞已 commit（f80bbbf）。
+- 20:14 **用户拍板承伤方案**：判据先行（到关等级+中等炼装，boss 最痛一击 25~40%/普攻 5~10%，手玩可通）、显式养成替代层（不改 progression.ts 原版数字、赛后宝石系统落地可回退）、补魔防成长曲线（原版 countHurt 通道，接线一直传 0 是半成品）、拾取球固定值不动（比例即保真）。派 survivability（tasks/hero-survivability-brief.md）。同时应用户要求对 4.8 会话（16:00~19:35）产出开三路独立审计。
+- 20:22 **用户并排截图打回战斗 HUD 视觉**（与 Online 实机差距大）。主会话亲做 12 条逐元素差距清单（整块底板=web感根源/血条形状/条上数字/坞格框暗淡/坞上多余Lv与数字/缺无双+按钮簇/按键帮助文字横战场/背景接缝+缺石台地面），ui-finish 优先级重排为 HUD 像素级保真重做，方法论写死：原版位图优先不许手绘近似、kagami 布局坐标、每轮并排拼图视觉迭代到挑不出、主会话终审后才给用户。参照图入库 docs/reference/zmxy-online-screens/battle-hud-user2.png。
+- 21:0x **三路审计全回（报告 tasks/audit-*.md）**：
+  - numbers（对 SWF 独立重新反编译）：4.8 标注 SWF 来源的数值全部逐字属实（普攻系数/11 条技能指数公式/双向减伤/三 boss/L1 蜂群巫鹰）；悟空成长曲线直接对上原版 Role1.upGrade 精确逐字，承伤地基可信。过度断言纠正：Role3/4 atk 曲线 kagami 私改、Role5 原版不存在、monster3 行为值=kagami（hp926 vs 原版 300）——校验状态已写入 CLAUDE.md。
+  - claims：43 commit 全实且在 remote；关键测试数（126/235/387）checkout 对应 commit 真跑复现全吻合；唯一夸大=skill-tree-port 报 182 例混入他人未提交文件（实际 161）；无未记账暗改动。
+  - runtime（origin/master worktree 真跑）：5/5 PASS——波次分层、切场景残留修复、登录流 Online 版式、UI 换装真组件、存档链全恢复。开放项：一次无法复现的"武器未显式 equip 即穿戴"（已记 report，非确认 bug）。
+  - **总结论：4.8 的漂移在视觉验收标准与优先级排序；数值移植与工程账经独立复核可信，无需返工。**
+- 21:18 survivability 验收合入（4619099，395 绿主会话复跑）：heroSurvivability.ts 替代层 maxHp ×3.5/def ×2/魔防 L10=10%→L30=35% 封顶 50%，判据带写死测试（L3 核击 39.9% 承重断言）；到关等级模型 L2:8/L3:15/L4:21。三尾巴分头：①魔防一行接线 patch 转 ui-finish 持笔应用；②装备 hp 词条从未进 combat.maxHp（真 bug，炼了白炼）续单真修+系数下调；③exp 经济断层（每杀固定 80 占位，L4 自然仅 lv10 vs 门槛 lv21）续单按原版 AS3 每怪 exp 真值修，达不到判据报偏差拍板不擅自放大。
+- 在途：ui-finish（HUD 像素级重做，主线）、survivability（续单×2）。push 策略沿用：UI 到位+真机验收过统一推，不推中间态。
+
 ### 赛后路线图（终包后）
 - **NPC Agent 能力架构**（游戏作为 MCP、每 NPC 受限工具集=权限边界、动态权限；炼丹炉照配方合成 / 老君概率交易以贱换尊）：用户 2026-07-07 提出的拓展构想，是"agent 驱动 NPC"愿景的完全体，需深入设计再做，**暂缓**。完整记录见 docs/design/npc-agent-mcp.md。
 - 关卡流水线：16 个同构关卡包可多 agent 并行移植（导包→抠怪物动作表→接波次→对 kagami 文档验数值）；每关 Boss 专属机制（HP_REJECT/弹幕MC）是硬骨头逐个啃。
