@@ -68,11 +68,11 @@ describe('saveSlots (three-slot wrapper over save.ts)', () => {
     storage = createMemoryStorage()
   })
 
-  it('exposes exactly three slots with distinct namespaced keys', () => {
-    expect(SLOT_COUNT).toBe(3)
-    expect(SLOT_IDS).toEqual([0, 1, 2])
+  it('exposes exactly six slots with distinct namespaced keys', () => {
+    expect(SLOT_COUNT).toBe(6)
+    expect(SLOT_IDS).toEqual([0, 1, 2, 3, 4, 5])
     const keys = SLOT_IDS.map((s) => slotStorageKey(s))
-    expect(new Set(keys).size).toBe(3)
+    expect(new Set(keys).size).toBe(6)
     for (const k of keys) expect(k).toMatch(/^zmxy3-remake\.slot\.v1\.\d$/)
   })
 
@@ -81,7 +81,7 @@ describe('saveSlots (three-slot wrapper over save.ts)', () => {
       expect(readSlot(storage, s)).toBeUndefined()
       expect(readSlotSummary(storage, s)).toEqual({ slot: s, occupied: false })
     }
-    expect(listSlotSummaries(storage)).toHaveLength(3)
+    expect(listSlotSummaries(storage)).toHaveLength(6)
   })
 
   it('round-trips a new game through write/read preserving save contents', () => {
