@@ -22,9 +22,10 @@ import type { HeroId } from './progression'
 import type { GameSaveV1, SaveStorage, CreateGameSaveInput } from './save'
 import { createGameSave, serializeGameSave, parseGameSave } from './save'
 
-export const SLOT_COUNT = 3
-export type SlotId = 0 | 1 | 2
-export const SLOT_IDS: readonly SlotId[] = [0, 1, 2]
+// Six slots, matching the original 造梦西游 大闹天庭篇 save panel (2 cols x 3 rows).
+export const SLOT_COUNT = 6
+export type SlotId = 0 | 1 | 2 | 3 | 4 | 5
+export const SLOT_IDS: readonly SlotId[] = [0, 1, 2, 3, 4, 5]
 
 /** Envelope schema version, independent of GameSave's own `version`. */
 export const SlotEnvelopeVersion = 1 as const

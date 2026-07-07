@@ -199,3 +199,25 @@ writeSlot(window.localStorage, slot, buildSlotEnvelope(save, this.playtimeSec))
 - 存回目前是"事件驱动自动存 + 退出存"，没做定时自动存（够用；要的话在 update 里加节流计时）。
 - `__saveState/__saveNow/__togglePause/__returnToMenu` 为验收调试钩子，量产前可清理。
 - Esc 暂停菜单是程序化水墨面板；后续若壳团队出暂停 UI 素材可替换，接口（saveToSlot/scene.start）不变。
+
+---
+
+## 附录：Online「大闹天庭篇」登录流复刻（2026-07-07，meta-shell 续单）
+
+用户拍板照《造梦西游 Online·大闹天庭篇》实机图复刻登录门面（两张实机图为准：
+`docs/reference/zmxy-online-screens/title-menu.png` + `save-slots.png`）。素材政策已放开
+（CLAUDE.md：全系列素材可直接用进产物）。
+
+- **主菜单改 Online 版式**（MainMenuScene 重写）：左侧角色群像+logo 原画（`assets/online/title/
+  title-bg.png` = Online main-title-background）满屏 + 右侧深色墨板竖排菜单。菜单裁到单机功能：
+  新的开始 / 读取存档 / 游戏帮助 / 关于我们 / 退出游戏（去掉联网项 造梦论坛/返回首页）。游戏帮助/
+  关于我们为程序化浮层，退出游戏尝试 window.close() 否则显告别浮层。
+- **存档弹窗改 6 槽**（saveSlots.ts SLOT_COUNT 3→6，SlotId 0..5；SlotSelectScene 重写为 2 列 ×
+  3 行卡片）：深色面板 + 橙色大槽号 + 头像 + 角色名/等级 + 游戏时间 + 时间戳 + 右上红叉关闭；
+  空槽 ＋新建、满槽点卡片继续、卡片角 ✕ 删除。存档槽逻辑扩容是纯数据层，单测已更新（SLOT_COUNT=6）。
+- 之前 chid410 造3 logo 方案未白做：`title_logo_bg.png` 仍在库，若要把 Online logo 换成造3 logo，
+  在 title-bg 上叠 chid410 logo 裁片即可（当前用 Online 原画 logo，与实机图一致）。
+- 判据：与用户两张实机图并排对比 `tmp/debug-shots/menu3-compare-title.png` /
+  `menu3-compare-slots.png`（版式/信息层级重合）；6 槽混合态截图 `menu3-03-slots-mixed.png`
+  （0/1/3/4 有档、2/5 空，刷新持久化实测）；vitest 387 全绿。
+- 接线不变：新建/继续仍走 registry（activeSlot/loadedState/origin），BattleScene 接线接口同正文。
