@@ -42,6 +42,60 @@ Base recovered: hp 16000, def 24, attackRange 250, alertRange 1000, speed 5, exp
 
 ---
 
+## Level 3 — 二郎神关 (Erlang Shen gauntlet)
+
+**Ported by:** pipeline main (Sonnet). **Source:** `out_res/3.swf` + `打开我开始玩.swf`.
+
+### Assets (`game/public/assets/extracted/level3/`)
+- Backgrounds: `bg31.png` `bg32.png` `bg33.png` (4700×590 scroll panoramas, sprite-export), `floorBg3.png` (1040×690, image-export).
+- Monster body sheets (image-export, `<chid>_` prefix stripped): `Monster1.png` (1800×1800), `Monster11.png` (1200×1000), `Monster12.png` (1200×1000), `Monster13.png` (1400×800), `Monster14.png` (1200×1200), `Monster20.png` (2100×2250), `Monster21.png` (3200×2400), `Monster22.png` (2400×3000), `Monster23.png` (1500×1200).
+
+### Action tables (`game/src/data/monsters/`)
+`monster1/11/12/13/14/20/21/22/23.json` — grid + per-action row/frames/stopCounts/frameCount, decoded from each `export.monster.MonsterN.initBBDC()+setAction()`. Cell sizes vary per monster (200×200 for most grunts; 300×300 M1; 350×250 M20; 400×300 M21/M22; 250×200 M23) — read from each `new BaseBitmapDataClip(...)`, never assumed. Confirmed via `symbolclass` re-run: body chids 9/4/3/2/1/8/7/6/5 = Monster1/11/12/13/14/20/21/22/23 respectively; `Monster22_ERLANGSHEN_HP_REJECT` (chid 205) is a marker symbol, not a body sprite.
+
+### Level data (`game/src/data/levels/level3.ts`)
+`LEVEL_3_ERLANGSHEN: LevelDef` — 5 stop-point waves culminating in an arena boss. Structure mirrors 3.swf's three sub-stages (StageListener31/32/33): grunts Monster11/12/13 recurring, two named elites (朱子真 M21, 袁洪 M20) folded into grunt waves as heavies, and 二郎神 (M22) as the arena boss. Monster1 (asset-pack extra, appears in no StageListener roster) and Monster23 (哮天犬, normally auto-spawned as 二郎神's companion, not wave-spawned at all in the original) are both folded into the final grunt wave — documented adaptation, since `LevelDef`/`BossSpec` has no "extra asset"/"companion" concept.
+
+### Values / provenance
+**All monster stats recovered VERBATIM** from the SWF constructors (hp/def/speed/attackRange/alertRange):
+- Grunts (single-branch, no stage/level condition): M1 hp5200/def20, M11 hp5100/def7, M12 hp6500/def12, M13 hp5000/def14 (flying, isFly=true), M14 hp8000/def27.
+- Elites (`gc.curStage==3 && gc.curLevel==3` branch — NOT the other branch's different-level tuning): 朱子真 M21 hp20000/def35 (isBoss=false in this branch — an elite, not the level's boss), 袁洪 M20 hp30000/def36 (both of M20's branches set isBoss=true; only this branch's 30000 hp applies to level 3, the other branch's 33000 is a different level).
+- Arena boss (single-branch, always boss): 二郎神 M22 hp45137/def45/speed7 — nearly 3x level 2's 多闻天王 (16000 hp), consistent with being a later, harder level.
+- Companion: 哮天犬 M23 hp9999999/def100 (effectively unkillable by design — a scripted companion, not a normal kill target; recorded verbatim per fidelity mandate).
+- `normalAttackRate`: every species here has a literal non-zero `probability` (0.18 grunts, 0.3 M20/M22, 0.35 M21) — used directly, no stand-in needed. The one exception is M23 (哮天犬), whose `probability` is literally 0; mapped to the same 0.35 "they do melee" stand-in level2.ts established for probability=0 grunts (documented, not recovered).
+
+### Boss mechanic — 二郎神 (Monster22) ERLANGSHEN_HP_REJECT
+**Reverse-engineered fully** (Monster22.as + Monster23.as + base/BaseAddEffect.as + base/BaseRoleProperies.as — not marked TODO-verify). Despite the name, this is **not** a boss-HP-threshold mechanic — it's a **heal-block debuff applied to the hero**:
+
+1. **Trigger**: 哮天犬 (Monster23)'s hit2 skill, on animation completion (`hit2Effect()`), scans the live monster array for Monster22 and, if found, calls `Monster22.setAtkUp()` (and its own `setAtkUp()`) — a 10s (`gc.frameClips*10`) self-buff raising both units' attack power (二郎神 hit1 279→345, hit2 999→1299, hit3 279→345, hit4 279→345; dog hit1/2/3 →456). Starting with this **first** buff cycle, 二郎神's hit4 attack definition permanently gains an `addEffect` entry `{name: ERLANGSHEN_HP_REJECT, time: gc.frameClips*30}` — present in both `setAtkUp()` and the post-buff `resetAtk()`, but absent from the original base constructor. (I.e., hit4 only starts threatening the debuff after the dog uses hit2 once — a quirk of the original template, not a copy/paste bug, since `resetAtk()` is clearly meant to restore power but not the addEffect.)
+2. **Two independent application paths** once hit4 carries the addEffect:
+   - **Facing check** (`checkDoHit4()`, fires mid-hit4-animation at frame 20, *before* the projectile spawns at frame 30): for each player, if 二郎神 faces them while they face **away** from him (back turned), the debuff applies directly — no hit required. Direction math: `this.x > player.x` (二郎神 to the player's right) && `二郎神.direct==0 && player.direct==1` (or the mirrored case) = player's back is to him.
+   - **Generic on-hit propagation** (`base/BaseMonster.as` connect-hit handler, ~line 622): once hit4's `attackBackInfoDict.addEffect` is populated and the attack actually connects, the debuff applies through the standard addEffect pipeline too.
+3. **Effect** (`base/BaseRoleProperies.as` `setHHP()`, ~line 745): while the hero carries `ERLANGSHEN_HP_REJECT`, any attempt to set current HP to a **higher** value than it currently has (heal potion, HP regen, lifesteal, etc.) is silently rejected/no-op'd; HP **decreases** (damage) are unaffected. A `Monster22_ERLANGSHEN_HP_REJECT` child symbol is attached to the hero while active (`show_erlangshen`/`hide_erlangshen`) as the visual tell.
+
+In short: get caught with your back turned (or hit) during 二郎神's hit4 after 哮天犬 has empowered him, and healing is locked out for 30 real seconds. Thematically fits 二郎神's third-eye "sees everything" motif. Not modeled in `monsterSim` yet (no heal-block/addEffect concept exists there) — **TODO-verify/non-blocking**, but the mechanic itself is fully decoded, not a guess.
+
+### Known original data bugs / quirks
+- **Monster11 & Monster12 `hit2` point to a nonexistent sheet row** — identical bug class to level 2's Monster9/10. `setAction case "hit2"` calls `setFramePointY(5)`, but both sheets are 1200×1000 = 6 cols × 5 rows (0–4). Row 5 doesn't exist, and neither monster even defines `attackBackInfoDict["hit2"]` (dead code in the original too). Omitted from both JSONs, noted in each `source` field.
+- **Monster22's row 2 is defined in the grid but never referenced by any named action** (setFrameStopCount/setFrameCount both have a row-2 entry, but no `setAction()` case points at it) — left out of the JSON rather than inventing a name for it.
+- **Monster22's "dead" and "hit2_1" share the same sheet row** (row 3), and **Monster20's "dead"(boss) picks row 3 while its non-boss `fenshen()` split-body clone's "dead" reuses hit3's row 6** — both are original row-reuse designs, not bugs; recorded as-is.
+- **Monster20 hit2's `setFrameCount` value (24) doesn't match its actual `setFrameStopCount` length (2)** — recorded both faithfully (`frames: 2` for the render grid, `frameCount: 24` as the source's raw value) per playbook pitfall #5.
+- **Monster23 has no death animation asset** — its `setAction("dead")` case calls `dropAura()+destroy()` directly without touching a bbdc frame row (confirmed: its 6 rows exactly cover wait/walk/hurt/hit1/hit2/hit3, none left over for dead). Consistent with it being a near-unkillable companion rather than a normal kill target.
+- **Monster1 and Monster23 are confirmed level-3 body monsters (via symbolclass) but appear in NO StageListener31/32/33 `waitForRegisterDataArray`.** Monster23 is explicitly auto-spawned by Monster22's `__added()` override in the original (`MainGame.getInstance().createMonster(23,...)`) rather than wave-spawned; Monster1 has no such explanation found. Both folded into the final grunt wave here (documented adaptation, see level3.ts header).
+
+### Acceptance
+- `game/tests/level3.test.ts` — 4 tests green: genuine full wave-clear sim (spawns each wave's real roster via monsterSim, kills them, drives the stop-point machine to boss trigger), boss spawn with recovered 45137 hp → kill → door → clear, internal difficulty escalation (grunts < elites < arena boss, and level 3's boss > level 2's boss), boss-not-in-grunt-waves (plus confirming the two elites and the companion ARE in grunt waves). `npx vitest run tests/level3.test.ts tests/level.test.ts` → 14 passed. `npx tsc --noEmit` → clean.
+- Visual: `tools/level3-preview.html` (standalone, no BattleScene) decodes all 9 monster sheets and filmstrips every action from the recovered grids. Screenshot: `tmp/debug-shots/level3-monsters.png` (plus zoomed crops `level3-monster22-zoom.png`/`level3-monster13-zoom.png`) — all frames align to cells cleanly (no half-cut sprites), including the boss's non-square 400×300 cell and the flying grunt's 200×200 cell.
+
+### Leftover / TODO
+- **INTERFACE GAP: RESOLVED during this pass.** `MonsterSpeciesId` was widened to `string` in `systems/level.ts` (commit `6cf311e`, landed before this level-3 pass started) — the `as MonsterSpeciesId` cast in `level3.ts` is now a no-op, kept only for pattern consistency with `level2.ts`. Level 3's pack still isn't wired into `LEVELS`/`BattleScene` (species→sprite preload mapping doesn't exist there yet), but that's a wiring task, not a type-system blocker anymore.
+- **Balance:** stats are original magnitudes (arena boss 45137 hp, well above level 2's 16000). Unwinnable in-engine until the hero's original-scale damage is ported — same caveat as level 2, unchanged.
+- ERLANGSHEN_HP_REJECT mechanic is fully decoded (see writeup above) but not implemented in `monsterSim`/hero systems — no heal-block/addEffect concept exists there yet. TODO-verify, non-blocking.
+- STUN addEffect on Monster21's hit3 (2s stun) — also recovered but not modeled in monsterSim. TODO-verify, non-blocking.
+- Boss/elite projectile assets (Monster20Bullet1/3/4/5, Monster21Bullet1/2/3/4_1/4_2, Monster22Bullet1/2/3/4_1) not extracted — same scope decision as level 2's Monster15Bullet1..4, TODO-verify.
+
+---
+
 ## Level 4 — 邪念之境 (Corrupted Disciples chain)
 
 **Ported by:** pipeline main (Sonnet). **Source:** `out_res/4.swf` + `打开我开始玩.swf`.

@@ -1,0 +1,12 @@
+{
+  "source": "export.monster.Monster13.initBBDC()+setAction() in 打开我开始玩.swf; sheet 3.swf chid2 Monster13. Single-branch flying grunt (isFly=true, graity=0). Roster member of StageListener31/32/33. \"walk\" reuses the same row as \"wait\" in setAction (both check `_loc2_.y != 0` and point at row 0) — a hovering flyer with no separate ground-walk pose, not a bug.",
+  "sheet": { "cols": 7, "rows": 4, "cellW": 200, "cellH": 200, "facing": "left" },
+  "offset": { "x": -18, "y": -15 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 7, "stopCounts": [2, 2, 2, 3, 2, 2, 2], "frameCount": 7 },
+    "walk": { "col": 0, "row": 0, "frames": 7, "stopCounts": [2, 2, 2, 3, 2, 2, 2], "frameCount": 7 },
+    "hurt": { "col": 0, "row": 1, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 2, "frames": 5, "stopCounts": [2, 2, 2, 2, 2], "frameCount": 5 },
+    "hit1": { "col": 0, "row": 3, "frames": 3, "stopCounts": [2, 2, 6], "frameCount": 3 }
+  }
+}

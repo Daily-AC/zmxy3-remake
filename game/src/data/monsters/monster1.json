@@ -1,0 +1,13 @@
+{
+  "source": "export.monster.Monster1.initBBDC()+setAction() in 打开我开始玩.swf; sheet 3.swf chid9 Monster1. Single-branch grunt (no curStage/curLevel condition). NOT found in any StageListener31/32/33 waitForRegisterDataArray — extracted for the level-3 asset pack (confirmed via symbolclass) but no scene explicitly registers it; folded into the final grunt wave for asset completeness (documented in level3.ts).",
+  "sheet": { "cols": 6, "rows": 6, "cellW": 300, "cellH": 300, "facing": "left" },
+  "offset": { "x": 0, "y": -50 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 5, "stopCounts": [2, 2, 2, 2, 6], "frameCount": 5 },
+    "hit1": { "col": 0, "row": 4, "frames": 4, "stopCounts": [2, 2, 2, 9], "frameCount": 4 },
+    "hit2": { "col": 0, "row": 5, "frames": 5, "stopCounts": [2, 2, 2, 2, 32], "frameCount": 5 }
+  }
+}

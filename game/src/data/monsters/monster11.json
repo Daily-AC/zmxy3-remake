@@ -1,0 +1,12 @@
+{
+  "source": "export.monster.Monster11.initBBDC()+setAction() in 打开我开始玩.swf; sheet 3.swf chid4 Monster11. Single-branch grunt. Roster member of StageListener31 (scene 1) and StageListener32 (scene 2) and StageListener33 (scene 3/arena approach). KNOWN ORIGINAL DATA BUG (same class as level-2's Monster9/10): setAction case \"hit2\" calls setFramePointY(5), but the sheet is 1200x1000 = 6 cols x 5 rows (rows 0-4 only) and setFrameStopCount only defines 5 rows. Row 5 does not exist — hit2 omitted here (the constructor doesn't even define attackBackInfoDict[\"hit2\"], so it's dead code in the original too).",
+  "sheet": { "cols": 6, "rows": 5, "cellW": 200, "cellH": 200, "facing": "left" },
+  "offset": { "x": 9, "y": -15 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 5, "stopCounts": [2, 2, 2, 2, 7], "frameCount": 5 },
+    "hit1": { "col": 0, "row": 4, "frames": 4, "stopCounts": [2, 2, 2, 20], "frameCount": 4 }
+  }
+}

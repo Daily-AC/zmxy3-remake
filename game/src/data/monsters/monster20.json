@@ -1,0 +1,16 @@
+{
+  "source": "export.monster.Monster20.initBBDC()+setAction() in 打开我开始玩.swf; sheet 3.swf chid8 Monster20. 袁洪 (Yuan Hong). Branch: `gc.curStage==3 && gc.curLevel==3 || gc.curStage==8` -> hp 30000 (the level-3 branch used here); else-branch hp 33000 is a different level's tuning, not used. Both branches set isBoss=true, so this species always self-identifies as a boss, but level3.ts folds it into a grunt-wave heavy (scene-2 stop point) rather than the arena boss slot, matching the roster in StageListener32. \"dead\" row is isBoss-conditional in source (row 3 when isBoss, row 6 for the non-boss `fenshen()` split-body clone spawned by hit2's scriptFrameOverFunc) — row 3 (the isBoss=true path, matching how this species is always constructed) is recorded here; the clone/fenshen split-body mechanic itself is not modeled (no direct HP/stat implication, purely a combat-script behavior). Row 5 (hit2) has setFrameCount=24 vs actual stopCounts length 2 — recorded frameCount faithfully per playbook pitfall #5, sheet+stopCounts (2 frames) are authoritative for the render grid.",
+  "sheet": { "cols": 6, "rows": 9, "cellW": 350, "cellH": 250, "facing": "left" },
+  "offset": { "x": 0, "y": -15 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 6, "stopCounts": [2, 2, 2, 2, 2, 10], "frameCount": 6 },
+    "hit1": { "col": 0, "row": 4, "frames": 4, "stopCounts": [2, 5, 2, 10], "frameCount": 4 },
+    "hit2": { "col": 0, "row": 5, "frames": 2, "stopCounts": [1, 1], "frameCount": 24 },
+    "hit3": { "col": 0, "row": 6, "frames": 1, "stopCounts": [28], "frameCount": 1 },
+    "hit4": { "col": 0, "row": 7, "frames": 1, "stopCounts": [48], "frameCount": 1 },
+    "hit5": { "col": 0, "row": 8, "frames": 4, "stopCounts": [2, 2, 2, 24], "frameCount": 4 }
+  }
+}
