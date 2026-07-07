@@ -39,9 +39,16 @@ import {
   updateHeroIdentity,
   heroTotalAtk,
   heroTotalDef,
+  heroStats,
   isHeroDead,
   isHeroInvincible,
 } from '../systems/heroIdentity'
+import {
+  NormalAttackHit,
+  calculateNormalAttackPower,
+  resolveIncomingHeroDamage,
+} from '../systems/heroScale'
+import { RealSkillId, calculateRealSkillDamage } from '../systems/skillDamageReal'
 import type { HeroHit } from '../systems/heroCombat'
 import { rollOnHitProcs } from '../systems/effects'
 import {
@@ -125,7 +132,9 @@ const MON_LOOP = new Set(['wait', 'walk'])
 const MON_ANIM_PREFIX = 'm30_'
 const NPC_ANIM_PREFIX = 'npc_'
 const COMBO_GRACE_MS = 220
-const STAGE_DAMAGE = [0, 30, 30, 35, 45, 60] // TODO-verify (see combat notes)
+// combo.stage (1-5) -> the normal-attack hit key whose real coefficient drives
+// damage (heroScale.NORMAL_ATTACK_COEFFICIENT). Index 0 is unused (stage 0 = idle).
+const COMBO_STAGE_HIT: (NormalAttackHit | null)[] = [null, 'hit1', 'hit2', 'hit3', 'hit4', 'hit5']
 const MON_START_X = 900
 const MON_RENDER_OFFSET_Y = 30
 const NPC_ID = 'laojun'
@@ -146,8 +155,16 @@ const SKILL_DEMO_LEVELS: Partial<Role1SkillLevels> = {
 // numbers. TODO-verify: temporary — remove once the hero-scale pass unifies the
 // damage economy (team-lead directive, 2026-07-07). Source of the mismatch:
 // skill-tree-port-report.md 数值出处表 (kagami 口径).
-const SKILL_DAMAGE_SCALE = 0.06
 const MP_REGEN_PER_SEC = 2 // gentle passive regen (TODO-verify, see mp.ts header)
+// SkillHitbox.actionName -> the real (AS3-accurate) skill damage id
+// (skillDamageReal.ts). Sub-variant hitboxes (hit8_2 = lyfb's 2nd projectile,
+// hmz's two boxes hit10_2/hit10_4) map to their real skill; hit12_1 is the
+// visual-only cast MC (no damage). Replaces the old kagami-scale hack.
+const REAL_SKILL_BY_ACTION: Record<string, RealSkillId> = {
+  hit6: 'slz', hit7: 'hytj', hit8: 'lyfb', hit8_2: 'lyfb', hit9: 'lys',
+  hit10_2: 'hmzLianZhan', hit10_4: 'hmzZaDi', hit11_1: 'jdyStage1', hit11_2: 'jdyStage2',
+  hit12: 'hyjj', hit13: 'qsez', hit14: 'zz',
+}
 // Number keys 1-9 -> the nine actives (no original keymap survives in the RE
 // docs; digits chosen to avoid the A/D/J/K/W/E/U bindings already in use).
 const SKILL_KEYS: [keyof typeof Phaser.Input.Keyboard.KeyCodes, Role1SkillId][] = [
@@ -514,7 +531,11 @@ export class BattleScene extends Phaser.Scene {
     this.skillAnim = { action, untilMs: this.simClockMs + Math.max(200, this.skillRuntime.cooldownMs) }
     this.playSfx(this.hitSfxKey(5), 0.5)
     this.showToast(`${skillId.toUpperCase()}${result.reentered ? '·二段' : ''}`, '#9fd8ff')
-    for (const hb of result.hitboxes) this.scheduleSkillHit(hb)
+    // Skill level for the real damage formula: jdy stage-2 reuses stage-1's
+    // level; others use the runtime's learned level (min 1 since it just cast).
+    const skillLevel = Math.max(1, this.skillRuntime.levels[skillId])
+    const atk = ctx.sourcePower
+    for (const hb of result.hitboxes) this.scheduleSkillHit(hb, skillLevel, atk)
   }
 
   private showSkillFail(reason: string): void {
@@ -528,13 +549,17 @@ export class BattleScene extends Phaser.Scene {
 
   /**
    * Turn one SkillHitbox descriptor into a real hit: after its activeAfterMs,
-   * check overlap with the monster and, if it connects, float the (scaled)
-   * damage and queue it onto the shared incoming-hit channel. Multi-hit
-   * (hitIntervalFrames/maxHits) is simplified to a single application per box —
-   * enough to show the skill deals damage; full multi-tick is a later pass.
+   * check overlap with the monster and, if it connects, apply the AS3-accurate
+   * skill damage (skillDamageReal, keyed by the hitbox's actionName) and queue
+   * it onto the shared incoming-hit channel. Damage is the real formula now, no
+   * artificial scale. Multi-hit (hitIntervalFrames/maxHits) is simplified to a
+   * single application per box — full multi-tick is a later pass.
    */
-  private scheduleSkillHit(hb: SkillHitbox): void {
-    if (hb.visualOnly || hb.damage <= 0) return
+  private scheduleSkillHit(hb: SkillHitbox, skillLevel: number, atk: number): void {
+    if (hb.visualOnly) return
+    const realId = REAL_SKILL_BY_ACTION[hb.actionName]
+    if (!realId) return // unknown/visual sub-variant: no damage
+    const dmg = Math.max(1, Math.round(calculateRealSkillDamage(realId, skillLevel, atk)))
     const fire = (): void => {
       if (this.monsterState.mode === 'dead' || this.monsterState.mode === 'gone') return
       const facing = this.heroState.facing
@@ -543,7 +568,6 @@ export class BattleScene extends Phaser.Scene {
       const box = centeredBox(hx, hy, hb.width, hb.height)
       const mBox = centeredBox(this.monsterState.x, GROUND_Y, 120, 140)
       if (!overlaps(box, mBox)) return
-      const dmg = Math.max(1, Math.round(hb.damage * SKILL_DAMAGE_SCALE))
       this.skillHitQueue.push({ attackId: ++this.skillAttackId, damage: dmg })
       this.floatText(this.monsterState.x, GROUND_Y - 90, `-${dmg}`, '#7ac7ff')
     }
@@ -953,9 +977,13 @@ export class BattleScene extends Phaser.Scene {
     const box = heroAttackBox(s.x, GROUND_Y, s.facing)
     const mBox = centeredBox(this.monsterState.x, GROUND_Y, 120, 140)
     if (!overlaps(box, mBox)) return null
-    // Combo damage = stage base + the hero's total atk (level curve + equipment),
-    // so both leveling up and equipping a weapon raise the numbers the player sees.
-    const damage = STAGE_DAMAGE[s.combo.stage] + heroTotalAtk(this.identity, this.equipment)
+    // Normal-attack damage at the original SWF scale: coefficient(hitN) × Hurt
+    // (Hurt = hero total atk), crit rolled from the equipment crit stat.
+    // heroScale.ts recovered the real per-hit coefficients (0.707/1.183/1.304).
+    const hitKey = COMBO_STAGE_HIT[s.combo.stage] ?? 'hit1'
+    const atk = heroTotalAtk(this.identity, this.equipment)
+    const crit = heroStats(this.identity, this.equipment).crit
+    const damage = Math.max(1, Math.round(calculateNormalAttackPower(hitKey, atk, { critChance: crit })))
     // First frame this swing connects: play sfx, roll onHit procs, and float the
     // damage number so the equip/level atk increase is visible on screen.
     if (!this.playedHitIds.has(s.attackId)) {
@@ -1026,7 +1054,20 @@ export class BattleScene extends Phaser.Scene {
     if (isHeroDead(this.identity)) return
     if (Math.abs(this.heroState.x - this.monsterState.x) > MONSTER30_STATS.attackRange) return
     if (isHeroInvincible(this.identity, this.simClockMs)) return
-    const mitigated = Math.max(1, MONSTER_ATTACK_DMG - heroTotalDef(this.identity, this.equipment))
+    // Route the monster's raw attack power through the original two-way defense
+    // formula (heroScale.resolveIncomingHeroDamage; heroCombat applies no
+    // mitigation itself). L1 monster is physics; no hero magic-def stat yet (0).
+    const mitigated = Math.max(
+      1,
+      Math.round(
+        resolveIncomingHeroDamage(
+          MONSTER_ATTACK_DMG,
+          'physics',
+          heroTotalDef(this.identity, this.equipment),
+          0,
+        ),
+      ),
+    )
     const knockbackX = this.heroState.x < this.monsterState.x ? -1 : 1
     const hit: HeroHit = {
       sourceId: 'monster30',
