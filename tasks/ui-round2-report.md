@@ -165,3 +165,39 @@ grep `furnace|alchemy|liandan|bagua|refine|smelt|forge|八卦炉|炼丹|炼制`�
 4. 对话框本体维持现状（无原版窗体素材，证据见 §6）。
 5. 演示页在 `game/tools/`，vite 直接服务 `/tools/ui-preview.html`，不进主构建、不影响游戏。
 6. **扩项 SkillBarHud + ResultBanner（lead 批准）**：素材 = Online-sourced（skill-icons 9 + results 4），落 `game/public/assets/online/`（见 ASSET-SOURCES.md），消费组件标 `ASSET_SOURCE_ONLINE=true`。**素材政策变更（CLAUDE.md 2026-07-07 用户拍板）**：用户是造梦团队成员、全系列素材可用无版权障碍，**占位/分发红线作废、无替换债**；仅保留"造3 本体 vs Online 后作区分使用、终包审一次风格一致性"的保真纪律。故原先的 placeholder-online 目录 + 替换债框架已作废，改为 online/ 源目录 + 来源标注。演示截图：ui3-01-skillbar / ui3-02-result-success / ui3-03-result-fail。
+
+## 9. 换装接线 — 已完成（2026-07-07 集成会话）
+
+§4 的换装清单已接进 `BattleScene.ts`（只动 BattleScene，未改任何 ui/hud 组件）。删掉全部脚手架文字 HUD，
+接入真组件：
+
+- **preload**：加载 `HUD_TEXTURES + HUD_ICONS + ONLINE_TEXTURES`。
+- **RoleInfoHud**（左上）：`new RoleInfoHud(this,16,14)`，`update({level,hp,maxHp,mp,maxMp,exp,expToNext,atk,weaponName})`
+  每帧——**替换掉**旧的 `statsText`/`heroHpBar`/`mpBar` 文字块（原版墨框悟空头像 + 等级徽章 + HP红/MP蓝/EXP金三条）。
+- **SkillBarHud**（左下）：`new SkillBarHud(this,20,470)`，`setSlots(9 主动 · 图标/热键/MP/等级)` +
+  每帧 `setCooldown(i, cooldownMs/1000)`（共享 busy-lock 归一）。热键显示当前绑定的 **1-9**（不是 YUIOL——见遗留）。
+- **BackpackWindow**（B 键开关）：`new BackpackWindow(this,{iconKeyFor})`——**替换掉**右上角 `invText` 文字列表
+  （原版 个人资料/背包 全窗：角色页 + 6×4 格子 + 物品图标/数量 + 品质色 + 分页）。`iconKeyFor=item.id→icon_<id>`，
+  缺则 `ICON_FALLBACK_KEY`。
+- **BossHpBar**（顶部）：`new BossHpBar(this)`，boss 关 `update({name:boss.label, hp, maxHp})`，非 boss 关隐藏
+  ——替换旧的 `bossHpBar/bossHpText` 自绘。
+- **MonsterHpBar**（小怪头顶）：每只 grunt 一个（boss 用顶部条），`renderEntity` 里 `update(hp,maxHp,x,GROUND_Y-110)`，
+  满血/死亡自动隐藏；`reap`/`startLevel` 里 destroy。
+- **Toast + 飘字**：`showToast()` 内部委托 `toastUi.show()`；`floatText(x,y,text,kind)` 委托
+  `spawnFloatingText()`，调用点按语义传 kind（combo/skill=damage、burn、heal、exp、hero 受击=crit 红大）。
+
+**验收判据**：`tsc` 干净、`vitest` 387 全绿；浏览器真机截图落 `game/tmp/debug-shots/`：
+- `19-hud-real-components.png`：左上真头像+等级徽章+HP/MP/EXP 三条+攻击/武器；左下 9 格技能坞（真技能图标+热键+MP）。
+- `20-hud-backpack-monsterbar.png`：B 键打开原版 个人资料/背包 全窗（角色页+格子物品图标+数量+分页+墨框+红✕）。
+- `21-hud-boss-combat.png`：boss 战全 HUD——顶部「巫鹰」名牌+红血条 234/300、左上 RoleInfo、左下技能坞、受击 `-1` 飘字（crit 样式）同屏。
+不再有任何调试文字 HUD（F1 调试遥测保留、默认隐藏）。
+
+**遗留（换装棒）**：
+- **技能坞热键显示 1-9 而非 YUIOL**：现有技能绑定是数字键 1-9（"只换显示层、不回退功能"约束下没改键位）；坞是真组件、
+  只是热键字母跟随实际绑定。要还原 Online 的 YUIOL 需改键位映射（功能变更），单独定。
+- **FurnacePanel（炼制面板）本棒没换**：炼宝走的是我之前做的水墨对话框内「择材入炉」overlay（已是真水墨风、非调试文字），
+  换成 FurnacePanel 需重接炼宝的选材/结果流程，作为后续单独一棒（组件 setMaterials/setResult 已就绪）。
+- **ResultBanner（关卡结算）未接**：boss死→传送门 的现流程没有结算 modal；接 ResultBanner 会给关卡推进加一道点击门，
+  改动流程，留后续。
+- MonsterHpBar 头顶条已接但截图里 grunt 死太快没拍到独立清晰帧；组件与 BossHpBar 同族、boss 条已验证渲染正常。
+- 加了 `__toggleBackpack` 验收调试钩子，量产前收敛。
