@@ -1,0 +1,14 @@
+{
+  "source": "export.monster.Monster31.initBBDC()+setAction() in 打开我开始玩.swf; sheet 4.swf chid5 Monster31. 邪.唐僧 (Evil Tang Seng), 3rd link in level-4's sequential boss chain (32->33->31->34). Single unbranched constructor (no gc.curStage form-select like level2's monsters) with isBoss=true baked in unconditionally. Row4 is a shared multi-purpose pose bank (jump1 col0/jump3 col1/hit8 col2/hit9 col3/hurt col4 all start at different columns within the same row; only hurt is encoded here, 1 frame). No dedicated dead row: death is a plain TweenMax alpha-fade to 0 in setAction('dead'), not a bitmap row — omitted (documented, not invented). Recovered stats in data/levels/level4.ts.",
+  "sheet": { "cols": 6, "rows": 13, "cellW": 200, "cellH": 200, "facing": "left" },
+  "offset": { "x": 15, "y": 0 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 36 },
+    "walk": { "col": 0, "row": 3, "frames": 4, "stopCounts": [2, 2, 2, 2], "frameCount": 4 },
+    "hurt": { "col": 4, "row": 4, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "hit1": { "col": 0, "row": 6, "frames": 3, "stopCounts": [2, 4, 12], "frameCount": 3 },
+    "hit3": { "col": 0, "row": 7, "frames": 4, "stopCounts": [2, 10, 2, 40], "frameCount": 4 },
+    "hit5": { "col": 0, "row": 10, "frames": 3, "stopCounts": [10, 2, 15], "frameCount": 3 },
+    "hit6": { "col": 0, "row": 11, "frames": 3, "stopCounts": [2, 2, 20], "frameCount": 3 }
+  }
+}
