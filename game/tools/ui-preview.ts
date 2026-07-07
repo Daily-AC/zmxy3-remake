@@ -1,9 +1,11 @@
 import Phaser from 'phaser'
-import { HUD_TEXTURES, HUD_ICONS, ICON_FALLBACK_KEY } from '../src/ui/hud/hudTheme'
+import { HUD_TEXTURES, HUD_ICONS, ONLINE_TEXTURES, ICON_FALLBACK_KEY } from '../src/ui/hud/hudTheme'
 import { RoleInfoHud } from '../src/ui/hud/RoleInfoHud'
 import { BossHpBar, MonsterHpBar } from '../src/ui/hud/MonsterHpBar'
 import { BackpackWindow } from '../src/ui/hud/BackpackWindow'
 import { FurnacePanel } from '../src/ui/hud/FurnacePanel'
+import { SkillBarHud, SkillSlotData } from '../src/ui/hud/SkillBarHud'
+import { ResultBanner } from '../src/ui/hud/ResultBanner'
 import { Toast, spawnFloatingText } from '../src/ui/hud/Toast'
 import type { Item } from '../src/systems/items'
 
@@ -35,7 +37,8 @@ class PreviewScene extends Phaser.Scene {
   private mob!: MonsterHpBar
   private backpack!: BackpackWindow
   private furnace!: FurnacePanel
-  private toast!: Toast
+  private skillbar!: SkillBarHud
+  private result!: ResultBanner
   private t = 0
   private floatTimer = 0
   private comboN = 0
@@ -46,7 +49,7 @@ class PreviewScene extends Phaser.Scene {
 
   preload(): void {
     this.load.setBaseURL('/')
-    for (const { key, url } of [...HUD_TEXTURES, ...HUD_ICONS]) {
+    for (const { key, url } of [...HUD_TEXTURES, ...HUD_ICONS, ...ONLINE_TEXTURES]) {
       if (!this.textures.exists(key)) this.load.image(key, url)
     }
   }
@@ -62,6 +65,7 @@ class PreviewScene extends Phaser.Scene {
     this.label('RoleInfoHud', 150, 96)
     this.label('BossHpBar', 480, 66)
     this.label('MonsterHpBar', 480, 250)
+    this.label('SkillBarHud', 90, 436)
     this.hint()
 
     this.hud = new RoleInfoHud(this, 16, 14)
@@ -79,6 +83,22 @@ class PreviewScene extends Phaser.Scene {
     this.furnace.setInfo({ name: '赤炎噬血杖', cost: 120 })
 
     this.toast = new Toast(this, 480, 160)
+
+    // Skill dock (bottom-left), 5 slots on YUIOL — icons are Online placeholders.
+    this.skillbar = new SkillBarHud(this, 20, 470)
+    const skills: SkillSlotData[] = [
+      { skillId: 'slz', hotkey: 'Y', mpCost: 20, level: 5 },
+      { skillId: 'lys', hotkey: 'U', mpCost: 35, level: 3 },
+      { skillId: 'hytj', hotkey: 'I', mpCost: 50, level: 4 },
+      { skillId: 'lyfb', hotkey: 'O', mpCost: 45, level: 2 },
+      { skillId: 'jdy', hotkey: 'L', mpCost: 60, level: 1, disabled: true },
+    ]
+    this.skillbar.setSlots(skills)
+
+    this.result = new ResultBanner(this, {
+      onRetry: () => this.result.hide(),
+      onContinue: () => this.result.hide(),
+    })
 
     this.exposeHooks()
   }
@@ -112,7 +132,12 @@ class PreviewScene extends Phaser.Scene {
       weaponName: '金箍棒',
     })
     this.boss.update({ name: '巫鹰王', hp: osc(680, 480, 0.55), maxHp: 1200 })
-    const modalOpen = this.backpack.isOpen || this.furnace.isOpen
+    // Sweep skill cooldowns (staggered) to show the overlay animating.
+    for (let i = 0; i < 4; i++) {
+      const phase = (this.t * 0.6 + i * 0.5) % 1
+      this.skillbar.setCooldown(i, 1 - phase)
+    }
+    const modalOpen = this.backpack.isOpen || this.furnace.isOpen || this.result.isOpen
     if (modalOpen) {
       this.mob.setVisible(false)
       return
@@ -144,6 +169,9 @@ class PreviewScene extends Phaser.Scene {
         spawnFloatingText(this, 560, 330, '5599', 'damage')
         this.toast.combo(9, 640, 210)
       },
+      resultSuccess: () => this.result.showSuccess({ stats: ['用时 01:24', '击杀 37', '获得灵魂 x120'] }),
+      resultFail: () => this.result.showFail({ stats: ['坚持 00:48', '击杀 12'] }),
+      hideResult: () => this.result.hide(),
       ready: true,
     }
   }

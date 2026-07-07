@@ -69,6 +69,25 @@ Toast 背景：原版水墨文字条中段有烘焙剧情文字，故**只取其
 普通黄 damage / **暴击红·大号 crit**（对齐 Online 暴击=红更大）/ 绿 heal / 橙 burn / 紫 exp，各含 color/fontSize/risePx/durationMs/stroke。
 `toast.combo()` = 黑笔刷横幅 + 橙字，对应 Online 的"连击!!"横幅。
 
+### SkillBarHud（左下技能坞）— `src/ui/hud/SkillBarHud.ts`  【lead 批准扩项】
+技能槽行（图标 + 热键字母 + CD 遮罩 + MP 消耗 + 等级），对应造梦系列战斗栏（YUIOL 热键）。
+```ts
+new SkillBarHud(scene, x, y, opts?: { cell?; gap?; iconKeyFor? })
+bar.setSlots(slots: SkillSlotData[])
+bar.setCooldown(index, frac)   // 0 就绪 .. 1 满 CD，每帧廉价更新
+interface SkillSlotData { skillId?; iconKey?; hotkey; cooldownFrac?; mpCost?; level?; disabled? }
+```
+数据映射：skillId 用 heroSkill.ts 的 Role1SkillId（默认图标键 `skill_<id>`）；cooldownFrac 由 Role1SkillRuntime.cooldownMs 归一；mpCost 由 getRole1SkillMpCost。
+**素材来源标注**：技能图标是 Online-sourced（`ASSET_SOURCE_ONLINE=true`，9 图标符号名与 Role1SkillId 对应）；坞格/热键字母/CD 遮罩为 DNA 自绘。
+
+### ResultBanner（关卡结算）— `src/ui/hud/ResultBanner.ts`  【lead 批准扩项】
+过关/失败结算：暗屏 + 挑战成功/失败横幅 + 成绩条 + 重试/继续按钮。给关卡链（boss死→过关 / 英雄死→失败）用。
+```ts
+new ResultBanner(scene, opts?: { onRetry?; onContinue? })
+banner.showSuccess({ stats?: string[] }); banner.showFail({ stats? }); banner.hide(); banner.isOpen
+```
+**素材来源标注**：横幅/成绩条/重试按钮是 Online-sourced（`ASSET_SOURCE_ONLINE=true`）；未加载时回退 DNA 自绘文字/按钮。
+
 ## 2. 品质色映射（纯逻辑，带单测）— `src/ui/hud/rarity.ts`
 原版无稀有度边框素材，只用**文字颜色**区分。我们 Item.rarity 是 3 档（items.ts 1|2|3），映射到 BattleScene 掉落星已用的同一套色（5fd6a0/6ba8ff/d9a441），保持代码库内一致：
 ```ts
@@ -95,6 +114,8 @@ preload() { for (const {key,url} of [...HUD_TEXTURES, ...HUD_ICONS]) this.load.i
 | **背包** | `invText` 右上角文字条 | `new BackpackWindow(this,{iconKeyFor})` + 一个开关键（B/I）；库存变化时 `bag.setItems(listStacks(inventory))`。**需补**：item.id→icon key 映射（drops.json 图标名即 id，或给个字典）；缺省已 fallback |
 | **Toast/飘字** | `showToast()`/`floatText()` 自绘 | 换 `new Toast(this)` + `spawnFloatingText(this,x,y,txt,kind)`；kind 按暴击/治疗/灼烧/经验选 |
 | **炼制面板** | 炼宝棒的"择材入炉"半透明黑块 | `new FurnacePanel(this,{iconKeyFor, onCraft})`；选材 `setMaterials(selected)`；WS `craft_item` 回来 `setResult(item)`+`setInfo({name,cost})` |
+| **技能栏** | 无（调试无技能栏） | `new SkillBarHud(this, 20, 470)`；每帧 `bar.setSlots(...)` / `bar.setCooldown(i, cdMs/maxCdMs)`，数据取 heroSkill.ts（skillId/mpCost/level/cooldownMs）。与 skill-tree 单配套 |
+| **关卡结算** | 无 | `new ResultBanner(this, {onRetry, onContinue})`；boss 死 → `showSuccess({stats})`，英雄死 → `showFail({stats})`。与 level-chain(#6 Phase B) 配套 |
 | **对话框本体** | DialogueBox 水墨自绘 | **无原版对话框素材可换**（见第 6 节），保持现状；如需统一，Toast 的笔触边手法可复用 |
 
 约束：以上全是接线棒在 BattleScene.ts / DialogueBox 侧的动作；本轮组件不接线、不改那些文件。
@@ -143,3 +164,4 @@ grep `furnace|alchemy|liandan|bagua|refine|smelt|forge|八卦炉|炼丹|炼制`�
 3. 小怪头顶血条无原版素材（原版只有 boss 横幅），按 HUD 配色画；如需更还原可后续找怪物专属条。
 4. 对话框本体维持现状（无原版窗体素材，证据见 §6）。
 5. 演示页在 `game/tools/`，vite 直接服务 `/tools/ui-preview.html`，不进主构建、不影响游戏。
+6. **扩项 SkillBarHud + ResultBanner（lead 批准）**：素材 = Online-sourced（skill-icons 9 + results 4），落 `game/public/assets/online/`（见 ASSET-SOURCES.md），消费组件标 `ASSET_SOURCE_ONLINE=true`。**素材政策变更（CLAUDE.md 2026-07-07 用户拍板）**：用户是造梦团队成员、全系列素材可用无版权障碍，**占位/分发红线作废、无替换债**；仅保留"造3 本体 vs Online 后作区分使用、终包审一次风格一致性"的保真纪律。故原先的 placeholder-online 目录 + 替换债框架已作废，改为 online/ 源目录 + 来源标注。演示截图：ui3-01-skillbar / ui3-02-result-success / ui3-03-result-fail。

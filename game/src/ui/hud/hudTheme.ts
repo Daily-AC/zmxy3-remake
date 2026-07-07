@@ -65,3 +65,22 @@ export const HUD_ICON_IDS = [
 export const HUD_ICONS: TextureRef[] = HUD_ICON_IDS.map((id) => ({ key: `icon_${id}`, url: `${ICON}${id}.png` }))
 
 export const ICON_FALLBACK_KEY = 'icon_fallback'
+
+// ---- Online-sourced textures (系列后作素材) ----
+// No legal/distribution restriction (CLAUDE.md: 用户是造梦团队成员，全系列可用).
+// Kept in a separate list + dir only to DISTINGUISH SOURCE for a packaging
+// style-consistency review (造3 本体 vs Online 后作，避免缝合感). Components that
+// consume these declare `export const ASSET_SOURCE_ONLINE = true` for grep.
+// See game/public/assets/online/ASSET-SOURCES.md.
+const ONLINE = 'assets/online/'
+
+/** Role1 skill-icon keys (`skill_<id>`), symbol-matched to heroSkill.ts Role1SkillId. */
+export const ROLE1_SKILL_IDS = ['slz', 'lys', 'hytj', 'lyfb', 'jdy', 'qsez', 'zz', 'hmz', 'hyjj'] as const
+
+export const ONLINE_TEXTURES: TextureRef[] = [
+  ...ROLE1_SKILL_IDS.map((id) => ({ key: `skill_${id}`, url: `${ONLINE}skill-icons/ss_${id}.png` })),
+  { key: 'result_success', url: `${ONLINE}results/challenge-success.png` },
+  { key: 'result_fail', url: `${ONLINE}results/challenge-fail.png` },
+  { key: 'result_my', url: `${ONLINE}results/my-results-banner.png` },
+  { key: 'result_retry', url: `${ONLINE}results/retry-button.png` },
+]
