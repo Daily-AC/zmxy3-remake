@@ -224,11 +224,17 @@ const REAL_SKILL_BY_ACTION: Record<string, RealSkillId> = {
   hit10_2: 'hmzLianZhan', hit10_4: 'hmzZaDi', hit11_1: 'jdyStage1', hit11_2: 'jdyStage2',
   hit12: 'hyjj', hit13: 'qsez', hit14: 'zz',
 }
-// Number keys 1-9 -> the nine actives (no original keymap survives in the RE
-// docs; digits chosen to avoid the A/D/J/K/W/E/U bindings already in use).
+// Skill dock hotkeys Y U I O L -- the real 造梦西游 player-1 layout. Source: the
+// Online 实机 battle-HUD screenshot (docs/reference/zmxy-online-screens/
+// battle-hud.png shows five slots keyed Y U I O L, left to right, after the 无双
+// ult icon) and kagami SkillUISystem (SkillSlotKeyLabels.p1 / P1_BINDING_ORDER =
+// ['Y','U','I','O','L']). The original docks only FIVE actives at once; the other
+// four (qsez/zz/hmz/hyjj) live off-dock until a skill-binding UI exists (skill
+// tree, future work) -- they stay castable via __castSkill for tests. Default
+// loadout = the five 基本技能 in canonical order. Rationale + off-dock note in
+// tasks/ui-finish-report.md; do NOT invent extra keys to re-dock the other four.
 const SKILL_KEYS: [keyof typeof Phaser.Input.Keyboard.KeyCodes, Role1SkillId][] = [
-  ['ONE', 'slz'], ['TWO', 'lys'], ['THREE', 'hytj'], ['FOUR', 'lyfb'], ['FIVE', 'jdy'],
-  ['SIX', 'qsez'], ['SEVEN', 'zz'], ['EIGHT', 'hmz'], ['NINE', 'hyjj'],
+  ['Y', 'slz'], ['U', 'lys'], ['I', 'hytj'], ['O', 'lyfb'], ['L', 'jdy'],
 ]
 // Skill -> a hero animation that exists in role1.json (the SkillHitbox.actionName
 // includes sub-variant labels like 'hit8_2' that aren't standalone hero actions).
@@ -460,12 +466,12 @@ export class BattleScene extends Phaser.Scene {
       this.debugVisible = !this.debugVisible
       for (const t of this.debugTexts) t.setVisible(this.debugVisible)
     })
-    // E: equip the first equippable item in the bag. U: take the weapon off.
+    // E: equip the first equippable item in the bag. (Unequip is dev-only via the
+    // __unequip hook now that U is a skill hotkey; the real unequip is the bag UI.)
     kb.on('keydown-E', () => this.equipFirstFromBag())
-    kb.on('keydown-U', () => this.doUnequip('weapon'))
     // B: toggle the backpack window.
     kb.on('keydown-B', () => this.toggleBackpack())
-    // Number keys 1-9: cast the nine Role1 active skills.
+    // Y U I O L: cast the five docked Role1 active skills.
     for (const [code, skillId] of SKILL_KEYS) {
       kb.on('keydown-' + code, () => this.castSkill(skillId))
     }
@@ -997,7 +1003,7 @@ export class BattleScene extends Phaser.Scene {
     this.debugTexts = [this.hud]
 
     this.add
-      .text(480, 522, 'A/D 走　K 跳　J 连击　1-9 技能　B 背包　W/↑ 对话/传送　E 穿戴　Esc 菜单', {
+      .text(480, 522, 'A/D 走　K 跳　J 连击　YUIOL 技能　B 背包　W/↑ 对话/传送　E 穿戴　Esc 菜单', {
         fontSize: '13px',
         color: '#c8cfe6',
       })
@@ -1630,10 +1636,8 @@ export class BattleScene extends Phaser.Scene {
     const slots: SkillSlotData[] = SKILL_KEYS.map(([code, skillId]) => {
       const level = this.skillRuntime.levels[skillId]
       const mpCost = level > 0 ? getRole1SkillMpCost(skillId, level) : 0
-      const hotkey = code === 'ONE' ? '1' : code === 'TWO' ? '2' : code === 'THREE' ? '3' :
-        code === 'FOUR' ? '4' : code === 'FIVE' ? '5' : code === 'SIX' ? '6' :
-        code === 'SEVEN' ? '7' : code === 'EIGHT' ? '8' : '9'
-      return { skillId, hotkey, mpCost, level, disabled: level <= 0 || this.mp.mp < mpCost }
+      // Hotkey label is the key code itself now (Y U I O L).
+      return { skillId, hotkey: code, mpCost, level, disabled: level <= 0 || this.mp.mp < mpCost }
     })
     this.skillBar.setSlots(slots)
   }
