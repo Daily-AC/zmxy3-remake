@@ -1,0 +1,12 @@
+{
+  "source": "export.monster.Monster10.initBBDC()+setAction() in 打开我开始玩.swf; sheet 2.swf chid1 Monster10. Level-2 grunt (else-branch, hp 1800). KNOWN ORIGINAL BUG: setAction case 'hit2' -> setFramePointY(5) but sheet is 1200x1000 = only 5 rows and setFrameStopCount defines only 5; row 5 does not exist. hit2 omitted. (setFrameCount had 6 entries but stopCounts/sheet cap at 5 rows.)",
+  "sheet": { "cols": 6, "rows": 5, "cellW": 200, "cellH": 200, "facing": "left" },
+  "offset": { "x": 22, "y": -17 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 5, "stopCounts": [2, 2, 2, 2, 7], "frameCount": 5 },
+    "hit1": { "col": 0, "row": 4, "frames": 4, "stopCounts": [2, 2, 2, 6], "frameCount": 6 }
+  }
+}

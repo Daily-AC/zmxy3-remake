@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Level 2 天王关 — monster sheet/action-table preview</title>
+<style>
+  body { margin: 0; background: #14110c; color: #e8dcc0; font: 13px/1.4 -apple-system, system-ui, sans-serif; }
+  h1 { font-size: 16px; padding: 12px 16px 0; margin: 0; font-weight: 600; }
+  .sub { padding: 2px 16px 10px; color: #9a8f74; font-size: 12px; }
+  .mon { border-top: 1px solid #2c261a; padding: 10px 16px; }
+  .mon h2 { font-size: 14px; margin: 0 0 6px; }
+  .mon h2 .cn { color: #d9b25a; }
+  .mon h2 .meta { color: #8a8064; font-weight: 400; font-size: 12px; margin-left: 8px; }
+  .strip { display: flex; align-items: flex-start; gap: 10px; margin: 4px 0; }
+  .strip .label { width: 52px; color: #b7a67e; padding-top: 24px; text-align: right; flex: none; }
+  .strip canvas { background: #0c0a06; image-rendering: pixelated; }
+  #done { position: fixed; top: 6px; right: 10px; color: #6f6; font-size: 11px; }
+</style>
+</head>
+<body>
+<h1>Level 2 · 天王关 (Four Heavenly Kings) — sheet + action-table decode</h1>
+<div class="sub">Each row plays one action left→right, sliced straight from the 2.swf bitmap sheet using the recovered grid + setAction()/setFrameStopCount() rows. Grunts (9/10/19) intentionally have no hit2 (original out-of-bounds-row bug).</div>
+<div id="root"></div>
+<div id="done"></div>
+
+<script>
+const ROW_H = 64;         // px height each frame is scaled to
+const MONSTERS = [
+  { sp: 'monster6',  cn: '增长天王', role: 'sub-boss', hp: 7874 },
+  { sp: 'monster16', cn: '广目天王', role: 'sub-boss', hp: 12000 },
+  { sp: 'monster15', cn: '多闻天王', role: 'BOSS',    hp: 16000 },
+  { sp: 'monster9',  cn: '', role: 'grunt', hp: 1500 },
+  { sp: 'monster10', cn: '', role: 'grunt', hp: 1800 },
+  { sp: 'monster19', cn: '', role: 'grunt', hp: 1200 },
+];
+const PNG = sp => `/game/public/assets/extracted/level2/${cap(sp)}.png`;
+const JSON_ = sp => `/game/src/data/monsters/${sp}.json`;
+function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+function loadImg(src){ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; }); }
+
+async function drawMonster(m){
+  const [data, img] = await Promise.all([ fetch(JSON_(m.sp)).then(r=>r.json()), loadImg(PNG(m.sp)) ]);
+  const { sheet, actions } = data;
+  const scale = ROW_H / sheet.cellH;
+
+  const box = document.createElement('div'); box.className='mon';
+  const h2 = document.createElement('h2');
+  h2.innerHTML = `${cap(m.sp)} <span class="cn">${m.cn||''}</span>`+
+    `<span class="meta">${m.role} · hp ${m.hp} · sheet ${img.width}×${img.height} · ${sheet.cols}×${sheet.rows} @ ${sheet.cellW}×${sheet.cellH}</span>`;
+  box.appendChild(h2);
+
+  for (const [name, a] of Object.entries(actions)){
+    const strip = document.createElement('div'); strip.className='strip';
+    const lab = document.createElement('div'); lab.className='label'; lab.textContent = name;
+    strip.appendChild(lab);
+    const cw = Math.round(sheet.cellW*scale), ch = Math.round(sheet.cellH*scale);
+    const cv = document.createElement('canvas');
+    cv.width = cw*a.frames + (a.frames-1)*3; cv.height = ch;
+    const ctx = cv.getContext('2d');
+    for (let f=0; f<a.frames; f++){
+      const sx = (a.col+f)*sheet.cellW, sy = a.row*sheet.cellH;
+      ctx.drawImage(img, sx, sy, sheet.cellW, sheet.cellH, f*(cw+3), 0, cw, ch);
+    }
+    strip.appendChild(cv);
+    box.appendChild(strip);
+  }
+  document.getElementById('root').appendChild(box);
+}
+
+(async ()=>{
+  for (const m of MONSTERS){ await drawMonster(m); }
+  document.getElementById('done').textContent = 'RENDER_DONE';
+})();
+</script>
+</body>
+</html>
