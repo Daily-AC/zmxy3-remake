@@ -3,22 +3,34 @@ import type { Item } from '../../systems/items'
 import { HUD_COLORS, ICON_FALLBACK_KEY } from './hudTheme'
 import { rarityCss } from './rarity'
 
-// 炼制 / 制作 panel on the ORIGINAL art (furnace_making = export.strength.Making
-// from backpack1.swf -- the 4399 game's real material-into-craft window: 制作书 +
-// 基本材料 x2 + 宝石 x3 slots, 生成物 result, 打造 button, all baked). There is NO
-// separate 八卦炉 window symbol in any pack (only baguaEffect FX in EIcon1); the
-// strength.* panels are the client's actual crafting UI -- evidence in
-// tasks/ui-round2-report.md.
+// 炼丹炉 (forge) window on the ORIGINAL art: the official StrengthEquipment 打造
+// tab. Two pieces of real 4399 art compose it:
+//   - furnace_frame  = the ink-brush window with the baked 炼丹炉 title
+//     (StrengthEquipmentv1090.swf / docs/reference/zmxy3-official/furnace-ui/
+//     panel-header-炼丹炉.png), the outer 八卦炉 window;
+//   - furnace_making = export.strength.Making, the material-into-craft layout:
+//     制作书 + 基本材料 x2 + 宝石 x3 slots -> 生成物 result, 打造 button.
 //
-// This wraps that art for our agent-furnace flow: material slots take the items
-// the player feeds the furnace, 生成物 previews the crafted result, and 打造 is a
-// live button. Slot coordinates are image-local (origin = panel center).
-// Pure view: setMaterials / setResult / setInfo drive it; onCraft is the button.
+// This is a straight presentation swap for the agent-furnace flow that used to
+// run inside the 水墨 dialogue overlay. The FLOW is unchanged: pick material
+// lots -> live 炉火 budget -> describe the wish -> 打造 fires onCraftSubmit, and
+// the scene runs the exact same lockMaterials/craftRequest/validate/addItem
+// protocol. The wish-description input is our agent-forge increment (the
+// original 打造 is a deterministic recipe); everything else mirrors the game.
+export const ASSET_SOURCE_ONLINE = false // 打造 art is official 造3 (Online 大闹天庭篇)
 
-const PANEL_TEX = 'furnace_making'
-// Slot centers in the 354x385 art, image-local (origin center). 5 input slots
-// (2 基本材料 + 3 宝石) + 1 result (生成物).
-// Measured from furnace_making.png slot cells (rows at local y -86 / -13 / +122).
+const FRAME_TEX = 'furnace_frame'
+const MAKING_TEX = 'furnace_making'
+
+// The 打造 layout (furnace_making) sits on the LEFT of the window; the material
+// picker + wish input + budget live on the RIGHT. Coordinates below are all
+// screen-space in the 960x540 game canvas.
+const WIN = { cx: 480, cy: 272 }
+const FRAME_SCALE = 1.05 // fits 479px art inside 540 canvas, 炼丹炉 title visible
+const MAKING = { x: 312, y: 272 } // furnace_making center (354x385, origin center)
+
+// Slot centers inside furnace_making, image-local (origin = image center):
+// 5 input slots (2 基本材料 + 3 宝石) + 1 生成物 result.
 const INPUT_SLOTS: { x: number; y: number }[] = [
   { x: -104, y: -86 }, // 基本材料 L
   { x: 52, y: -86 }, // 基本材料 R
@@ -26,125 +38,287 @@ const INPUT_SLOTS: { x: number; y: number }[] = [
   { x: 0, y: -13 }, // 宝石 2
   { x: 108, y: -13 }, // 宝石 3
 ]
-const RESULT_SLOT = { x: -108, y: 122 }
-const CRAFT_BTN = { x: 42, y: 158, w: 120, h: 38 }
-const ICON_FIT = 44
+const RESULT_SLOT = { x: -108, y: 122 } // 生成物
+const CRAFT_BTN = { x: 42, y: 158, w: 120, h: 38 } // baked 打造 button hotspot
+const ICON_FIT = 40
 
-export interface FurnaceInfo {
-  name: string
-  cost: number
+const GOLD = 0xd9b45a
+const INK = 0x0c0d12
+
+/** A craft lot: how many of a bag material the player fed the furnace. */
+export interface CraftLot {
+  item: Item
+  qty: number
+}
+/** One selectable material the furnace can spend. */
+export interface CraftMaterialOption {
+  item: Item
+  owned: number
 }
 
 export interface FurnacePanelOptions {
-  x?: number
-  y?: number
   iconKeyFor?: (item: Item) => string
-  onCraft?: () => void
+  /** Fired with the wish + picked lots when the player clicks 打造 / presses Enter. */
+  onCraftSubmit?: (description: string, lots: CraftLot[]) => void
+  /** One-line 炉火 budget preview for the current selection (scene computes it). */
+  budgetPreview?: (lots: CraftLot[]) => string
   onClose?: () => void
+}
+
+interface Chip {
+  opt: CraftMaterialOption
+  selected: number
+  rect: Phaser.GameObjects.Rectangle
+  label: Phaser.GameObjects.Text
 }
 
 export class FurnacePanel {
   readonly container: Phaser.GameObjects.Container
   private readonly scene: Phaser.Scene
-  private readonly opts: Required<Omit<FurnacePanelOptions, 'onCraft' | 'onClose'>> &
-    Pick<FurnacePanelOptions, 'onCraft' | 'onClose'>
-  private readonly itemLayer: Phaser.GameObjects.Container
-  private readonly nameText: Phaser.GameObjects.Text
-  private readonly costText: Phaser.GameObjects.Text
+  private readonly opts: Required<Pick<FurnacePanelOptions, 'iconKeyFor'>> &
+    Pick<FurnacePanelOptions, 'onCraftSubmit' | 'budgetPreview' | 'onClose'>
+  private readonly slotLayer: Phaser.GameObjects.Container
+  private readonly pickerLayer: Phaser.GameObjects.Container
+  private readonly resultText: Phaser.GameObjects.Text
+  private readonly budgetText: Phaser.GameObjects.Text
+  private readonly craftBtn: Phaser.GameObjects.Rectangle
+  private readonly dom: Phaser.GameObjects.DOMElement
+  private input!: HTMLInputElement
+  private chips: Chip[] = []
+  private locked = false
+  private currentResult: Item | null = null
 
   constructor(scene: Phaser.Scene, opts: FurnacePanelOptions = {}) {
     this.scene = scene
     this.opts = {
-      x: opts.x ?? 480,
-      y: opts.y ?? 280,
-      iconKeyFor: opts.iconKeyFor ?? ((item) => (scene.textures.exists(`icon_${item.id}`) ? `icon_${item.id}` : ICON_FALLBACK_KEY)),
-      onCraft: opts.onCraft,
+      iconKeyFor:
+        opts.iconKeyFor ?? ((item) => (scene.textures.exists(`icon_${item.id}`) ? `icon_${item.id}` : ICON_FALLBACK_KEY)),
+      onCraftSubmit: opts.onCraftSubmit,
+      budgetPreview: opts.budgetPreview,
       onClose: opts.onClose,
     }
     const children: Phaser.GameObjects.GameObject[] = []
 
-    if (scene.textures.exists(PANEL_TEX)) {
-      children.push(scene.add.image(0, 0, PANEL_TEX))
+    // Dim backdrop (blocks the battlefield behind).
+    const dim = scene.add.rectangle(480, 270, 960, 540, 0x000000, 0.6).setInteractive()
+    children.push(dim)
+
+    // 炼丹炉 window frame (falls back to a drawn ink panel if art is missing).
+    if (scene.textures.exists(FRAME_TEX)) {
+      children.push(scene.add.image(WIN.cx, WIN.cy, FRAME_TEX).setScale(FRAME_SCALE))
     } else {
       const g = scene.add.graphics()
-      g.fillStyle(HUD_COLORS.panel, 0.98).fillRoundedRect(-177, -192, 354, 385, 14)
-      g.lineStyle(2, HUD_COLORS.gold, 0.9).strokeRoundedRect(-177, -192, 354, 385, 14)
+      g.fillStyle(HUD_COLORS.panel, 0.98).fillRoundedRect(WIN.cx - 460, WIN.cy - 250, 920, 500, 16)
+      g.lineStyle(3, GOLD, 0.9).strokeRoundedRect(WIN.cx - 460, WIN.cy - 250, 920, 500, 16)
       children.push(g)
+      children.push(scene.add.text(WIN.cx - 440, WIN.cy - 240, '炼丹炉', { fontSize: '22px', color: '#f2c65a', fontStyle: 'bold' }))
     }
 
-    this.itemLayer = scene.add.container(0, 0)
-    children.push(this.itemLayer)
+    // The 打造 layout art on the left.
+    if (scene.textures.exists(MAKING_TEX)) {
+      children.push(scene.add.image(MAKING.x, MAKING.y, MAKING_TEX))
+    }
+    this.slotLayer = scene.add.container(0, 0)
+    children.push(this.slotLayer)
 
-    // Dynamic 名称 / 所需灵魂 text (to the right of the 生成物 slot).
-    this.nameText = scene.add.text(-56, 110, '', { fontSize: '15px', color: HUD_COLORS.textGold, fontStyle: 'bold' }).setOrigin(0, 0.5).setShadow(1, 1, '#000', 3)
-    this.costText = scene.add.text(-56, 134, '', { fontSize: '13px', color: '#e8d9a0' }).setOrigin(0, 0.5).setShadow(1, 1, '#000', 3)
-    children.push(this.nameText, this.costText)
-
-    // Interactive 打造 button hotspot over the baked art.
-    const btn = scene.add
-      .rectangle(CRAFT_BTN.x, CRAFT_BTN.y, CRAFT_BTN.w, CRAFT_BTN.h, 0xffffff, 0.001)
+    // Interactive 打造 button over the baked art.
+    this.craftBtn = scene.add
+      .rectangle(MAKING.x + CRAFT_BTN.x, MAKING.y + CRAFT_BTN.y, CRAFT_BTN.w, CRAFT_BTN.h, 0xffffff, 0.001)
       .setInteractive({ useHandCursor: true })
-      .on('pointerover', () => btn.setFillStyle(0xffffff, 0.12))
-      .on('pointerout', () => btn.setFillStyle(0xffffff, 0.001))
-      .on('pointerdown', () => this.opts.onCraft?.())
-    children.push(btn)
+      .on('pointerover', () => !this.locked && this.craftBtn.setFillStyle(0xffffff, 0.12))
+      .on('pointerout', () => this.craftBtn.setFillStyle(0xffffff, 0.001))
+      .on('pointerdown', () => this.submit())
+    children.push(this.craftBtn)
 
-    this.container = scene.add.container(this.opts.x, this.opts.y, children).setScrollFactor(0).setDepth(200).setVisible(false)
-  }
+    // ---- Right column: title, picker, wish input, budget ----
+    const rx = 512 // right-column left edge
+    children.push(
+      scene.add.text(rx, 96, '择材入炉', { fontSize: '18px', color: '#f0d99a', fontStyle: 'bold' }).setShadow(1, 1, '#000', 3),
+    )
+    children.push(
+      scene.add
+        .text(rx, 122, '点材料择数 · 下方写下心愿 · 点「打造」', { fontSize: '12px', color: '#c8bfa6' })
+        .setShadow(1, 1, '#000', 2),
+    )
 
-  open(): this {
-    this.container.setVisible(true)
-    return this
-  }
+    this.pickerLayer = scene.add.container(0, 0)
+    children.push(this.pickerLayer)
 
-  close(): this {
-    this.container.setVisible(false)
-    return this
+    this.budgetText = scene.add
+      .text(rx, 372, '炉火预算：0 点', { fontSize: '14px', color: '#ffcf7a', fontStyle: 'bold' })
+      .setShadow(1, 1, '#000', 3)
+    children.push(this.budgetText)
+
+    // Crafted-item readout (shown when a result is set).
+    this.resultText = scene.add
+      .text(rx, 394, '', { fontSize: '13px', color: HUD_COLORS.textGold })
+      .setShadow(1, 1, '#000', 3)
+    children.push(this.resultText)
+
+    children.push(
+      scene.add.text(rx, 412, '心愿', { fontSize: '13px', color: '#c8bfa6' }).setShadow(1, 1, '#000', 2),
+    )
+    this.dom = this.buildInput(rx, 434, 300)
+    children.push(this.dom)
+
+    // 返回 (close) button, top-right of the window.
+    const closeBtn = scene.add
+      .rectangle(792, 92, 66, 30, INK, 0.85)
+      .setStrokeStyle(2, 0x8a7f66, 1)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.close())
+    const closeLabel = scene.add.text(792, 92, '返回', { fontSize: '14px', color: '#f2eddf' }).setOrigin(0.5)
+    children.push(closeBtn, closeLabel)
+
+    this.container = scene.add.container(0, 0, children).setScrollFactor(0).setDepth(210).setVisible(false)
   }
 
   get isOpen(): boolean {
     return this.container.visible
   }
 
-  /** Fill the 5 input slots (extra items ignored). */
-  setMaterials(items: Item[]): void {
-    this.rebuild(items, this.currentResult, this.currentInfo)
+  /** Open the furnace with the player's current bag materials. */
+  open(options: CraftMaterialOption[]): void {
+    this.locked = false
+    this.currentResult = null
+    this.rebuildChips(options)
+    this.setResult(null)
+    this.input.value = ''
+    this.input.placeholder = '描述想要的法宝，如：一柄能吸血的火杖'
+    this.refreshSlots()
+    this.refreshBudget()
+    this.container.setVisible(true)
+    setTimeout(() => this.input.focus(), 0)
   }
 
+  close(): void {
+    if (!this.container.visible) return
+    this.container.setVisible(false)
+    this.input.blur()
+    this.opts.onClose?.()
+  }
+
+  /** Freeze the panel while a craft is in flight (no double-submit). */
+  setCraftLocked(locked: boolean): void {
+    this.locked = locked
+    this.input.disabled = locked
+    this.craftBtn.setFillStyle(0xffffff, 0.001)
+  }
+
+  clearInput(): void {
+    this.input.value = ''
+  }
+
+  /** Show the crafted item in the 生成物 slot + a rarity-colored readout. */
   setResult(item: Item | null): void {
     this.currentResult = item
-    this.rebuild(this.currentMaterials, item, this.currentInfo)
+    this.refreshSlots()
+    if (item) this.resultText.setText(`生成：${item.name}`).setColor(rarityCss(item.rarity))
+    else this.resultText.setText('')
   }
 
-  setInfo(info: FurnaceInfo | null): void {
-    this.currentInfo = info
-    this.nameText.setText(info ? info.name : '')
-    this.costText.setText(info ? `所需灵魂 ${info.cost}` : '')
+  // ---------- internals ----------
+
+  private rebuildChips(options: CraftMaterialOption[]): void {
+    this.pickerLayer.removeAll(true)
+    this.chips = []
+    const startX = 512
+    const startY = 152
+    const chipW = 138
+    const chipH = 30
+    const gapX = 10
+    const gapY = 8
+    const perRow = 2
+    options.slice(0, 10).forEach((opt, i) => {
+      const col = i % perRow
+      const row = Math.floor(i / perRow)
+      const bx = startX + col * (chipW + gapX) + chipW / 2
+      const by = startY + row * (chipH + gapY) + chipH / 2
+      const rect = this.scene.add
+        .rectangle(bx, by, chipW, chipH, INK, 0.7)
+        .setStrokeStyle(2, 0x6b5f47, 1)
+        .setInteractive({ useHandCursor: true })
+      const label = this.scene.add.text(bx, by, '', { fontSize: '12px', color: '#e8ddc4' }).setOrigin(0.5)
+      const chip: Chip = { opt, selected: 0, rect, label }
+      rect.on('pointerdown', () => this.cycleChip(chip))
+      this.chips.push(chip)
+      this.pickerLayer.add([rect, label])
+      this.paintChip(chip)
+    })
   }
 
-  private currentMaterials: Item[] = []
-  private currentResult: Item | null = null
-  private currentInfo: FurnaceInfo | null = null
+  private cycleChip(chip: Chip): void {
+    if (this.locked) return
+    chip.selected = (chip.selected + 1) % (chip.opt.owned + 1)
+    this.paintChip(chip)
+    this.refreshSlots()
+    this.refreshBudget()
+  }
 
-  private rebuild(materials: Item[], result: Item | null, info: FurnaceInfo | null): void {
-    this.currentMaterials = materials
-    this.itemLayer.removeAll(true)
-    materials.slice(0, INPUT_SLOTS.length).forEach((it, i) => this.placeIcon(it, INPUT_SLOTS[i]))
-    if (result) {
-      this.placeIcon(result, RESULT_SLOT)
-      // Name in the result's rarity color.
-      this.nameText.setColor(rarityCss(result.rarity))
-    } else {
-      this.nameText.setColor(HUD_COLORS.textGold)
-    }
-    this.setInfo(info)
+  private paintChip(chip: Chip): void {
+    chip.label.setText(`${chip.opt.item.name} ${chip.selected}/${chip.opt.owned}`)
+    chip.rect.setStrokeStyle(2, chip.selected > 0 ? GOLD : 0x6b5f47, 1)
+    chip.rect.setFillStyle(chip.selected > 0 ? 0x3a2c12 : INK, chip.selected > 0 ? 0.85 : 0.7)
+  }
+
+  private selectedLots(): CraftLot[] {
+    return this.chips.filter((c) => c.selected > 0).map((c) => ({ item: c.opt.item, qty: c.selected }))
+  }
+
+  /** Fill the 5 input slots with the picked material types + the result. */
+  private refreshSlots(): void {
+    this.slotLayer.removeAll(true)
+    const picked = this.chips.filter((c) => c.selected > 0)
+    picked.slice(0, INPUT_SLOTS.length).forEach((c, i) => this.placeIcon(c.opt.item, INPUT_SLOTS[i]))
+    if (this.currentResult) this.placeIcon(this.currentResult, RESULT_SLOT)
   }
 
   private placeIcon(item: Item, at: { x: number; y: number }): void {
     const key = this.opts.iconKeyFor(item)
     if (!this.scene.textures.exists(key)) return
-    const icon = this.scene.add.image(at.x, at.y, key)
+    const icon = this.scene.add.image(MAKING.x + at.x, MAKING.y + at.y, key)
     icon.setScale(Math.min(1, ICON_FIT / Math.max(icon.width, icon.height)))
-    this.itemLayer.add(icon)
+    this.slotLayer.add(icon)
+  }
+
+  private refreshBudget(): void {
+    const lots = this.selectedLots()
+    const preview = this.opts.budgetPreview?.(lots)
+    this.budgetText.setText(preview ?? `炉火预算：${lots.length} 种材料`)
+  }
+
+  private submit(): void {
+    if (this.locked) return
+    const description = this.input.value.trim()
+    this.opts.onCraftSubmit?.(description, this.selectedLots())
+  }
+
+  private buildInput(leftX: number, cy: number, width: number): Phaser.GameObjects.DOMElement {
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.maxLength = 200
+    Object.assign(input.style, {
+      width: `${width}px`,
+      boxSizing: 'border-box',
+      padding: '6px 10px',
+      fontSize: '14px',
+      border: `1px solid #${GOLD.toString(16)}`,
+      borderRadius: '8px',
+      background: 'rgba(14,16,26,0.72)',
+      color: '#f2eddf',
+      outline: 'none',
+    })
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation()
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        this.submit()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        this.close()
+      }
+    })
+    this.input = input
+    return this.scene.add.dom(leftX, cy, input).setOrigin(0, 0.5)
   }
 }
