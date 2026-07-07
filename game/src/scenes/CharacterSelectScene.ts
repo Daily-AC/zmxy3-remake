@@ -1,6 +1,4 @@
 import Phaser from 'phaser'
-import { drawPalaceBackdrop, PALACE_BG_TEX, PALACE_BG_URL } from '../ui/menu/inkBackdrop'
-import { MenuButton } from '../ui/menu/MenuButton'
 import { SCENE, REG, shellStorage } from './shellShared'
 import { createNewSlotEnvelope, writeSlot, type SlotId } from '../systems/saveSlots'
 import { restoreGameState } from '../systems/save'
@@ -8,24 +6,76 @@ import { createProgression, type HeroId } from '../systems/progression'
 import { createEquipment } from '../systems/equipment'
 import { createInventory } from '../systems/inventory'
 
-// Character select built on the ORIGINAL 4399 art: `select_role_bg` is the game's
-// own SelectRole sprite (5 ink panels: 孙悟空/唐僧/猪八戒/沙僧/???), cropped to its
-// content box. Only 悟空 is playable in this milestone; the other four panels are
-// tagged 敬请期待. Confirming writes a fresh save into the chosen slot and enters
-// battle. The battle scene currently always plays 悟空 (HERO_ID hardcoded), so the
-// hero id we persist here is the integration seam documented in the report.
+// SelectRole, redone against the original AS3 (`打开我开始玩.swf` ->
+// `export.SelectRole`, tasks/decompile-as3-ui-report-codex.md) + real per-panel
+// button art pulled straight from OtherMat1.swf (DefineSprite_1012). See
+// tasks/selectrole-saveslots-report.md for the full extraction trail
+// (tools/selectrole-origins.py) and origin table.
+//
+// Layout truth: SelectRole is five FULL-BLEED ink panels, no border, no title,
+// no button bar (screen-fidelity-spec.md S2). Idle state is one flattened
+// render of all five panels (all grayscale -- the original achieves "gray" via
+// a runtime ColorMatrixFilter on the SAME colored art, not a separate baked
+// asset, confirmed from the button records' filterList). Selecting swaps the
+// whole-row texture for one where panel 1 (悟空) is the colorful/red "over"
+// button-state art, empirically aligned onto the base canvas (see report).
+// AS3's over() handler adds a "1P"/"2P" badge (real linkage-class bitmaps,
+// chid 11/14) at `button.x - 50, y = 40` in SelectRole's own coordinate space;
+// same math, reused here as a fixed offset once mapped into our asset's pixel
+// space (report §origin table).
+//
+// Interaction: only 悟空 (panel 1) is playable this milestone (functional
+// scope unchanged from the prior shell -- other four panels stay locked, same
+// as before, just restyled to fit the borderless five-panel format). AS3's
+// real single-player behavior is "one click selects AND confirms" (`onClick`
+// -> `newRole()` -> `selectOver()` immediately); this project's shell instead
+// keeps the pre-existing two-step select/confirm UX (click to select, click
+// again or Enter to confirm) because the confirm hooks
+// (`__shellSelectHero`/`__shellConfirm`) are a fixed external contract from
+// the prior milestone and the brief keeps behavior unchanged -- only the
+// visuals were in scope this pass.
 
-const BG_TEX = 'select_role_bg'
-const HERO_TEX = 'role1_0'
-const WK_BADGE = 'name_wukong'
-const HERO_CELL = 200
+// The full 5-panel row, both states, are pre-composited PNGs (942x619,
+// FFDec sprite export cropped to content bbox) rather than assembled at
+// runtime from the four independent per-button crops -- panel widths in the
+// source aren't quite uniform (art bleeds past the nominal ~188px column, see
+// report), so compositing once offline (with an empirically verified pixel
+// offset per panel, not the raw PlaceObject matrix -- FFDec's per-symbol
+// canvas padding when a ColorMatrixFilter is present doesn't match the
+// analytic twips math, see report "Origin/placement pitfall") is both more
+// faithful and simpler than five independently-positioned sprites at runtime.
+const IDLE_TEX = 'select_role_idle'
+const SELECTED_WUKONG_TEX = 'select_role_selected_wukong'
+const BADGE_1P_TEX = 'badge_1p'
+
+// Native pixel space of the extracted art (see report). All panel/hit-zone
+// math below is expressed in these units; the whole row is contain-fit
+// (never cropped) into the 960x540 canvas, per the mandatory "S1 棒" pillarbox
+// rule in docs/playbooks/ui-port-dual-source.md (cover-fit would clip the
+// panel row's top/bottom ink border -- the exact mistake that rule exists to
+// prevent).
+const ART_W = 942
+const ART_H = 619
+const PANEL_W = ART_W / 5
+// Badge placement: AS3 `badge.x = btn.x - 50; badge.y = 40` in SelectRole's
+// local space, mapped into this asset's pixel space via the same offset that
+// aligned panel 1's button art onto the base canvas (canvas_px = local_px +
+// 16.29, +193.55; see tools/selectrole-origins.py + report). Cross-checked
+// visually against selectrole-original-1p.png -- matches.
+const BADGE_X = 69
+const BADGE_Y = 59
+
 const LOCKED_PANELS = [1, 2, 3, 4]
+const LOCKED_LABEL = ['唐僧', '猪八戒', '沙僧', '？？？']
 
 export class CharacterSelectScene extends Phaser.Scene {
   private slot: SlotId = 0
   private selectedHero = 1 // 悟空; the only selectable hero this milestone
-  private highlight!: Phaser.GameObjects.Graphics
-  private confirmBtn!: MenuButton
+  private isSelected = false
+  private idleImg!: Phaser.GameObjects.Image
+  private selectedImg!: Phaser.GameObjects.Image
+  private badge!: Phaser.GameObjects.Image
+  private row!: Phaser.GameObjects.Container
 
   constructor() {
     super(SCENE.characterSelect)
@@ -33,135 +83,109 @@ export class CharacterSelectScene extends Phaser.Scene {
 
   init(data: { slot?: number }): void {
     this.slot = (data?.slot as SlotId) ?? 0
+    this.isSelected = false
   }
 
   preload(): void {
-    if (!this.textures.exists(PALACE_BG_TEX)) this.load.image(PALACE_BG_TEX, PALACE_BG_URL)
-    if (!this.textures.exists(BG_TEX)) {
-      this.load.image(BG_TEX, 'assets/extracted/menu/select_role_bg.png')
+    if (!this.textures.exists(IDLE_TEX)) {
+      this.load.image(IDLE_TEX, 'assets/extracted/menu/select_role_idle.png')
     }
-    if (!this.textures.exists(WK_BADGE)) {
-      this.load.image(WK_BADGE, 'assets/extracted/menu/name_wukong.png')
+    if (!this.textures.exists(SELECTED_WUKONG_TEX)) {
+      this.load.image(SELECTED_WUKONG_TEX, 'assets/extracted/menu/select_role_selected_wukong.png')
     }
-    if (!this.textures.exists(HERO_TEX)) {
-      this.load.spritesheet(HERO_TEX, 'assets/extracted/role1_0.png', {
-        frameWidth: HERO_CELL,
-        frameHeight: HERO_CELL,
-      })
+    if (!this.textures.exists(BADGE_1P_TEX)) {
+      this.load.image(BADGE_1P_TEX, 'assets/extracted/menu/badge_1p.png')
     }
   }
 
   create(): void {
-    drawPalaceBackdrop(this)
-    this.add
-      .text(480, 44, '选择角色', {
-        fontSize: '36px',
-        fontStyle: 'bold',
-        color: '#f2c65a',
-        stroke: '#3a2410',
-        strokeThickness: 6,
-      })
-      .setOrigin(0.5)
-    this.add
-      .text(480, 80, `存档 ${this.slot + 1} · 悟空可选，其余敬请期待`, { fontSize: '15px', color: '#c8bfa6' })
-      .setOrigin(0.5)
+    // Scene底色 matches the panel row's own ink black so the contain-fit
+    // pillarbox reads as part of the artwork, not a visible letterbox seam.
+    this.add.graphics().fillStyle(0x0b0a0d, 1).fillRect(0, 0, 960, 540)
 
-    // Original SelectRole panel art, fit under the title.
-    const bg = this.add.image(480, 96, BG_TEX).setOrigin(0.5, 0)
-    const scale = Math.min(900 / bg.width, 372 / bg.height)
-    bg.setScale(scale)
-    const dispW = bg.width * scale
-    const dispH = bg.height * scale
-    const left = 480 - dispW / 2
-    const panelW = dispW / 5
-    const panelCX = (i: number): number => left + (i + 0.5) * panelW
+    const scale = 540 / ART_H
+    const offsetX = (960 - ART_W * scale) / 2
+    this.row = this.add.container(offsetX, 0).setScale(scale)
 
-    // Color 悟空 idle popped over its (grayscale) panel to read as "alive".
-    this.add
-      .sprite(panelCX(0), 96 + dispH * 0.46, HERO_TEX, 0)
-      .setScale((panelW * 0.92) / HERO_CELL)
-      .setDepth(6)
-    // Colored 悟空 name badge over the baked gray name.
-    this.add
-      .image(panelCX(0), 96 + dispH * 0.86, WK_BADGE)
-      .setScale(Math.min(1.4, (panelW * 0.7) / 76))
-      .setDepth(7)
+    this.idleImg = this.add.image(0, 0, IDLE_TEX).setOrigin(0, 0)
+    this.selectedImg = this.add.image(0, 0, SELECTED_WUKONG_TEX).setOrigin(0, 0).setVisible(false)
+    this.row.add([this.idleImg, this.selectedImg])
 
-    // Pulsing gold highlight around the 悟空 panel.
-    this.highlight = this.add.graphics().setDepth(8)
-    this.drawHighlight(panelCX(0) - panelW / 2 + 4, 96 + 6, panelW - 8, dispH - 12)
-    this.tweens.add({ targets: this.highlight, alpha: { from: 0.55, to: 1 }, duration: 900, yoyo: true, repeat: -1 })
+    this.badge = this.add.image(BADGE_X, BADGE_Y, BADGE_1P_TEX).setOrigin(0, 0).setVisible(false).setDepth(10)
+    this.row.add(this.badge)
 
-    // 悟空 panel is clickable (re-affirms selection).
-    this.add
-      .zone(panelCX(0), 96 + dispH / 2, panelW, dispH)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.selectHero(1))
-
-    // Lock tags over the other four panels.
-    for (const i of LOCKED_PANELS) {
-      const cx = panelCX(i)
-      const g = this.add.graphics().setDepth(6)
-      g.fillStyle(0x000000, 0.42).fillRect(cx - panelW / 2 + 4, 96 + 6, panelW - 8, dispH - 12)
+    // Panel 1 (悟空): click selects, click again (or Enter) confirms --
+    // matches spec "确认=再次点击/回车" while keeping the two-step contract
+    // the existing __shellSelectHero/__shellConfirm hooks assume.
+    this.row.add(
       this.add
-        .text(cx, 96 + dispH * 0.5, '敬请\n期待', {
-          fontSize: '20px',
+        .zone(0, 0, PANEL_W, ART_H)
+        .setOrigin(0, 0)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.onPanel1Click()),
+    )
+
+    // Locked panels 2-5: same "敬请期待" affordance as before, restyled to
+    // sit flush in the full-bleed row (no boxed card look).
+    for (const i of LOCKED_PANELS) {
+      const cx = i * PANEL_W
+      const label = this.add
+        .text(cx + PANEL_W / 2, ART_H * 0.42, '敬请\n期待', {
+          fontSize: '26px',
           fontStyle: 'bold',
           color: '#e8d9b0',
           align: 'center',
           stroke: '#2c1d0e',
-          strokeThickness: 3,
-          lineSpacing: 4,
+          strokeThickness: 4,
+          lineSpacing: 6,
         })
         .setOrigin(0.5)
-        .setDepth(7)
-      this.add
-        .zone(cx, 96 + dispH / 2, panelW, dispH)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.flashLocked())
+        .setAlpha(0.88)
+      this.row.add(label)
+      this.row.add(
+        this.add
+          .zone(cx, 0, PANEL_W, ART_H)
+          .setOrigin(0, 0)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => this.flashLocked(LOCKED_LABEL[i - 1])),
+      )
     }
 
-    // Bottom controls.
-    new MenuButton(this, {
-      x: 150,
-      y: 508,
-      width: 130,
-      height: 44,
-      label: '← 返回',
-      fontSize: 18,
-      variant: 'ghost',
-      onClick: () => this.scene.start(SCENE.slotSelect),
+    // Keyboard: Enter confirms once selected. Esc returns to slot select --
+    // deliberately NOT a visible button (spec removes the bottom button bar
+    // entirely; this is a keyboard-only escape hatch so the screen isn't a
+    // dead end, invisible so it doesn't violate "无按钮条").
+    this.input.keyboard?.on('keydown-ENTER', () => {
+      if (this.isSelected) this.confirm()
     })
-    this.confirmBtn = new MenuButton(this, {
-      x: 620,
-      y: 508,
-      width: 300,
-      height: 50,
-      label: '确定出战 · 孙悟空',
-      fontSize: 22,
-      onClick: () => this.confirm(),
-    })
+    this.input.keyboard?.on('keydown-ESC', () => this.scene.start(SCENE.slotSelect))
 
-    this.input.keyboard?.once('keydown-ENTER', () => this.confirm())
     this.exposeHooks()
   }
 
-  private drawHighlight(x: number, y: number, w: number, h: number): void {
-    this.highlight.clear()
-    this.highlight.lineStyle(4, 0xffd873, 1).strokeRoundedRect(x, y, w, h, 8)
-    this.highlight.lineStyle(1.5, 0xfff3c0, 0.9).strokeRoundedRect(x + 3, y + 3, w - 6, h - 6, 6)
+  private onPanel1Click(): void {
+    if (!this.isSelected) {
+      this.selectHero(1)
+    } else {
+      this.confirm()
+    }
   }
 
   private selectHero(heroId: number): void {
-    this.selectedHero = heroId // only 悟空 (1) is reachable this milestone
+    if (heroId !== 1) return // only 悟空 selectable this milestone
+    this.selectedHero = heroId
+    this.isSelected = true
+    this.idleImg.setVisible(false)
+    this.selectedImg.setVisible(true)
+    this.badge.setVisible(true)
   }
 
-  private flashLocked(): void {
+  private flashLocked(name: string): void {
     const t = this.add
-      .text(480, 470, '该角色敬请期待', { fontSize: '20px', fontStyle: 'bold', color: '#ffb26b' })
+      .text(480, 500, `${name} 敬请期待`, { fontSize: '20px', fontStyle: 'bold', color: '#ffb26b' })
       .setOrigin(0.5)
       .setDepth(20)
-    this.tweens.add({ targets: t, y: 450, alpha: 0, duration: 1100, onComplete: () => t.destroy() })
+    this.tweens.add({ targets: t, y: 480, alpha: 0, duration: 1100, onComplete: () => t.destroy() })
   }
 
   private confirm(): void {
@@ -187,6 +211,5 @@ export class CharacterSelectScene extends Phaser.Scene {
     w.__shellScene = () => SCENE.characterSelect
     w.__shellSelectHero = (id: number) => this.selectHero(id)
     w.__shellConfirm = () => this.confirm()
-    void this.confirmBtn
   }
 }
