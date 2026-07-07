@@ -1,15 +1,17 @@
 import Phaser from 'phaser'
-import { drawInkBackdrop } from '../ui/menu/inkBackdrop'
 import { MenuButton } from '../ui/menu/MenuButton'
 import { SCENE } from './shellShared'
 
-// The nostalgia "login" shell. Single-player, so this is a period-feel façade,
-// not a real account system: it shows the title, a 游客 (guest) login line, and
-// an 进入游戏 button that carries straight into slot selection. Art is the shared
-// ink backdrop plus the color 悟空 idle frame (role1_0 frame 0) for life.
+// Title / login shell built on the ORIGINAL cover artwork: `title_logo_bg` is the
+// game's own 造梦西游3 大闹天庭篇 logo art (blue ink-splatter title screen,
+// extracted from the main SWF, chid 410 — the image the original client shows
+// while loading). Single-player, so the only interaction is a 进入游戏 entry into
+// slot selection, with a small guest-login note kept for period feel. No
+// system-font title: the logo lives in the art itself.
 
-const HERO_TEX = 'role1_0'
-const HERO_CELL = 200
+const LOGO_BG = 'title_logo_bg'
+const CANVAS_W = 960
+const CANVAS_H = 540
 
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -17,75 +19,41 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   preload(): void {
-    if (!this.textures.exists(HERO_TEX)) {
-      this.load.spritesheet(HERO_TEX, 'assets/extracted/role1_0.png', {
-        frameWidth: HERO_CELL,
-        frameHeight: HERO_CELL,
-      })
+    if (!this.textures.exists(LOGO_BG)) {
+      this.load.image(LOGO_BG, 'assets/extracted/menu/title_logo_bg.png')
     }
   }
 
   create(): void {
-    drawInkBackdrop(this)
+    // Original cover art, cover-fit to the canvas (logo stays centered).
+    const bg = this.add.image(CANVAS_W / 2, CANVAS_H / 2, LOGO_BG)
+    const scale = Math.max(CANVAS_W / bg.width, CANVAS_H / bg.height)
+    bg.setScale(scale)
 
-    // Title block.
-    this.add
-      .text(480, 118, '造梦西游 3', {
-        fontSize: '68px',
-        fontStyle: 'bold',
-        color: '#f2c65a',
-        stroke: '#3a2410',
-        strokeThickness: 8,
-      })
-      .setOrigin(0.5)
-      .setShadow(3, 5, '#000000', 8, true, true)
-    this.add
-      .text(480, 178, '再续天庭  ·  Remake', {
-        fontSize: '22px',
-        color: '#e8d9b0',
-        stroke: '#2c1d0e',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5)
-
-    // 悟空 idle portrait with a gentle bob so the screen isn't static.
-    const hero = this.add.sprite(700, 380, HERO_TEX, 0).setScale(1.7).setDepth(5)
-    this.tweens.add({
-      targets: hero,
-      y: hero.y - 10,
-      duration: 1400,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-
-    // Faux guest-login line.
-    this.add
-      .text(300, 320, '账号', { fontSize: '18px', color: '#c8bfa6' })
-      .setOrigin(0, 0.5)
-    const acct = this.add.graphics()
-    acct.fillStyle(0x0e0b07, 0.6).fillRoundedRect(300, 336, 260, 40, 8)
-    acct.lineStyle(1.5, 0xd9b45a, 0.7).strokeRoundedRect(300, 336, 260, 40, 8)
-    this.add
-      .text(316, 356, '游客（本地存档）', { fontSize: '17px', color: '#f2eddf' })
-      .setOrigin(0, 0.5)
+    // Soft bottom vignette so the button/text read over the busy art.
+    this.add.graphics().fillStyle(0x0a1830, 0.3).fillRect(0, CANVAS_H - 150, CANVAS_W, 150)
 
     new MenuButton(this, {
-      x: 430,
-      y: 440,
-      width: 260,
-      height: 58,
+      x: 480,
+      y: 452,
+      width: 280,
+      height: 60,
       label: '进入游戏',
-      fontSize: 26,
+      fontSize: 27,
       onClick: () => this.enter(),
     }).setDepth(10)
 
     this.add
-      .text(480, 512, '本地假登录 · 情怀壳 · 回车 / 点击进入', {
-        fontSize: '13px',
-        color: '#8a7f68',
+      .text(480, 500, '游客登录 · 本地存档　　回车 / 点击进入', {
+        fontSize: '14px',
+        color: '#dfeaff',
+        stroke: '#0a1830',
+        strokeThickness: 3,
       })
       .setOrigin(0.5)
+
+    // Gold hairline frame to tie the shell scenes together.
+    this.add.graphics().lineStyle(2, 0xd9b45a, 0.4).strokeRoundedRect(8, 8, CANVAS_W - 16, CANVAS_H - 16, 12)
 
     this.input.keyboard?.once('keydown-ENTER', () => this.enter())
     this.exposeHooks()
