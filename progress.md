@@ -159,6 +159,10 @@
   - **总结论：4.8 的漂移在视觉验收标准与优先级排序；数值移植与工程账经独立复核可信，无需返工。**
 - 21:18 survivability 验收合入（4619099，395 绿主会话复跑）：heroSurvivability.ts 替代层 maxHp ×3.5/def ×2/魔防 L10=10%→L30=35% 封顶 50%，判据带写死测试（L3 核击 39.9% 承重断言）；到关等级模型 L2:8/L3:15/L4:21。三尾巴分头：①魔防一行接线 patch 转 ui-finish 持笔应用；②装备 hp 词条从未进 combat.maxHp（真 bug，炼了白炼）续单真修+系数下调；③exp 经济断层（每杀固定 80 占位，L4 自然仅 lv10 vs 门槛 lv21）续单按原版 AS3 每怪 exp 真值修，达不到判据报偏差拍板不擅自放大。
 - 在途：ui-finish（HUD 像素级重做，主线）、survivability（续单×2）。push 策略沿用：UI 到位+真机验收过统一推，不推中间态。
+- 21:4x~22:5x **承伤线全闭环 + UI 线收官**：
+  - survivability 续单交付（de94cee）：装备 hp/mp 词条真接血池（syncHeroEquipment，scale 3.5→3.0 吸收改真修）；原版每怪 exp 反编译落 monsterExp.ts；自然轨迹真值只到 lv8/11 vs 门槛 15/21（关卡结构性压缩所致），主会话拍板 CAMPAIGN_EXP_MULTIPLIER=6（d650b0d/9525a7d，性质同养成替代层可回退，测试 pin 6× 落带 + ×1 对照断言）。承伤线四段全闭环。
+  - ui-finish HUD 像素级重做收官（5aac615/09cbbc2/c6ba94f/d76b5a8/161d8d2）：12 条差距清单全闭（拆底板/胶囊条/墨牌/墨点等级/删属性行/按键帮助进 Esc/背景接缝根修+莲叶前景）；技能坞三轮迭代（双重深框根因→图标框相连当槽→FFDec 挖 RoleSkillInterfacev3550 亮图标换装）；4 项承伤接线补丁入 09cbbc2（魔防/syncHeroEquipment/MP 容量/monsterExp）。主会话逐轮终审（round3/COMPARE2/COMPARE3 亲看），定稿待用户点头后统一推。三件套中炼丹炉窗/结算横幅终审过；失败横幅因无败局机制不接（待用户拍板要不要败局）；默认上坞 5 技拍板 slz/lys/hytj/lyfb/jdy。
+  - 乌龟怪体型确认真渲染 bug（BattleScene:937 按 sheet 格高归一致 Monster7 大英雄 35%），已派 monster-scale 修复棒（tasks/monster-scale-brief.md，原则=全体统一 px→world 缩放保 SWF 原生比例）。
 
 ### 赛后路线图（终包后）
 - **NPC Agent 能力架构**（游戏作为 MCP、每 NPC 受限工具集=权限边界、动态权限；炼丹炉照配方合成 / 老君概率交易以贱换尊）：用户 2026-07-07 提出的拓展构想，是"agent 驱动 NPC"愿景的完全体，需深入设计再做，**暂缓**。完整记录见 docs/design/npc-agent-mcp.md。
