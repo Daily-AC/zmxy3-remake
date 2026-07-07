@@ -27,7 +27,7 @@ const WS_URL = `ws://localhost:${PORT}`;
 const NPC_ID = "laojun";
 
 // Engine ceilings the server's static clamp must never let a field exceed.
-const ENGINE = { atk: 50, def: 50, hp: 200, mp: 200, crit: 0.5, onHitChance: 0.5, onHitPower: 30 };
+const ENGINE = { atk: 200, def: 200, hp: 800, mp: 800, crit: 0.5, onHitChance: 0.5, onHitPower: 30 };
 
 function log(...args: unknown[]): void {
   console.log("[forge-mock]", ...args);
@@ -104,10 +104,11 @@ async function main(): Promise<void> {
     await waitFor((m) => m.type === "welcome");
     ws.send(JSON.stringify({ type: "hello", player: { id: "tester", name: "斗战胜佛" } }));
 
-    // The player spends 7 玄铁碎片 (rarity 3) -> a budget big enough that the
-    // clamped item (atk 50 + burn 30/0.5) is affordable and the game accepts it.
+    // The player spends 17 玄铁碎片 (rarity 3 = 255 pts) -> a budget big enough
+    // that the clamped item (atk 200 + burn 30/0.5, cost 250) is affordable and
+    // the game accepts it.
     const blackIron: Item = { id: "black_iron", name: "玄铁碎片", kind: "material", rarity: 3 };
-    const lots: MaterialLot[] = [{ item: blackIron, qty: 7 }];
+    const lots: MaterialLot[] = [{ item: blackIron, qty: 17 }];
     const budget = computeBudget(lots);
     const requestId = "forge-req-1";
     const description = "一把会喷火的法杖";
@@ -154,12 +155,12 @@ async function main(): Promise<void> {
         throw new Error(`unknown effect type: ${JSON.stringify(e)}`);
       }
     }
-    if (!sawClampedAtk) throw new Error("expected the over-max atk (999) to come back clamped to 50");
+    if (!sawClampedAtk) throw new Error("expected the over-max atk (999) to come back clamped to 200");
     if (!sawClampedOnHit) throw new Error("expected the over-max burn (0.9/999) to come back clamped to 0.5/30");
     if (typeof result.flavor !== "string" || result.flavor.length === 0)
       throw new Error("craft_result missing 太上老君's flavor line");
     if (!result.flavor.includes("玄铁碎片")) throw new Error("flavor line should quote the spent material");
-    log("assertion 1 PASSED: server static clamp fired over the wire (atk 999->50, burn 0.9/999->0.5/30)");
+    log("assertion 1 PASSED: server static clamp fired over the wire (atk 999->200, burn 0.9/999->0.5/30)");
 
     // ---- assertion 2: the real game-side furnace validation ACCEPTS the item ----
     const validation = validateCraftedEquipment(item, budget);

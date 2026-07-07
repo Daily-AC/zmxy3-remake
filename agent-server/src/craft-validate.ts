@@ -6,11 +6,14 @@
 // being unbalanced or malformed, independent of what the LLM produced.
 import type { CraftEffect, CraftedItem, OnHitEffect, StatEffect } from "./types.js";
 
+// Mirrors game/src/systems/furnace.ts ENGINE_MAX. Raised to original-scale
+// numbers (atk/def 50->200, hp/mp 200->800) once level monsters moved to
+// canonical HP (万级 bosses). crit is deliberately left at 0.5.
 const STAT_LIMITS: Record<StatEffect["stat"], number> = {
-  atk: 50,
-  def: 50,
-  hp: 200,
-  mp: 200,
+  atk: 200,
+  def: 200,
+  hp: 800,
+  mp: 800,
   crit: 0.5,
 };
 

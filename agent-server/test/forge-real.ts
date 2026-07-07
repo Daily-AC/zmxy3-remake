@@ -22,7 +22,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..");
 const PORT = 5183;
 const NPC_ID = "laojun";
-const ENGINE = { atk: 50, def: 50, hp: 200, mp: 200, crit: 0.5, onHitChance: 0.5, onHitPower: 30 };
+const ENGINE = { atk: 200, def: 200, hp: 800, mp: 800, crit: 0.5, onHitChance: 0.5, onHitPower: 30 };
 
 function log(...args: unknown[]): void {
   console.log("[forge-real]", ...args);
@@ -107,11 +107,12 @@ async function main(): Promise<void> {
     await waitFor((m) => m.type === "welcome");
     ws.send(JSON.stringify({ type: "hello", player: { id: "tester", name: "斗战胜佛" } }));
 
-    // Generous budget (14 玄铁碎片, 210 pts -> all caps at engine max) so ANY
-    // in-sandbox real item is affordable; this test is about real shape +
-    // acceptance, not about the reject path (unit-tested separately).
+    // Generous budget (45 玄铁碎片, 675 pts -> every cap at engine max, and more
+    // than the max possible 3-effect item cost) so ANY in-sandbox real item is
+    // affordable; this test is about real shape + acceptance, not the reject
+    // path (unit-tested separately).
     const blackIron: Item = { id: "black_iron", name: "玄铁碎片", kind: "material", rarity: 3 };
-    const lots: MaterialLot[] = [{ item: blackIron, qty: 14 }];
+    const lots: MaterialLot[] = [{ item: blackIron, qty: 45 }];
     const budget = computeBudget(lots);
     const requestId = `real-req-${Date.now()}`;
     const description = "一把又能吸血、又能点燃敌人的赤红长枪，攻击也要高";
