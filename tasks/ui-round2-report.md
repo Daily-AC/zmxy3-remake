@@ -201,3 +201,20 @@ grep `furnace|alchemy|liandan|bagua|refine|smelt|forge|八卦炉|炼丹|炼制`�
   改动流程，留后续。
 - MonsterHpBar 头顶条已接但截图里 grunt 死太快没拍到独立清晰帧；组件与 BossHpBar 同族、boss 条已验证渲染正常。
 - 加了 `__toggleBackpack` 验收调试钩子，量产前收敛。
+
+### 追加修复：切场景 UI 残留（commit 2d72596）
+acceptance 真机发现：L1 老君对话框切到 L2 后残留盖住标题卡（关卡切换在同一场景内 startLevel、不重启场景，
+故上一关打开的 overlay 不会自动清）。已修：`startLevel` 里 `dialogue.close()` + `backpack.close()` +
+`bossBar.setVisible(false)`；另加 `SHUTDOWN` 事件处理（回主菜单）dispose NPC socket + 关对话框，防 DOM
+input/重连定时器泄漏进壳。浏览器验证：L1 开着对话框走传送门进 L2，对话框强制关闭（dlgAfterAdvance=false）、
+L2 标题/HUD 无残留（截图 22-no-dialogue-residue-L2.png）。tsc 净、vitest 387 全绿。
+
+### 本棒交接状态（给新会话）
+UI 换装**已基本完成**，commit：015602d（HUD 换装）+ 2d72596（切场景残留修复），均未 push（在共享本地 master）。
+- **已接的真组件**：RoleInfoHud（左上头像+HP/MP/EXP+攻击/武器）、SkillBarHud（左下 9 格技能坞）、
+  BackpackWindow（B 键，原版个人资料/背包全窗）、BossHpBar（顶部 boss 条+名牌）、MonsterHpBar（小怪头顶条）、
+  Toast + spawnFloatingText（飘字按 FLOAT_STYLES）。脚手架文字 HUD 全删（F1 遥测保留隐藏）。
+- **没接、留后续单独棒**：① FurnacePanel（炼制面板）——炼宝仍走水墨对话框 overlay；② ResultBanner（关卡结算）
+  ——boss死→传送门无结算 modal；③ 技能坞热键显 1-9 非 YUIOL（键位没改，改需功能变更）。
+- **卡点/依赖**：无阻塞。vite dev server 用 Bash `&`/run_in_background 会被环境杀（exit 144），只有
+  `nohup ... & disown` 起得住；炼宝依赖 agent-server 可达（本地 mock:5185 或 home wss）。
