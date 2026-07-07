@@ -145,3 +145,23 @@ DPS 模型（`heroScale.ts` 的 `simulateComboDps`）：五段普攻 hit1~5 连�
 - kagami 技能伤害公式（`heroSkill.ts`）与真实 AS3 指数公式不符（见上），本棒未修，留给后续技能伤害重新校准任务。
 - 英雄 maxHp/防御成长曲线本身也需要放大（不只是 atk/furnace），这是个跨文件耦合决策，需要拍板具体倍率，本棒只给出定量证据，不擅自决定。
 - 本报告只反编译验证了 Role1 的普攻公式；Role2~5 未涉及（本项目目前只有悟空一个可玩角色）。
+
+## 场景接线 — 阶段 A 口径统一（2026-07-07 合龙棒）
+
+heroScale.ts + skillDamageReal.ts 已接进 `BattleScene.ts`（只动 BattleScene；两个 systems 模块未改）：
+
+1. **普攻**：`resolveHeroHit` 的连击伤害从旧的 `STAGE_DAMAGE[stage]+atk` 换成
+   `calculateNormalAttackPower(COMBO_STAGE_HIT[stage], heroTotalAtk, {critChance})`——即
+   `系数(hit1~5: .707/.707/.707/1.183/1.304) × Hurt`，暴击率取装备 crit 词条（`heroStats().crit`）。
+   删掉了 `STAGE_DAMAGE` 常量。
+2. **怪打英雄**：`monsterHitsHero` 从 `max(1, dmg-def)` 换成 `resolveIncomingHeroDamage(rawPower,
+   'physics', heroTotalDef, 0)`（heroCombat 仍不自减防，桥在接线层）。L1 怪 rawPower 仍是现有小值
+   `MONSTER_ATTACK_DMG=14`（L1 小数值怪暂保留）；hero 暂无魔防字段故魔防分数传 0。
+3. **技能**：`scheduleSkillHit` 删掉临时的 `SKILL_DAMAGE_SCALE=0.06`，改用
+   `calculateRealSkillDamage(REAL_SKILL_BY_ACTION[hb.actionName], skillLevel, atk)`——按 hitbox 的
+   `actionName`（hit6→slz、hit10_2→hmzLianZhan、hit10_4→hmzZaDi、hit8_2→lyfb 等）映射到真·AS3 指数
+   公式；`hit12_1` 等 visualOnly 无伤害。这样技能伤害是原版口径，不再有 6.6x 偏差或人工缩放。
+
+**验收**：`tsc` 干净（BattleScene；仓库唯一报错仍在他人 `ui/hud/RoleInfoHud.ts`），`vitest` 387 全绿。
+浏览器真机（atk 10、L1 怪）：连击真扣血（150→119，约 4/击 = hit1 系数 .707×10−3def）；`slz` 一击 43
+（真公式 38.56+0.717×10=45.7，减 3 def ≈ 43），MP 50→14。普攻/技能都走原版口径且真实生效。
