@@ -1,0 +1,34 @@
+{
+  "name": "zmxy3-desktop-spike",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Packaging-pipeline spike only: repo -> Windows exe -> runs on home. Not the final packaging tool (see project CLAUDE.md, which has decided Tauri 2).",
+  "main": "main.js",
+  "scripts": {
+    "build:win-portable": "electron-builder --win portable --x64",
+    "build:win-dir": "electron-builder --win dir --x64",
+    "build:win-zip": "electron-builder --win zip --x64"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.zmxy3remake.spike",
+    "productName": "ZMXY3RemakeSpike",
+    "files": [
+      "main.js",
+      "renderer/**/*"
+    ],
+    "directories": {
+      "output": "out"
+    },
+    "win": {
+      "target": [
+        "portable",
+        "zip",
+        "dir"
+      ]
+    }
+  }
+}
