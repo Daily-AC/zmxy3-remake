@@ -1,0 +1,13 @@
+{
+  "source": "export.monster.Monster4.initBBDC()+setAction() in 打开我开始玩.swf; sheet 1.swf chid3 Monster4",
+  "sheet": { "cols": 6, "rows": 6, "cellW": 190, "cellH": 190, "facing": "left" },
+  "offset": { "x": 0, "y": -10 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 5, "stopCounts": [2, 3, 4, 3, 3], "frameCount": 5 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 6, "stopCounts": [2, 2, 2, 2, 2, 8], "frameCount": 5 },
+    "hit1": { "col": 0, "row": 4, "frames": 5, "stopCounts": [4, 4, 4, 2, 7], "frameCount": 5 },
+    "hit2": { "col": 0, "row": 5, "frames": 6, "stopCounts": [2, 2, 2, 2, 29, 23], "frameCount": 6 }
+  }
+}

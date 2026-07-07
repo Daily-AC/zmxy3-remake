@@ -1,0 +1,12 @@
+{
+  "source": "export.monster.Monster7.initBBDC()+setAction() in 打开我开始玩.swf; sheet 1.swf chid7 Monster7. NOTE: setAction() references a hit2 state at row 5, but the sheet is only 750px tall (5 rows of 150px, rows 0-4) and setFrameStopCount() only defines 5 rows — hit2 is unreachable/broken in the source and is intentionally omitted here.",
+  "sheet": { "cols": 6, "rows": 5, "cellW": 150, "cellH": 150, "facing": "left" },
+  "offset": { "x": 3, "y": 0 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 5, "stopCounts": [2, 2, 2, 2, 7], "frameCount": 5 },
+    "hit1": { "col": 0, "row": 4, "frames": 4, "stopCounts": [2, 2, 2, 4], "frameCount": 4 }
+  }
+}

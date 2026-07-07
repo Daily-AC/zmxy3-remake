@@ -1,0 +1,24 @@
+{
+  "source": "export.hero.Role2.initBBDC()+setAction()+scriptFrameOverFunc() in 打开我开始玩.swf; sheet TangSeng.swf chid4 ROLE2_0",
+  "sheet": { "cols": 6, "rows": 13, "cellW": 200, "cellH": 200, "facing": "left" },
+  "offset": { "x": 15, "y": 0 },
+  "actions": {
+    "wait":    { "col": 0, "row": 0,  "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 36 },
+    "wait2":   { "col": 0, "row": 1,  "frames": 4, "stopCounts": [2, 2, 2, 14], "frameCount": 4 },
+    "walk":    { "col": 0, "row": 2,  "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "run":     { "col": 0, "row": 3,  "frames": 4, "stopCounts": [2, 2, 2, 2], "frameCount": 4 },
+    "jump1":   { "col": 0, "row": 4,  "frames": 1, "stopCounts": [1], "frameCount": 1 },
+    "jump3":   { "col": 1, "row": 4,  "frames": 1, "stopCounts": [1], "frameCount": 1 },
+    "hit8":    { "col": 2, "row": 4,  "frames": 1, "stopCounts": [30], "frameCount": 1 },
+    "hit9":    { "col": 3, "row": 4,  "frames": 1, "stopCounts": [55], "frameCount": 1 },
+    "hurt":    { "col": 4, "row": 4,  "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "jump2":   { "col": 0, "row": 5,  "frames": 5, "stopCounts": [2, 2, 2, 2, 2], "frameCount": 5 },
+    "hit1":    { "col": 0, "row": 6,  "frames": 3, "stopCounts": [2, 4, 12], "frameCount": 3 },
+    "hit3":    { "col": 0, "row": 7,  "frames": 4, "stopCounts": [2, 10, 2, 20], "frameCount": 4 },
+    "hit4_1":  { "col": 0, "row": 8,  "frames": 2, "stopCounts": [2, 2], "frameCount": 24 },
+    "hit4_2":  { "col": 0, "row": 9,  "frames": 3, "stopCounts": [2, 2, 6], "frameCount": 3 },
+    "hit5":    { "col": 0, "row": 10, "frames": 3, "stopCounts": [48, 2, 15], "frameCount": 3 },
+    "hit6":    { "col": 0, "row": 11, "frames": 3, "stopCounts": [2, 2, 20], "frameCount": 3 },
+    "hit7":    { "col": 0, "row": 12, "frames": 3, "stopCounts": [2, 2, 10], "frameCount": 3 }
+  }
+}

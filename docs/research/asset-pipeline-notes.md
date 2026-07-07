@@ -148,3 +148,74 @@ Role2/3/4 同构，各自的表在 `export.hero.Role2/3/4.setAction()`；Role5�
    抠 `setFrameStopCount/setFrameCount`，换算成 Phaser anims 的 frameRate/duration；
    资源 SWF 内不要找帧标签，没有。
 6. 产物统一落 `vendor/extracted/<包名>/`，原始 SWF 只读不动。
+
+## 批量导出实录（四角色 + 动作 JSON + 音频 + 第一关，2026-07-07）
+
+### 角色包批量导出
+
+`-export symbolclass` + `-format image:png -export image` 对 TangSeng/BaJie/ShaShen 三包重复
+WuKong 的命令即可，chid 每包不同，靠 symbolclass CSV 查（`grep ROLE2_0`/`ROLE3_0`/`ROLE4_SHOVEL_0`）。
+默认时装表 chid：TangSeng ROLE2_0=4，BaJie ROLE3_0=11，ShaShen ROLE4_SHOVEL_0=12。
+
+**cell 尺寸每个角色不同，必须用 `new BaseBitmapDataClip(...)` 构造参数实测，不能照抄 WuKong 的 200×200**：
+悟空/唐僧/沙僧都是 200×200；**八戒（Role3）是 300×200**（`new BaseBitmapDataClip([...],5*60,200,...)`），
+sheet 尺寸 1800×2800 = 6列×14行。用错格宽会切出半个人形（实测过 200×200 切出的图只有半身在格子右侧）。
+
+**视觉核对发现的偏差**：这份"魔改版"资源包里，默认时装并非传统西游形象——
+唐僧默认造型确实光头僧袍，符合预期；但**八戒（ROLE3_0）和沙僧（ROLE4_SHOVEL_0）的默认造型是重绘的
+二创风格人物**（八戒是扎头巾拿类似步枪造型武器的短发少年，沙僧是蓝色尖刺头发的精灵耳少年），
+不是传统猪头/持铲僧人形象。核对过 BaJie 的 ROLE3_1~ROLE3_4 多套时装，画风一致，
+不是抠图抠错（chid↔类名对照过 symbolclass，ROLE3_0/ROLE4_SHOVEL_0 映射本身没错）——
+这是资源包本身的二创重绘，做美术验收时要按实际图对，不要预设传统造型。
+
+### 动作 JSON 抠取方法（Role2/3/4 + 补全 Role1）
+
+命令同悟空：`-selectclass export.hero.Role2,export.hero.Role3,export.hero.Role4 -export script`，
+一次性把三个类都抠出来（约2秒）。Role1 之前只有 docs 里的表格，本轮额外单独抠了
+`export.hero.Role1.as` 核实 `hit11Count` 变量实际值（=35，源码里 `setFrameStopCount` 写的是
+`this.hit11Count` 变量引用，不是字面量，之前 notes 表格里的 "hit11,hit11" 占位符换算成了 `[35,35]`）。
+
+**Role4（沙僧）有双武器分支**：`initBBDC()` 里 `getCurWeaponId()==4/5/9` 时走 ARROW（弓）分支，
+否则走 SHOVEL（铲）分支，两套 `setFrameStopCount`/`setFrameCount`/setAction 行号完全不同。
+团队要的是 SHOVEL 默认武器，取 `isNotArrow=true` 分支；且同一分支还分「首次创建 bbdc」与
+「replaceBitmapData 换装」两套数值（差异很小，如 row4 第三格 8 vs 15），取首次创建分支
+（`bbdc = new BaseBitmapDataClip(...)` 紧跟着的那组，游戏启动时走这条）。
+
+`game/src/data/roles/role<N>.json` 的 schema 除约定字段外，额外加了两个非破坏性扩展：
+`"source"`（抠自哪个类，必填）、单个动作可选 `"offsetOverride":{x,y}`（Role1 的 hit14 有专属渲染偏移
+`setOffsetXY(5,-30)`，与角色默认偏移 `(5,-15)` 不同）。
+
+### 音频（Music.swf）
+
+`-export sound` 导出 85 个符号，其中 84 个原生就是 mp3（FFDec 对 DefineSound 默认按源编码导出，
+多数游戏音效本来就是 mp3 压缩），只有 1 个（chid -1，未绑定类名，导出成 `-1.wav`）——
+用 `file`/`ffprobe` 查过是 44 字节的纯 WAV 头、零音频数据的哑元占位符，不是真实音效，
+已跳过不拷贝进 `game/public/assets/audio/`。真实音效统一去掉 FFDec 加的 `<chid>_` 前缀
+（如 `24_bg4.mp3` → `bg4.mp3`），用符号名当文件名。`afplay` 验证过 `bg0.mp3`（123.9 秒 BGM）能正常播放。
+
+### 第一关（1.swf）场景包
+
+**背景层/剧情容器是 MovieClip，不是位图 tag**——`bg11`/`bg12`/`bg13`/`CloudSprite`/`files1`
+在 symbolclass 里能查到类名，但 `-format image:png -export image` 直接跳过它们（只导出了一堆
+无类名的裸 chid 数字文件，如 `100.png`/`108.png`，那些是背景内部拼接用的碎图，不是完整背景）。
+要拿完整拼好的背景图必须用 `-format sprite:png -export sprite`（同弹幕 MC 的导法）。
+
+**踩坑：`-selectclass` 对 `-export sprite` 不生效为过滤条件**——传了
+`-selectclass bg11,bg12,bg13,CloudSprite` 结果 FFDec 把全 SWF 的所有 DefineSprite（包括全部
+`Monster*Bullet*`）都导出了（耗时从预期的几个符号变成几十个目录）。`-selectclass` 只对
+`-export script`（AS3 类导出）生效，对 sprite/image 导出无过滤作用；批量导出背景/弹幕类资产时
+干脆不用 `-selectclass`，直接全量 sprite 导出后按目录名（`DefineSprite_<chid>_<类名>/1.png`）挑要的。
+
+第一关怪物：Monster2/Monster3/Monster4/Monster5/Monster7/Monster8/Monster30 共 7 只（比预想的多，
+因为一关不止一个杂兵，包括其中一个 boss 级 Monster30）。每只怪的动作表在主逻辑 SWF 的
+`export.monster.Monster<M>.initBBDC()+setAction()`，结构比角色简单（多数只有
+wait/walk/hurt/dead/hit1/hit2，没有连招），但 **cell 尺寸和网格行数每只怪都不同**，
+必须逐个读 `new BaseBitmapDataClip(...)` 的宽高参数（190/180/190/350/150/150/150），
+不能假设统一 200×200。
+
+**发现一处源码 bug**：`Monster7.setAction()` 里 `case "hit2"` 指向第 5 行（`setFramePointY(5)`），
+但 `Monster7` 的位图表只有 900×750（150px 格 = 5 行，索引 0-4），`setFrameStopCount()` 也只定义了
+5 行——第 5 行根本不存在。`attackBackInfoDict`/`enterFrameFunc` 里确实还留着 hit2 相关逻辑，
+但视觉上这个状态永远不可能正常播放（原始游戏里大概率是从未真正触发到，或者触发了也是显示错位/
+越界读到别的图块）。`monster7.json` 里没写 hit2，并在其 `source` 字段注明了这个问题，做怪物 AI
+时别照抄这条攻击动作。
