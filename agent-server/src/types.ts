@@ -19,6 +19,36 @@ export interface NpcGoal {
   desc?: string;
 }
 
+/** Crafting effect DSL. This is the sandbox: the LLM can only ever produce
+ * one of these two shapes (checked by the tool schema), and the numeric
+ * fields are hard-clamped server-side regardless of what the model sends
+ * (see craft-validate.ts) — there is no code generation or free-form
+ * execution path here, just a small closed vocabulary of stat bonuses and
+ * on-hit procs. */
+export interface StatEffect {
+  type: "stat";
+  stat: "atk" | "def" | "hp" | "mp" | "crit";
+  value: number;
+}
+
+export interface OnHitEffect {
+  type: "onHit";
+  effect: "burn" | "lifesteal" | "freeze";
+  chance: number; // 0-1, hard-clamped to <=0.5
+  power: number; // hard-clamped to <=30
+}
+
+export type CraftEffect = StatEffect | OnHitEffect;
+
+export interface CraftedItem {
+  id: string;
+  name: string;
+  kind: "equip";
+  rarity: 1 | 2 | 3;
+  desc: string;
+  effects: CraftEffect[]; // capped at 3 by the server, regardless of input length
+}
+
 // ---------- game -> server ----------
 
 export interface HelloMessage {
@@ -28,7 +58,7 @@ export interface HelloMessage {
 
 export interface WorldEventMessage {
   type: "world_event";
-  kind: string; // e.g. "monster_killed", "player_hp"
+  kind: string; // e.g. "monster_killed", "player_hp", "item_obtained"
   data?: Record<string, unknown>;
   at?: number; // unix ms; server fills in if omitted
 }
@@ -75,6 +105,12 @@ export interface SetGoalMessage {
   goal: NpcGoal;
 }
 
+export interface CraftItemMessage {
+  type: "craft_item";
+  npcId: string;
+  item: CraftedItem;
+}
+
 export interface ErrorMessage {
   type: "error";
   message: string;
@@ -86,4 +122,5 @@ export type OutboundMessage =
   | NpcSayMessage
   | GiveItemMessage
   | SetGoalMessage
+  | CraftItemMessage
   | ErrorMessage;

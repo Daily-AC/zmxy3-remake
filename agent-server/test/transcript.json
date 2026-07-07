@@ -7,7 +7,7 @@
         "laojun"
       ]
     },
-    "at": 1783397818712
+    "at": 1783398522914
   },
   {
     "direction": "game->server",
@@ -18,7 +18,7 @@
         "name": "斗战胜佛"
       }
     },
-    "at": 1783397818713
+    "at": 1783398522914
   },
   {
     "direction": "game->server",
@@ -29,7 +29,7 @@
         "monster": "赤炎狼"
       }
     },
-    "at": 1783397818713
+    "at": 1783398522915
   },
   {
     "direction": "game->server",
@@ -40,7 +40,7 @@
         "monster": "石头怪"
       }
     },
-    "at": 1783397818713
+    "at": 1783398522915
   },
   {
     "direction": "game->server",
@@ -49,7 +49,7 @@
       "npcId": "laojun",
       "text": "老君，我刚才战况如何？"
     },
-    "at": 1783397818713
+    "at": 1783398522915
   },
   {
     "direction": "server->game",
@@ -59,7 +59,7 @@
         "laojun"
       ]
     },
-    "at": 1783397818713
+    "at": 1783398522915
   },
   {
     "direction": "server->game",
@@ -67,16 +67,16 @@
       "type": "npc_thinking",
       "npcId": "laojun"
     },
-    "at": 1783397818713
+    "at": 1783398522915
   },
   {
     "direction": "server->game",
     "message": {
       "type": "npc_say",
       "npcId": "laojun",
-      "text": "哼，猴头，老夫在丹炉边都听见动静了——一只赤炎狼一只石头怪，眨眼就没了。也就这点本事，当年砸我丹炉的劲头倒是一分没减。"
+      "text": "哼，老夫在丹炉边都听见动静了——赤炎狼、石头怪，一口气撂倒两只，猴头你这拳脚倒还没生锈。当年大闹天宫的那股蛮劲，总算用对地方了。"
     },
-    "at": 1783397831001
+    "at": 1783398533124
   },
   {
     "direction": "game->server",
@@ -85,7 +85,7 @@
       "npcId": "laojun",
       "text": "老君，我打怪打得辛苦，好歹赏我点什么当奖励吧！"
     },
-    "at": 1783397831001
+    "at": 1783398533124
   },
   {
     "direction": "server->game",
@@ -93,16 +93,70 @@
       "type": "npc_thinking",
       "npcId": "laojun"
     },
-    "at": 1783397831001
+    "at": 1783398533124
   },
   {
     "direction": "server->game",
     "message": {
       "type": "npc_say",
       "npcId": "laojun",
-      "text": "哼，猴头，不过打杀一头赤炎狼、一只石头怪，也好意思到老夫丹房讨赏？……罢了罢了，看你满身尘土的份上，这瓶回气丹拿去，别嫌少——当年你偷吃老夫满炉金丹的账，老夫可还记着呢！"
+      "text": "哼，打了两只小妖就来讨赏？想当年你大闹天宫可没这么殷勤……罢了罢了，赤炎狼倒是死得其所，狼牙留着，再赏你颗炉边捡的回气丹，别嫌少！"
     },
-    "at": 1783397840917
+    "at": 1783398543465
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "give_item",
+      "npcId": "laojun",
+      "item": {
+        "id": "chiyan-langya",
+        "name": "赤炎狼牙",
+        "kind": "material",
+        "desc": "赤炎狼的獠牙，尚有余温，是炼制火属性兵刃的好料子。",
+        "qty": 1
+      }
+    },
+    "at": 1783398545982
+  },
+  {
+    "direction": "game->server",
+    "message": {
+      "type": "world_event",
+      "kind": "item_obtained",
+      "data": {
+        "item": "白银矿石"
+      }
+    },
+    "at": 1783398545982
+  },
+  {
+    "direction": "game->server",
+    "message": {
+      "type": "world_event",
+      "kind": "item_obtained",
+      "data": {
+        "item": "白银矿石"
+      }
+    },
+    "at": 1783398545983
+  },
+  {
+    "direction": "game->server",
+    "message": {
+      "type": "player_say",
+      "npcId": "laojun",
+      "text": "老君，我想要一把会吸血、还能点着火的法杖，你能帮我炼一把不？"
+    },
+    "at": 1783398545983
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "npc_thinking",
+      "npcId": "laojun"
+    },
+    "at": 1783398545983
   },
   {
     "direction": "server->game",
@@ -113,10 +167,79 @@
         "id": "huiqi-dan",
         "name": "回气丹",
         "kind": "consumable",
-        "desc": "太上老君丹炉里顺手炼的小丹药，服用后恢复少量气血。老君嘴上嫌弃，给的分量倒不含糊。",
-        "qty": 3
+        "desc": "老君丹炉边随手捡的小丹，服下可恢复些许气血。别嫌弃，火候可是足的。",
+        "qty": 1
       }
     },
-    "at": 1783397844146
+    "at": 1783398548665
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "npc_say",
+      "npcId": "laojun",
+      "text": "吸血又喷火的法杖？口气不小啊猴头。也罢——老夫瞧你刚捡了两块白银矿石，把它们交上来当杖身，火气丹炉里现成的。不见材料不开炉，老夫的规矩你是知道的。"
+    },
+    "at": 1783398558805
+  },
+  {
+    "direction": "game->server",
+    "message": {
+      "type": "player_say",
+      "npcId": "laojun",
+      "text": "给你，两块白银矿石都在这儿了，麻烦老君帮我炼一把！"
+    },
+    "at": 1783398558805
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "npc_thinking",
+      "npcId": "laojun"
+    },
+    "at": 1783398558805
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "craft_item",
+      "npcId": "laojun",
+      "item": {
+        "id": "chiyan-xixue-zhang",
+        "name": "赤炎噬魂杖",
+        "kind": "equip",
+        "rarity": 2,
+        "desc": "老夫拿你那两块白银矿石熔了做杖身，又掺了半勺赤炎狼胆里的火髓——杖头一点便燃三昧真火，打人还能吸他几口精气回来。粗坯而已，莫要嫌弃。",
+        "effects": [
+          {
+            "type": "stat",
+            "stat": "atk",
+            "value": 18
+          },
+          {
+            "type": "onHit",
+            "effect": "burn",
+            "chance": 0.35,
+            "power": 8
+          },
+          {
+            "type": "onHit",
+            "effect": "lifesteal",
+            "chance": 0.3,
+            "power": 6
+          }
+        ]
+      }
+    },
+    "at": 1783398572133
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "npc_say",
+      "npcId": "laojun",
+      "text": "两块白银矿石？成色勉强入眼。看好了猴头——三昧真火淬杖身，狼胆火髓封杖头，成了！这把「赤炎噬魂杖」点火吸血样样齐，可别学当年拿老夫的宝贝去捅娄子！"
+    },
+    "at": 1783398575269
   }
 ]

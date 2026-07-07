@@ -7,12 +7,14 @@ import {
   recentWorldEvents,
   type WorldEventRecord,
 } from "./npc-state.js";
-import type { NpcItem, NpcGoal } from "./types.js";
+import { validateCraftedItem } from "./craft-validate.js";
+import type { NpcItem, NpcGoal, CraftedItem } from "./types.js";
 
 export interface NpcBrainCallbacks {
   onSay: (text: string) => void;
   onGiveItem: (item: NpcItem) => void;
   onSetGoal: (goal: NpcGoal) => void;
+  onCraftItem: (item: CraftedItem) => void;
 }
 
 function describeEvent(ev: WorldEventRecord): string {
@@ -25,6 +27,8 @@ function describeEvent(ev: WorldEventRecord): string {
       const maxHp = ev.data?.maxHp;
       return `${agoSec}秒前，玩家的血量是 ${hp ?? "?"}${maxHp ? "/" + maxHp : ""}`;
     }
+    case "item_obtained":
+      return `${agoSec}秒前，玩家获得了「${ev.data?.item ?? "一件东西"}」`;
     default:
       return `${agoSec}秒前，发生了事件「${ev.kind}」：${JSON.stringify(ev.data ?? {})}`;
   }
@@ -112,10 +116,55 @@ export async function askNpc(
     },
   );
 
+  // Crafting effect DSL: the schema below only constrains shape (which
+  // fields exist, which enum a "stat"/"effect" name must come from) — it
+  // does NOT constrain numeric ranges. That's intentional: numeric bounds
+  // are enforced downstream by validateCraftedItem (src/craft-validate.ts),
+  // a plain function with its own unit tests, so crafting stays safe no
+  // matter what number the model decides to send.
+  const statEffectSchema = z.object({
+    type: z.literal("stat"),
+    stat: z.enum(["atk", "def", "hp", "mp", "crit"]),
+    value: z.number(),
+  });
+  const onHitEffectSchema = z.object({
+    type: z.literal("onHit"),
+    effect: z.enum(["burn", "lifesteal", "freeze"]),
+    chance: z.number(),
+    power: z.number(),
+  });
+
+  const craftItemTool = tool(
+    "craft_item",
+    "为玩家炼制一件装备，交给玩家。只有在对话记录显示玩家已经明确交付/确认" +
+      "材料之后才能调用；打造请求刚提出、材料还没到手时，不要调用这个工具，" +
+      "只用 say 报价索要材料。",
+    {
+      id: z.string().describe("装备 id，简短英文/拼音 slug"),
+      name: z.string().describe("装备名称，中文，要贴合玩家的描述"),
+      rarity: z.number().int().describe("品阶，1-3，越高越稀有"),
+      desc: z.string().describe("装备描述，太上老君的炼丹房口吻"),
+      effects: z
+        .array(z.discriminatedUnion("type", [statEffectSchema, onHitEffectSchema]))
+        .describe("装备效果；最多 3 条会生效，数值超出丹炉火候上限会被自动收敛，不必纠结精确数字"),
+    },
+    async (args) => {
+      const item = validateCraftedItem({
+        id: args.id,
+        name: args.name,
+        rarity: args.rarity,
+        desc: args.desc,
+        effects: args.effects,
+      });
+      cb.onCraftItem(item);
+      return { content: [{ type: "text", text: "已炼制完成，交给了玩家" }] };
+    },
+  );
+
   const npcTools = createSdkMcpServer({
     name: "npc",
     version: "0.1.0",
-    tools: [sayTool, giveItemTool, setGoalTool],
+    tools: [sayTool, giveItemTool, setGoalTool, craftItemTool],
   });
 
   const prompt = `【最近的世界事件】
@@ -128,7 +177,17 @@ ${historyBlock}
 ${playerText}
 
 请调用 say 工具回应玩家这句话（必须调用且只调用一次 say）；如果剧情合适，
-可以额外调用 give_item 或 set_goal。除了这些工具调用，不要输出任何其他内容。`;
+可以额外调用 give_item 或 set_goal。
+
+如果玩家是在向你描述一件想要打造的装备（说明想要什么效果/外观/用途）：
+1. 如果对话记录里玩家还没交材料、也没确认交付，这一轮不要调用 craft_item，
+   只用 say 报价——说明需要什么材料（优先从"最近的世界事件"里玩家获得过的
+   材料里选，没有就随口要一两样丹房常见材料，比如"两块白银矿石"）。
+2. 只有当对话记录显示玩家已经明确交付/确认材料（比如说"给你" "在这"
+   "确认" "好了"之类）之后，才调用 craft_item 正式打造，并且这一轮仍然
+   要调用 say 说几句交货时的俏皮话。
+
+除了这些工具调用，不要输出任何其他内容。`;
 
   let fallbackResultText: string | undefined;
 
@@ -137,7 +196,12 @@ ${playerText}
     options: {
       systemPrompt: persona.prompt,
       mcpServers: { npc: npcTools },
-      allowedTools: ["mcp__npc__say", "mcp__npc__give_item", "mcp__npc__set_goal"],
+      allowedTools: [
+        "mcp__npc__say",
+        "mcp__npc__give_item",
+        "mcp__npc__set_goal",
+        "mcp__npc__craft_item",
+      ],
       tools: [],
     },
   })) {
