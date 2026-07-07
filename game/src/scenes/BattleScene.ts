@@ -934,7 +934,16 @@ export class BattleScene extends Phaser.Scene {
     const config = this.monsterConfigFor(species, stats)
     const state = initMonster(config, x, GROUND_Y)
     const tex = this.textures.exists(species) ? species : 'monster30'
-    const scale = (isBoss ? 2.0 : 1.5) * (200 / data.sheet.cellH)
+    // Every species sheet is a native SWF-pixel export in the same coordinate
+    // space as the hero's — a boss's SWF art is simply drawn bigger, a small
+    // grunt's smaller. So every sprite (grunt or boss) gets the *same*
+    // px->world factor as the hero (HERO_SCALE); relative size is then
+    // whatever the original art already encodes, with no per-cell "stretch to
+    // 200px" normalization and no artificial isBoss multiplier. Verified
+    // against docs/reference/zmxy-online-screens/combat-damage.png (turtle
+    // grunt ~85-95% of hero height) and the SWF's own idle-frame silhouettes
+    // (monster-scale-report.md).
+    const scale = HERO_SCALE
     const sprite = this.add.sprite(x, GROUND_Y, tex).setScale(scale).setDepth(isBoss ? 9 : 8)
     const atk = this.monsterAttackPower(species, stats, isBoss)
     const entity: MonsterEntity = {
