@@ -166,6 +166,12 @@
 - 23:0x **用户严厉打回 UI 终版 + 方法论升级（重要教训）**：我终审放水（"分不出门派"是形容词打分不是判断——血条不等长/错位/图标暗肉眼可见）。用户指令"抄上游仓库"。新方法写死：复刻 UI 一律抄原版 SWF 对象树 PlaceObject 坐标 + 原件位图组装、零手调；验收改机器可查（同分辨率 overlay + 像素 diff，布局层 diff≈0 才过）；版本几何分歧 vendor 胜（复刻真源）。教训入全局 memory（feedback-ui-fidelity-pixel-diff）。
 - 23:5x~00:1x **对象树重排收官（7288335/bec3bc2/9941695）**：FFDec 导出 export.RoleInfo（OtherMat1 chid341）对象树，血条真值=三条等宽 143×11（之前不等长纯属按眼画）；组装后 vs vendor 复合图像素 diff：几何零错位。过程中主会话从 DIFF 抓到漏报子件 chid262（herobeattacktimes=怒气/无双充能条），拍板渲染空 chrome（与装饰性无双按钮一致性）；终版 DIFF 亮区仅剩烘焙标签+动态数字+AA。vs Online 头像锚定对比图证两版几何吻合。monster-scale 验收合入（b292b35，全体统一 px→world 缩放，巨灵神反证原生比例原则双向成立；monster30 72% 身高判原生保真不追）。**功能缺口对账**（ui-finish report 点名）：怒气系统/失败横幅（无败局，拍板赛内不做）/4 技能下坞待绑定 UI/HP·MP·EXP 标签为手写文字。
 - 00:0x kagami UI 悖论解答（用户问"没布局代码怎么像官方"）：kagami 视觉层根本没做（调研档案：不是可玩游戏、零素材），像官方的是机制层；UI 布局唯一真源=SWF 对象树（正在走的路）。派两路借力：ruffle-spike（Ruffle 跑解密 SWF→"活的原版"参照）、community-sweep（社区还原度资料扫荡→docs/research/community-fidelity-resources.md）。
+- 00:4x **两路侦察全回，"活的原版"到手**：
+  - ruffle-spike（docs/research/ruffle-reference.md）：**桌面版 Ruffle 0.3.0 完整跑通原版**——主菜单→世界地图→模式选择→横版关卡→巫鹰 boss 战，无黑屏无崩溃，AS3 真跑（trace 可证）。**用户亲玩判定"手感很对"**→ Ruffle 可作战斗手感实测基准。GUI 自动化三坑记档（中文路径 symlink 静默拒载/权限弹窗不挂进程需裸坐标/非 key window 首击只激活需连点）。web WASM 版 headless 画布空白未深追。
+  - community-sweep（docs/research/community-fidelity-resources.md）：最高价值 Speculum-4399（本地代理+Flash Standalone 跑真实 4399 造3，防盗链绕法与我们独立发现的一致，互证）；官方 Steam 新作《造梦西游：无双》可作现代化取舍标杆；确认社区无 UI 拆解/素材 rip 现货。
+  - **待开：手感校验棒**——用 Ruffle 活原版逐项实测校准 combo.ts 的 TODO-verify 参数（收招窗 220ms/重力 2/空中禁普攻/击退硬直）。需 GUI 自动化驱动 Ruffle，与用户用机错峰，屏幕空闲时再派。
+  - 用户拍板记录："解包成可魔改基底（弃 Phaser）"路线已评估否决（AS3 无源码、字节码补丁地狱、agent NPC 挂不进黑盒）；Ruffle 怀旧模式嵌壳（WASM 版）作可选 demo 彩蛋备案未派。
+- 00:38 用户开玩本地最新构建（vite :5174），重点体感承伤档位与升级节奏；顺手清掉占 5173 的无关进程（soda_webapp，用户令）。
 
 ### 赛后路线图（终包后）
 - **NPC Agent 能力架构**（游戏作为 MCP、每 NPC 受限工具集=权限边界、动态权限；炼丹炉照配方合成 / 老君概率交易以贱换尊）：用户 2026-07-07 提出的拓展构想，是"agent 驱动 NPC"愿景的完全体，需深入设计再做，**暂缓**。完整记录见 docs/design/npc-agent-mcp.md。
