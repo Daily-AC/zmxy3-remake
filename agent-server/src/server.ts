@@ -3,6 +3,7 @@ import type { InboundMessage, OutboundMessage } from "./types.js";
 import { listNpcIds } from "./npc-registry.js";
 import { recordWorldEvent } from "./npc-state.js";
 import { askNpc } from "./brain.js";
+import { forgeEquipment } from "./forge.js";
 
 const PORT = Number(process.env.AGENT_SERVER_PORT ?? 5181);
 
@@ -45,6 +46,26 @@ wss.on("connection", (ws) => {
             onSetGoal: (goal) => send(ws, { type: "set_goal", npcId: msg.npcId, goal }),
             onCraftItem: (item) => send(ws, { type: "craft_item", npcId: msg.npcId, item }),
           });
+          break;
+        }
+        case "craft_request": {
+          try {
+            const { item, flavor } = await forgeEquipment(msg);
+            send(ws, {
+              type: "craft_result",
+              npcId: msg.npcId,
+              requestId: msg.requestId,
+              item,
+              flavor,
+            });
+          } catch (err) {
+            send(ws, {
+              type: "craft_reject",
+              npcId: msg.npcId,
+              requestId: msg.requestId,
+              reason: err instanceof Error ? err.message : String(err),
+            });
+          }
           break;
         }
         default: {

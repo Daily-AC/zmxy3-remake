@@ -5,6 +5,8 @@
 //
 // Protocol source of truth: agent-server/src/types.ts + agent-server/README.md.
 
+import type { CraftMaterialRef, AttributeBudget } from '../systems/furnace'
+
 export const DEFAULT_NPC_SERVER_URL = 'ws://localhost:5181'
 // Deployed target (must include :8443 — port 443 is blocked upstream):
 export const REMOTE_NPC_SERVER_URL = 'wss://zm-dev.qmledmq.cn:8443'
@@ -85,7 +87,27 @@ export interface PlayerSayMessage {
   playerId?: string
   text: string
 }
-export type ClientMessage = HelloMessage | WorldEventMessage | PlayerSayMessage
+/**
+ * Structured furnace craft request. Distinct from the free-form `player_say`
+ * crafting chat: here the player has already picked materials and the game has
+ * computed the attribute budget, so it's a single request/response round rather
+ * than a two-turn "quote then confirm" conversation. `requestId` correlates the
+ * response and the material-lock transaction on the game side.
+ */
+export interface CraftRequestMessage {
+  type: 'craft_request'
+  npcId: string
+  requestId: string
+  playerId?: string
+  description: string
+  materials: CraftMaterialRef[]
+  budget: AttributeBudget
+}
+export type ClientMessage =
+  | HelloMessage
+  | WorldEventMessage
+  | PlayerSayMessage
+  | CraftRequestMessage
 
 // ---------- server -> game ----------
 
@@ -117,6 +139,25 @@ export interface CraftItemMessage {
   npcId: string
   item: CraftedItem
 }
+/** Response to a `craft_request`: a server-forged item plus 太上老君's line.
+ * The item is still untrusted — the game re-clamps it against the request's
+ * budget (systems/furnace validateCraftedEquipment) before it enters the bag. */
+export interface CraftResultMessage {
+  type: 'craft_result'
+  npcId: string
+  requestId: string
+  item: CraftedItem
+  flavor: string
+}
+/** Server-side refusal to forge (bad request, forge failure). The game refunds
+ * the locked materials. Distinct from a game-side over-budget rejection, which
+ * happens after a `craft_result` fails validateCraftedEquipment. */
+export interface CraftRejectMessage {
+  type: 'craft_reject'
+  npcId: string
+  requestId: string
+  reason: string
+}
 export interface ErrorMessage {
   type: 'error'
   message: string
@@ -128,6 +169,8 @@ export type ServerMessage =
   | GiveItemMessage
   | SetGoalMessage
   | CraftItemMessage
+  | CraftResultMessage
+  | CraftRejectMessage
   | ErrorMessage
 
 const SERVER_TYPES = new Set([
@@ -137,6 +180,8 @@ const SERVER_TYPES = new Set([
   'give_item',
   'set_goal',
   'craft_item',
+  'craft_result',
+  'craft_reject',
   'error',
 ])
 
@@ -179,6 +224,20 @@ export function decodeServer(raw: string): ServerMessage | null {
     case 'craft_item':
       return typeof m.npcId === 'string' && typeof m.item === 'object' && m.item !== null
         ? (m as unknown as CraftItemMessage)
+        : null
+    case 'craft_result':
+      return typeof m.npcId === 'string' &&
+        typeof m.requestId === 'string' &&
+        typeof m.item === 'object' &&
+        m.item !== null &&
+        typeof m.flavor === 'string'
+        ? (m as unknown as CraftResultMessage)
+        : null
+    case 'craft_reject':
+      return typeof m.npcId === 'string' &&
+        typeof m.requestId === 'string' &&
+        typeof m.reason === 'string'
+        ? (m as unknown as CraftRejectMessage)
         : null
     case 'error':
       return typeof m.message === 'string' ? (m as unknown as ErrorMessage) : null
@@ -291,6 +350,29 @@ export class NpcClient {
 
   playerSay(npcId: string, text: string, playerId?: string): boolean {
     return this.send({ type: 'player_say', npcId, text, playerId })
+  }
+
+  /** Send a structured furnace craft request. The caller is expected to have
+   * already locked the materials (systems/furnace lockMaterials) under the same
+   * `requestId`, so the matching `craft_result`/`craft_reject` can resolve the
+   * transaction. Returns false (no-op) while the connection isn't open. */
+  craftRequest(
+    npcId: string,
+    requestId: string,
+    description: string,
+    materials: CraftMaterialRef[],
+    budget: AttributeBudget,
+    playerId?: string,
+  ): boolean {
+    return this.send({
+      type: 'craft_request',
+      npcId,
+      requestId,
+      description,
+      materials,
+      budget,
+      playerId,
+    })
   }
 
   dispose(): void {

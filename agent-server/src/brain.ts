@@ -1,5 +1,4 @@
 import { query, tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
-import { createOpencode } from "@opencode-ai/sdk";
 import { z } from "zod";
 import { getNpcPersona, type NpcPersona } from "./npc-registry.js";
 import {
@@ -9,6 +8,7 @@ import {
   type WorldEventRecord,
 } from "./npc-state.js";
 import { validateCraftedItem } from "./craft-validate.js";
+import { getOpencode, OPENCODE_MODEL, stripCodeFence, safeJsonParse } from "./llm.js";
 import type { NpcItem, NpcGoal, CraftedItem } from "./types.js";
 
 export interface NpcBrainCallbacks {
@@ -165,47 +165,6 @@ const npcTurnSchema = z.object({
     })
     .optional(),
 });
-
-const OPENCODE_MODEL = {
-  providerID: process.env.NPC_OPENCODE_PROVIDER_ID ?? "deepseek",
-  modelID: process.env.NPC_OPENCODE_MODEL_ID ?? "deepseek-v4-flash",
-};
-
-let opencodeInstance: ReturnType<typeof createOpencode> | undefined;
-
-/** Lazily spawns one `opencode serve` subprocess for the lifetime of this
- * process, shared across all NPCs/turns. Cleaned up on exit. */
-function getOpencode(): ReturnType<typeof createOpencode> {
-  if (!opencodeInstance) {
-    opencodeInstance = createOpencode({ hostname: "127.0.0.1" }).then((oc) => {
-      const cleanup = () => oc.server.close();
-      process.once("exit", cleanup);
-      process.once("SIGINT", () => {
-        cleanup();
-        process.exit(0);
-      });
-      process.once("SIGTERM", () => {
-        cleanup();
-        process.exit(0);
-      });
-      return oc;
-    });
-  }
-  return opencodeInstance;
-}
-
-function stripCodeFence(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  return fenced ? fenced[1] : text;
-}
-
-function safeJsonParse(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
 
 async function askViaOpencode(
   persona: NpcPersona,
