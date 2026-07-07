@@ -110,3 +110,47 @@ curl -e "https://www.4399.com/flash/zmhj.htm?g=3" $BASE/role4_arrow_0.swf   # 20
 顺带留一手：官方 4399 CDN 直连方式（referer 绕过防盗链 + 反编译 loader 找相对路径）本身是通用技巧，
 以后要拿其他角色/关卡的"确定无疑的原版"素材，可以照此流程从 `gamefile.swf` 里再反编译其他 `export.hero.RoleN`
 或 `export.monster.MonsterN` 类找文件名规律，直接对 CDN 目录批量 curl，不必再依赖社区仓库。
+
+## 后续（2026-07-07 同日）：不用再让用户点，反编译 loader 拿到完整资源清单 + 一次性批量直下
+
+**背景**：Online 客户端（`docs/reference/zmxy-online-extracted/`、`docs/reference/zmxy3-official/`
+两次任务）靠"用户手点界面→资源流进 IE 缓存→抓缓存"来挖素材，慢且每次只挖到用户点过的那几个面板。
+既然 `v3870.swf`/`gamefile.swf` 就是本文档上面已经拿到手的同一个官方 loader，直接反编译它的资源
+加载逻辑，答案比等用户点快得多。
+
+**反编译路径**：`v3870.swf`（`prefor.System4399Manager`/`L4399Main` 类，4399 平台账号/存档/商城
+API 桥）→ `-export binaryData` 导出内嵌 `DefineBinaryData`（chid 3，`L4399Main_gamefile`）→
+这就是真正的游戏逻辑 SWF（本文档前面已经这么干过一次）→ 对这个 gamefile 再 `-export script`
+（1104 个 `.as` 文件）→ `loader/Aloader.as`（开局必加载的 7 个包：`MagicWeaponv1240.swf`/
+`Commonv3720.swf`/`petEIconv1450.swf`/`EIconv3420.swf`/`GameMapv3870.swf`/`OtherMatv3570.swf`/
+`GameBackGroundv3870.swf`）+ `my/Decrypt.as`（关键类：每关/每个 boss/每只宠物具体加载哪些
+`.swf`，`loadSwfsWhenStageN` 系列数组 + `getUrlByAfterName()` 版本号后缀映射表，如
+`"4"→"4v1070"`、`"41"→"41v3651"`）——**这就是游戏完整的资源清单和文件名规则，不用再猜、不用
+再等用户点开哪个面板**。
+
+`Decrypt.as` 还顺带把 SWF 头部加密算法的 AS3 源码原文交出来验证了一遍：
+`_local4.writeBytes(_local3,300,25); _local4.writeBytes(_local3,0,300); _local4.writeBytes(_local3,325);`
+——跟 `tools/decrypt-zmxyol-swf.py` 逆出的 PIVOT=300/END=325 完全一致（不是巧合，是同一套代码）。
+`whichSwfDontNeedDecrypt(name)` 函数还给出了"哪些文件不加密"的确定性规则：`Role1~4`/`Monster*`/
+全部宠物名/以及字面量 `"41"`，其余（关卡容器、UI 面板、图标、地图、法宝等）都要过一遍解密。
+
+**URL 规律确认**：`Decrypt.as` 里所有加载调用都是 `uloader.load(new URLRequest(url))`，`url` 就是
+裸文件名（不带域名），在 Flash 里会按"当前 SWF 自身的加载来源"解析相对路径——也就是本文档最初
+验证过的同一个 CDN 目录：`https://sda.4399.com/4399swf/upload_swf/ftp7/hanbao/20120107/6/`，
+Referer 绕防盗链同一招。
+
+**结果**：编出 91 个文件名（Aloader 预加载表 + 全部 `loadSwfsWhenStageN` 数组 + 角色/宠物命名
+函数穷举 + 之前几轮从 IE 缓存里见过的 UI 面板包名），从 mac 直接批量 `curl`（91 个请求，15s
+超时/个，串行约 2 分钟），**88/91 成功**（134MB），失败的 3 个（`A4399dv_base`/
+`A4399dv_base_main`/`ctrl_mo_v5`，4399 平台通用 UI 壳，不在这个游戏专属 CDN 目录下，
+大概率是平台级共享资源挂在别的路径，价值也低，没有再深追）。抽样 2 个新拉到的加密文件
+（`0v1150.swf`/`65.swf`）过 `tools/decrypt-zmxyol-swf.py` + FFDec 打开验证，正常。
+
+产物落 `vendor/canonical-hunt/official_4399/batch/`（gitignored，跟 `vendor/` 全部素材同规矩，
+不进 git；私有项目 + 法律风险已澄清，本地留着按需抽取即可）。这条路径以后要抠具体某个关卡/怪物
+的美术，直接从这批本地文件里解密+导出，不需要再连 home、不需要再等用户点任何界面。
+
+**已知不完整**：91 个文件名是从 `Decrypt.as` 里*显式命名*的 `loadSwfsWhenStageN` 数组
++ 有版本号映射的关卡容器编号拼出来的，没有机械穷举 0~65 每一个关卡数字（有些关卡编号在
+`getUrlByAfterName()` 里没有版本后缀映射，可能是子关卡/活动关卡，命名规则未完全摸清）——
+够用但不是 100% 全量，以后按需要再补，方法已经跑通不是难点。
