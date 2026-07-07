@@ -1,0 +1,7 @@
+node_modules/
+dist/
+vendor/
+tools/ffdec/
+game/public/assets/extracted/
+*.swf
+.DS_Store
