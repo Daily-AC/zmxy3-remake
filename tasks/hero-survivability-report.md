@@ -107,7 +107,7 @@ maxHp ×3.0、base def ×2、装备 hp/mp 真接进血池，外加一条全新�
 
 ## 7. 疑点 / 留给后续
 
-1. ~~**exp 经济到不了可赢等级**~~ → **续单二已反编译真实 exp 落数据**，但真值仍到不了到关等级（自然通关 lv3/8/11 vs 目标 lv15/21），最小调整方案（≈6× multiplier）待拍板。详见续单二。
+1. ~~**exp 经济到不了可赢等级**~~ → **续单二已反编译真实 exp 落数据 + team-lead 拍板 `CAMPAIGN_EXP_MULTIPLIER=6`**（补偿关卡结构性压缩），自然通关到关 L3≈16/L4≈20 进容差带。详见续单二。
 2. ~~**装备 hp 未接进 `combat.maxHp`**~~ → **续单一已真修**：新增 `syncHeroEquipment` 把装备 hp/mp 词条接进血池，scale 从 3.5 下调到 3.0。BattleScene 侧 sync 调用 patch 见续单一。
 3. **L2/L4 结构性出带**（§3）：单一全局系数放不平非单调 boss 伤害。若要三关都严格进带，需 per-boss 或 per-关 的血/防微调，或重审原版 boss 单发攻击力口径——超出"单点可回退替代层"的范围，未做。
 4. **只覆盖 Role1（悟空）**：`heroSurvivability` 的 scale/魔防对全 heroId 通用（Role2~5 也会被放大），但判据只针对悟空核算——本项目目前只有悟空可玩，Role2~5 上线时需重核。
@@ -141,7 +141,7 @@ maxHp ×3.0、base def ×2、装备 hp/mp 真接进血池，外加一条全新�
 
 **接线后生效**：装备 hp 真加进血池，炼 hp 装真变肉。未接线时装备 hp 仍不生效（跟改前一样），但 scale 已降到 3.0，故**未接 sync 前，无装备的裸血比改前低约 14%**（3.0/3.5）——这是必须接 sync 才闭合的地方，务必应用 patch。测试 `heroIdentity.test.ts` 新增 2 例直接断言 `syncHeroEquipment` 后 `combat.maxHp` 按装备 hp 增长、卸装夹回、升级保住加成。
 
-# 续单二：exp 经济反编译（真源落数据 + 轨迹复算 + 偏差待拍板）
+# 续单二：exp 经济反编译（真源落数据 + 轨迹复算 + multiplier 已拍板 6）
 
 **源优先级纪律**：反编译原版主逻辑 SWF 拿每怪真实 exp，替换 BattleScene 的 flat `MONSTER_KILL_EXP=80` 占位值。
 
@@ -178,4 +178,4 @@ maxHp ×3.0、base def ×2、装备 hp/mp 真接进血池，外加一条全新�
 4. 调用点第 1368 行：`this.awardKillExp(ev.x, ev.y, e.species)`
 5. （可选）honor M30 防刷：英雄 ≥lv10 时 M30 给 0——若要保真，在 `awardKillExp` 里 `species==='monster30' && this.identity.progression.level>=10 ? 0 : monsterExp(species)`。
 
-**测试**：`monsterExp.test.ts`（4 例）pin 死反编译值（boss + 代表 grunt + 分支怪 M19=28），断言 multiplier=1 时轨迹 lv3/8/11（写死偏差）、断言假设 6× 时 L3∈[14,16]/L4∈[19,23]（证明提案有效）。改 exp 值或倍率跑偏会红。
+**测试**：`monsterExp.test.ts`（4 例）pin 死反编译值（boss + 代表 grunt + 分支怪 M19=28）+ shipped multiplier=6；断言真值 base 单独（×1）轨迹 lv3/8/11（写死为何需要 6×）、shipped 6× 轨迹 L3∈[14,16]/L4∈[19,23]（写死落带）。改 exp 值或倍率跑偏会红。
