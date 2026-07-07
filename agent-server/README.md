@@ -87,7 +87,7 @@ interface NpcGoal {
 interface StatEffect {
   type: "stat";
   stat: "atk" | "def" | "hp" | "mp" | "crit";
-  value: number; // 服务端硬性收敛：atk/def<=50，hp/mp<=200，crit<=0.5
+  value: number; // 服务端硬性收敛：atk/def<=200，hp/mp<=800，crit<=0.5
 }
 
 interface OnHitEffect {
@@ -118,7 +118,7 @@ interface CraftedItem {
 `src/craft-validate.ts` 是一个不依赖 SDK/网络的纯函数模块：`validateEffects`
 和 `validateCraftedItem`。工具的 zod schema（`src/brain.ts`）只约束**形状**——
 `stat`/`effect` 必须是枚举里的合法名字，字段类型必须对——**故意不**在 zod
-里加数值上限。真正的数值边界（`atk/def<=50`、`hp/mp<=200`、`crit<=0.5`、
+里加数值上限。真正的数值边界（`atk/def<=200`、`hp/mp<=800`、`crit<=0.5`、
 `chance<=0.5`、`power<=30`、`effects` 最多 3 条）全部在 `craft-validate.ts`
 里用 `Math.min/max` 硬 clamp，和模型发了什么数字无关；超限时把差值收敛掉，
 并在 `desc` 后面注明"（丹炉火候不足，威力已收敛）"，而不是拒绝整个请求。

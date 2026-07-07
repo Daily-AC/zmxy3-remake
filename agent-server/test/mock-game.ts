@@ -225,7 +225,7 @@ async function main(): Promise<void> {
     if (!Array.isArray(item.effects) || item.effects.length > 3) {
       throw new Error(`craft_item.item.effects should have at most 3 entries, got: ${JSON.stringify(item.effects)}`);
     }
-    const STAT_LIMITS: Record<string, number> = { atk: 50, def: 50, hp: 200, mp: 200, crit: 0.5 };
+    const STAT_LIMITS: Record<string, number> = { atk: 200, def: 200, hp: 800, mp: 800, crit: 0.5 };
     for (const effect of item.effects) {
       if (effect.type === "stat") {
         const max = STAT_LIMITS[effect.stat];

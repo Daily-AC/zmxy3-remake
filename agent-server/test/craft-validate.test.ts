@@ -10,7 +10,7 @@ test("stat value above limit is clamped, not rejected", () => {
   assert.equal(clamped, true);
   assert.equal(effects.length, 1);
   assert.equal(effects[0], effects[0]); // narrows for TS below
-  assert.deepEqual(effects[0], { type: "stat", stat: "atk", value: 50 });
+  assert.deepEqual(effects[0], { type: "stat", stat: "atk", value: 200 });
 });
 
 test("each stat has its own clamp ceiling", () => {
@@ -21,7 +21,7 @@ test("each stat has its own clamp ceiling", () => {
   ]);
   assert.deepEqual(
     effects.map((e) => (e.type === "stat" ? e.value : null)),
-    [200, 200, 0.5],
+    [800, 800, 0.5],
   );
 });
 

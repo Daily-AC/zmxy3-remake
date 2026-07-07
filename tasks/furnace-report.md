@@ -223,3 +223,7 @@ V4 Flash，key 走环境变量；`REMOTE_WS=wss://...` 可切远端）。
 - 真实响应 item：`赤焰噬魂枪`（rarity 2；atk 48、lifesteal 0.3/14、burn 0.25/12），desc「玄铁淬以三昧真火炼就……」，flavor「猴头你这些玄铁碎片倒还够看，丹炉一响，赤焰噬魂枪就成了——挨着烫嘴，砍着回血，美得你！」
 - 游戏侧校验**接受**：成本 96 / 210，入库为「赤焰噬魂枪」。
 - 证明：mac → 公网 wss → home 部署的新版 agent-server → 真实 DeepSeek 炼器 → 游戏侧双层校验入库，全链路真实跑通（非 mock、非本地）。
+
+## 附录 C：上限变更记录
+
+- **2026-07-07（口径统一配套，配合关卡怪物换原版口径/Boss 万级血）**：炼器属性绝对上限 **atk/def 50→200、hp/mp 200→800**；crit（0.5）、onHit（chance≤0.5/power≤30）、effects 条数（≤3）不变。成本模型不动，对称性保持（hp cost=value/4，故 800 hp 成本=200，恰等一条满 atk）。两侧镜像同步：`game/src/systems/furnace.ts` ENGINE_MAX + `agent-server/src/craft-validate.ts` STAT_LIMITS；连带更新 README 与受影响测试断言（furnace.test.ts 的 caps 点检、craft-validate.test.ts、forge-mock/forge-real 的 999→200 clamp 点检、mock-game.ts 内联 STAT_LIMITS）。本地 vitest 358 全绿 + forge-mock e2e 过（atk 999→200、成本 250/255 接受）。home 部署等主会话终包前统一更新。

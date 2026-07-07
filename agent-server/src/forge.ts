@@ -3,7 +3,7 @@
 //
 // This REUSES the existing crafting sandbox — every provider's raw output goes
 // through validateCraftedItem (src/craft-validate.ts), the same static clamp
-// (atk/def<=50, hp/mp<=200, crit<=0.5, onHit chance<=0.5/power<=30, <=3 effects)
+// (atk/def<=200, hp/mp<=800, crit<=0.5, onHit chance<=0.5/power<=30, <=3 effects)
 // that guards the conversational craft_item path. There is no code generation
 // or free-form execution: the model only ever fills a closed stat/onHit DSL, and
 // the numbers are clamped regardless of what it sends. The game then re-clamps

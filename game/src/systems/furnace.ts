@@ -18,11 +18,15 @@ import { Inventory, addItem, removeItem, countItem } from './inventory'
 
 // ---------- absolute engine ceilings (mirror agent-server craft-validate) ----------
 // No crafted field may exceed these regardless of how many materials are spent.
+// Raised to original-scale numbers once level monsters moved to canonical HP
+// (bosses in the 万级 range); atk/def 50->200, hp/mp 200->800. The cost model is
+// unchanged and stays symmetric: hp cost = value/4, so 800 hp costs 200, exactly
+// one maxed atk. crit / onHit / effect-count ceilings are deliberately untouched.
 const ENGINE_MAX = {
-  atk: 50,
-  def: 50,
-  hp: 200,
-  mp: 200,
+  atk: 200,
+  def: 200,
+  hp: 800,
+  mp: 800,
   crit: 0.5,
   onHitChance: 0.5,
   onHitPower: 30,

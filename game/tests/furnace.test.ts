@@ -32,13 +32,13 @@ describe('material → attribute budget (材料转预算)', () => {
 
   it('per-field caps are min(engine max, budget-scaled)', () => {
     const small = computeBudget([{ item: demonSoul, qty: 1 }]) // 2 points
-    expect(small.caps.atk).toBe(2) // budget-scaled, well under engine 50
+    expect(small.caps.atk).toBe(2) // budget-scaled, well under engine 200
     expect(small.caps.hp).toBe(8) // 2 * 4
-    const huge = computeBudget([{ item: blackIron, qty: 10 }]) // 150 points
-    expect(huge.caps.atk).toBe(50) // clamped to engine ceiling
-    expect(huge.caps.hp).toBe(200)
-    expect(huge.caps.crit).toBe(0.5)
-    expect(huge.caps.onHitPower).toBe(30)
+    const huge = computeBudget([{ item: blackIron, qty: 20 }]) // 300 points
+    expect(huge.caps.atk).toBe(200) // clamped to engine ceiling (raised 50 -> 200)
+    expect(huge.caps.hp).toBe(800) // raised 200 -> 800
+    expect(huge.caps.crit).toBe(0.5) // crit ceiling unchanged
+    expect(huge.caps.onHitPower).toBe(30) // onHit ceiling unchanged
   })
 
   it('the cost model and the caps share one rate table', () => {
