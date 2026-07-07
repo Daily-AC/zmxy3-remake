@@ -13,7 +13,7 @@ import {
 import {
   MonsterConfig,
   MonsterState,
-  MONSTER30_STATS,
+  MonsterStats,
   initMonster,
   advanceMonster,
 } from '../systems/monsterSim'
@@ -44,11 +44,29 @@ import {
   isHeroInvincible,
 } from '../systems/heroIdentity'
 import {
+  AttackKind,
   NormalAttackHit,
   calculateNormalAttackPower,
   resolveIncomingHeroDamage,
 } from '../systems/heroScale'
 import { RealSkillId, calculateRealSkillDamage } from '../systems/skillDamageReal'
+import {
+  LevelDef,
+  LevelState,
+  MonsterSpawnSpec,
+  createLevelState,
+  updateLevelSpawn,
+  getActiveWaveRoster,
+  isBossZoneTriggered,
+  markBossTriggered,
+  isBossDead,
+  revealTransferDoor,
+  tryClearArena,
+  LEVEL_1,
+} from '../systems/level'
+import { LEVEL_2_TIANWANG, LEVEL2_MONSTER_NAMES } from '../data/levels/level2'
+import { LEVEL_3_ERLANGSHEN, LEVEL3_MONSTER_NAMES } from '../data/levels/level3'
+import { LEVEL_4_XIENIAN, LEVEL4_MONSTER_NAMES } from '../data/levels/level4'
 import type { HeroHit } from '../systems/heroCombat'
 import { rollOnHitProcs } from '../systems/effects'
 import {
@@ -88,10 +106,47 @@ import {
 } from '../net/npcClient'
 import { DialogueBox } from '../ui/DialogueBox'
 import roleRaw from '../data/roles/role1.json'
-import monsterRaw from '../data/monsters/monster30.json'
 
 const roleData = roleRaw as unknown as RoleData
-const monsterData = monsterRaw as unknown as RoleData
+
+// ---- monster species registry (data-driven, all campaign levels) ----
+// Action tables (RoleData) for every monster, loaded eagerly by Vite glob so a
+// level can spawn any species by id without a static import per monster.
+const monsterJsonModules = (
+  import.meta as unknown as {
+    glob: (p: string, o: { eager: boolean }) => Record<string, { default: RoleData }>
+  }
+).glob('../data/monsters/*.json', { eager: true })
+const MONSTER_DATA: Record<string, RoleData> = {}
+for (const [path, mod] of Object.entries(monsterJsonModules)) {
+  const m = path.match(/(monster\d+)\.json$/)
+  if (m) MONSTER_DATA[m[1]] = mod.default
+}
+// species id -> the extracted sheet's level dir + file (Capitalized), so the
+// preloader can load `assets/extracted/<dir>/<file>.png` for each.
+const SPECIES_SHEET: Record<string, { dir: string; file: string }> = {}
+for (const [dir, ids] of [
+  ['level1', ['2', '3', '4', '5', '7', '8', '30']],
+  ['level2', ['6', '9', '10', '15', '16', '19']],
+  ['level3', ['1', '11', '12', '13', '14', '20', '21', '22', '23']],
+  ['level4', ['31', '32', '33', '34']],
+] as [string, string[]][]) {
+  for (const n of ids) SPECIES_SHEET['monster' + n] = { dir, file: 'Monster' + n }
+}
+// Names for boss HP-bar labels, merged from each level pack.
+const MONSTER_NAMES: Record<string, string> = {
+  ...LEVEL2_MONSTER_NAMES,
+  ...LEVEL3_MONSTER_NAMES,
+  ...LEVEL4_MONSTER_NAMES,
+}
+// Per-boss raw attack power (pre-mitigation), from heroScale.BOSS_REFERENCE /
+// level packs. Grunts derive a modest value from their def (see monsterAttackPower).
+const BOSS_ATTACK_POWER: Record<string, { power: number; kind: AttackKind }> = {
+  monster3: { power: 40, kind: 'physics' }, // L1 boss (level.ts tuning)
+  monster15: { power: 186, kind: 'physics' }, // 多闻天王 hit1
+  monster22: { power: 345, kind: 'physics' }, // 二郎神 hit1 (post-buff)
+  monster34: { power: 829, kind: 'physics' }, // 邪·悟空 hit1
+}
 
 const HERO_TEX = 'role1_0'
 // Weapon overlay sheet: same 200×200 grid + same action frames as role1_0, with
@@ -99,24 +154,16 @@ const HERO_TEX = 'role1_0'
 // exist (EQUIP_6/7 are absent in every pack); Stage A uses the default EQUIP_0.
 const WEAPON_TEX = 'role1_equip0'
 const HERO_ID = 1 as const // 悟空 = kagami hero curve #1 (progression.ts)
-// Monster30's swing damage before the hero's def is subtracted. TODO-verify: no
-// per-attack damage exists in kagami's Monster30 record (it was a ranged bullet
-// monster, see monsterSim.ts DIVERGENCE); tuned so a level-1 hero (80 hp) can
-// take a handful of hits before going down.
-const MONSTER_ATTACK_DMG = 14
-// Exp per Monster30 kill. TODO-verify: monster JSON carries no exp field yet
-// (progression.ts note); this clears level 1 (needs 135) in ~2 kills for a
-// demo-visible level-up.
-const MONSTER30_KILL_EXP = 80
+// Exp per monster kill. TODO-verify: monster JSON carries no exp field yet
+// (progression.ts note); flat award, demo-visible level-ups.
+const MONSTER_KILL_EXP = 80
 const HERO_START_X = 480
 const BURN_TICKS = 4
 const BURN_INTERVAL_MS = 260
 const FREEZE_MS = 1200
 const NPC_TEX = 'laojun'
-const MON_TEX = 'monster30'
 const HERO_SCALE = 1.5
 const NPC_SCALE = 1.0
-const MON_SCALE = 1.5
 // 太上老君 sheet: 1800×2100, 6 cols × 7 rows of 300px (12.swf Monster65 boss).
 const NPC_CELL = 300
 const NPC_WAIT_FRAMES = 6 // row 0 = idle
@@ -129,7 +176,6 @@ const MAX_X = 1460
 const WORLD_W = 1560
 const HERO_LOOP = new Set(['wait', 'wait2', 'walk', 'run'])
 const MON_LOOP = new Set(['wait', 'walk'])
-const MON_ANIM_PREFIX = 'm30_'
 const NPC_ANIM_PREFIX = 'npc_'
 const COMBO_GRACE_MS = 220
 // combo.stage (1-5) -> the normal-attack hit key whose real coefficient drives
@@ -141,7 +187,6 @@ const NPC_ID = 'laojun'
 const NPC_NAME = '太上老君'
 const NPC_X = 1380
 const DIALOGUE_RANGE = 120
-const MONSTER_DISPLAY_NAME = '云头妖鸟'
 
 // --- skills (Role1 悟空) ---
 // Demo loadout: every active + sx at level 1 (cheap enough to cast, MP costs
@@ -187,6 +232,30 @@ function npcKindToGameKind(k: NpcItem['kind'] | 'equip'): Item['kind'] {
 
 type CraftedGameItem = Item & { effects?: CraftEffect[] }
 
+/** The campaign level chain L1 -> L2 -> L3 -> L4. L1 keeps its small invented
+ * numbers (level.ts LEVEL_1); L2-L4 are the real-scale ports in data/levels/. */
+const CAMPAIGN: LevelDef[] = [LEVEL_1, LEVEL_2_TIANWANG, LEVEL_3_ERLANGSHEN, LEVEL_4_XIENIAN]
+
+/** One live monster: its sim state + config, its sprite, and the render/combat
+ * facts (data table, per-monster elemental status, attack power). */
+interface MonsterEntity {
+  species: string
+  state: MonsterState
+  config: MonsterConfig
+  sprite: Phaser.GameObjects.Sprite
+  data: RoleData
+  scale: number
+  attackPower: number
+  attackKind: AttackKind
+  isBoss: boolean
+  attackId: number // per-swing dedup for hits this monster deals to the hero
+  burn: { ticksLeft: number; nextAtMs: number; power: number } | null
+  frozenUntilMs: number
+  // Incoming hits (combo / skill / burn), drained one per frame into
+  // advanceMonster's single incoming-hit slot — monsterSim dedups by attackId.
+  hitQueue: { attackId: number; damage: number }[]
+}
+
 /**
  * Milestone-3 battle scene: parallax level, a Monster30 the hero combos to
  * death with loot -> inventory, and an LLM-driven NPC (太上老君) the player can
@@ -195,13 +264,22 @@ type CraftedGameItem = Item & { effects?: CraftEffect[] }
  */
 export class BattleScene extends Phaser.Scene {
   private hero!: Phaser.GameObjects.Sprite
-  private monster!: Phaser.GameObjects.Sprite
   private npc!: Phaser.GameObjects.Sprite
   private keys!: Record<'a' | 'd' | 'j' | 'k', Phaser.Input.Keyboard.Key>
   private heroState!: HeroState
   private heroConfig!: HeroConfig
-  private monsterState!: MonsterState
-  private monsterConfig!: MonsterConfig
+  // Level chain: the wave/boss state machine (level.ts) + the live monsters it
+  // has spawned (grunts and, once the boss zone triggers, the boss entity).
+  private campaignIndex = 0
+  private levelState!: LevelState
+  private monsters: MonsterEntity[] = []
+  private bossEntity: MonsterEntity | null = null
+  private bossHpBar?: Phaser.GameObjects.Graphics
+  private bossHpText?: Phaser.GameObjects.Text
+  private portal?: Phaser.GameObjects.Container
+  private floorImg?: Phaser.GameObjects.Image
+  private bgBase?: Phaser.GameObjects.Image
+  private levelBanner?: Phaser.GameObjects.Text
   // Parallax: tilesprites that scroll via tilePositionX. The far base backdrop
   // (bg11) and ground are covering Images (auto-parallax via scrollFactor).
   private bgTiles: { img: Phaser.GameObjects.TileSprite; factor: number }[] = []
@@ -252,10 +330,9 @@ export class BattleScene extends Phaser.Scene {
   private skillRuntime!: Role1SkillRuntime
   // While set, the hero holds a skill cast pose instead of heroSim's action.
   private skillAnim: { action: string; untilMs: number } | null = null
-  // Skill hits drain one-per-frame through the same incoming-hit channel as the
-  // combo, so monsterSim resolves dedup/hurt/death exactly as for a melee hit.
-  private skillHitQueue: { attackId: number; damage: number }[] = []
-  private skillAttackId = 200000 // kept clear of combo (from 1) and burn (from 100000)
+  // Monotonic ids for skill/burn hits, kept clear of combo (from 1). Each
+  // monster entity has its own hitQueue; these just guarantee unique ids.
+  private skillAttackId = 200000
   private mpBar!: Phaser.GameObjects.Graphics
 
   // Equipment / hero combat state
@@ -264,14 +341,9 @@ export class BattleScene extends Phaser.Scene {
   // Unified hero identity: level/exp (progression) + live hp/death (heroCombat),
   // with equipment layering atk/def on top. Created in create().
   private identity!: HeroIdentityState
-  private monsterAttackId = 0 // per-swing dedup key for incoming monster hits
   private statsText!: Phaser.GameObjects.Text
   private heroHpBar!: Phaser.GameObjects.Graphics
-  // onHit effect state, applied scene-side without touching the locked
-  // monsterSim/combo modules.
-  private burn: { ticksLeft: number; nextAtMs: number; power: number } | null = null
   private burnAttackId = 100000 // kept clear of hero attackIds (which start at 1)
-  private frozenUntilMs = 0
   private simClockMs = 0
 
   constructor() {
@@ -291,12 +363,25 @@ export class BattleScene extends Phaser.Scene {
       frameWidth: NPC_CELL,
       frameHeight: NPC_CELL,
     })
-    this.load.spritesheet(MON_TEX, 'assets/extracted/level1/Monster30.png', {
-      frameWidth: monsterData.sheet.cellW,
-      frameHeight: monsterData.sheet.cellH,
-    })
+    // Every campaign species' sheet (grid size read from its own action table).
+    for (const [species, sheet] of Object.entries(SPECIES_SHEET)) {
+      const data = MONSTER_DATA[species]
+      if (!data) continue
+      this.load.spritesheet(species, `assets/extracted/${sheet.dir}/${sheet.file}.png`, {
+        frameWidth: data.sheet.cellW,
+        frameHeight: data.sheet.cellH,
+      })
+    }
+    // Backgrounds for every level (L1 bg11/12/13 + L2-L4 bgN1/N2/N3, floors).
     for (const key of ['bg11', 'bg12', 'bg13', 'floorBg1']) {
       this.load.image(key, `assets/extracted/level1/${key}.png`)
+    }
+    for (const n of [2, 3, 4]) {
+      this.load.image(`floorBg${n}`, `assets/extracted/level${n}/floorBg${n}.png`)
+      const bgCount = n === 4 ? 1 : 3 // L4 only has bg41
+      for (let i = 1; i <= bgCount; i++) {
+        this.load.image(`bg${n}${i}`, `assets/extracted/level${n}/bg${n}${i}.png`)
+      }
     }
     this.load.image('ink_panel', 'assets/extracted/ui/dialogue_textpanel_crop.png')
     const audio: Record<string, string> = {
@@ -316,7 +401,13 @@ export class BattleScene extends Phaser.Scene {
   create(): void {
     this.buildBackground()
     this.registerAnimations(roleData, HERO_TEX, HERO_LOOP, '')
-    this.registerAnimations(monsterData, MON_TEX, MON_LOOP, MON_ANIM_PREFIX)
+    // Register every campaign species' animations under a per-species prefix.
+    for (const species of Object.keys(SPECIES_SHEET)) {
+      const data = MONSTER_DATA[species]
+      if (data && this.textures.exists(species)) {
+        this.registerAnimations(data, species, MON_LOOP, species + '_')
+      }
+    }
     this.registerNpcIdle()
 
     this.hero = this.add.sprite(480, GROUND_Y, HERO_TEX).setScale(HERO_SCALE).setDepth(10)
@@ -326,7 +417,6 @@ export class BattleScene extends Phaser.Scene {
       .setScale(HERO_SCALE)
       .setDepth(11)
       .setVisible(false)
-    this.monster = this.add.sprite(MON_START_X, GROUND_Y, MON_TEX).setScale(MON_SCALE).setDepth(9)
     this.npc = this.add
       .sprite(NPC_X + NPC_OFFSET.x * NPC_SCALE, GROUND_Y + NPC_OFFSET.y * NPC_SCALE, NPC_TEX)
       .setScale(NPC_SCALE)
@@ -343,8 +433,8 @@ export class BattleScene extends Phaser.Scene {
       j: kb.addKey(Phaser.Input.Keyboard.KeyCodes.J),
       k: kb.addKey(Phaser.Input.Keyboard.KeyCodes.K),
     }
-    kb.on('keydown-W', () => this.tryOpenDialogue())
-    kb.on('keydown-UP', () => this.tryOpenDialogue())
+    kb.on('keydown-W', () => this.onInteract())
+    kb.on('keydown-UP', () => this.onInteract())
     kb.on('keydown-F1', (e: KeyboardEvent) => {
       e.preventDefault()
       this.debugVisible = !this.debugVisible
@@ -367,15 +457,15 @@ export class BattleScene extends Phaser.Scene {
     })
     this.heroState = initHeroState(this.heroConfig, HERO_START_X)
     this.seedFromSave()
-    this.setupMonster()
+    this.startLevel(this.campaignIndex)
 
     this.pickupCfg = { gravity: 2, groundY: GROUND_Y, pickupRadius: DEFAULT_PICKUP_RADIUS, tickMs: TICK_MS }
 
     this.buildHud()
     this.buildDialogue()
     this.buildPauseMenu()
+    this.buildBossHud()
     this.applyHeroRender('wait')
-    this.applyMonsterRender(false)
     this.startAudioOnFirstInput()
     this.connectNpc()
     this.exposeDebugHooks()
@@ -421,6 +511,24 @@ export class BattleScene extends Phaser.Scene {
     this.mp = createMp(getRole1MaxMp(this.identity.progression.level))
     this.skillRuntime = createRole1SkillRuntime()
     syncRole1SkillLevels(this.skillRuntime, SKILL_DEMO_LEVELS)
+
+    // Campaign level index. save.ts (another team's file) has no level field, so
+    // this rides a BattleScene-owned side-channel key per slot rather than
+    // stomping GameSave. TODO: fold into GameSave with a version bump when the
+    // save owner adds a `campaignIndex` field.
+    this.campaignIndex =
+      this.activeSlot !== null && this.saveOrigin === 'continue'
+        ? this.readSavedLevel(this.activeSlot)
+        : 0
+  }
+
+  private levelKey(slot: SlotId): string {
+    return `zmxy3-remake.slot.v1.${slot}.level`
+  }
+  private readSavedLevel(slot: SlotId): number {
+    const raw = window.localStorage.getItem(this.levelKey(slot))
+    const n = raw === null ? 0 : Math.floor(Number(raw))
+    return Number.isFinite(n) ? Math.min(Math.max(0, n), CAMPAIGN.length - 1) : 0
   }
 
   /** Write the current live state back to the active slot (no-op without a slot). */
@@ -432,6 +540,7 @@ export class BattleScene extends Phaser.Scene {
       inventory: this.inventory,
     })
     writeSlot(window.localStorage, this.activeSlot, buildSlotEnvelope(save, this.playtimeSec))
+    window.localStorage.setItem(this.levelKey(this.activeSlot), String(this.campaignIndex))
   }
 
   // ---------- pause / return to main menu ----------
@@ -511,15 +620,12 @@ export class BattleScene extends Phaser.Scene {
     // from interrupting a cast.
     if (this.heroState.combo.stage !== 0) return
 
-    const monsterAlive = this.monsterState.mode !== 'dead' && this.monsterState.mode !== 'gone'
     const ctx = {
       sourcePower: heroTotalAtk(this.identity, this.equipment),
       x: this.heroState.x,
       y: GROUND_Y,
       facingX: this.heroState.facing,
-      targets: monsterAlive
-        ? [{ id: 'monster30', x: this.monsterState.x, y: GROUND_Y, isAlive: true }]
-        : [],
+      targets: this.aliveMonsters().map((e) => ({ id: e.species, x: e.state.x, y: GROUND_Y, isAlive: true })),
     }
     const result = tryCastRole1Skill(this.skillRuntime, this.mp, skillId, ctx)
     if (!result.ok) {
@@ -536,6 +642,12 @@ export class BattleScene extends Phaser.Scene {
     const skillLevel = Math.max(1, this.skillRuntime.levels[skillId])
     const atk = ctx.sourcePower
     for (const hb of result.hitboxes) this.scheduleSkillHit(hb, skillLevel, atk)
+  }
+
+  /** Up/W: use the transfer portal if open + standing in it, else talk to 老君. */
+  private onInteract(): void {
+    if (this.tryUsePortal()) return
+    this.tryOpenDialogue()
   }
 
   private showSkillFail(reason: string): void {
@@ -561,15 +673,19 @@ export class BattleScene extends Phaser.Scene {
     if (!realId) return // unknown/visual sub-variant: no damage
     const dmg = Math.max(1, Math.round(calculateRealSkillDamage(realId, skillLevel, atk)))
     const fire = (): void => {
-      if (this.monsterState.mode === 'dead' || this.monsterState.mode === 'gone') return
       const facing = this.heroState.facing
       const hx = this.heroState.x + facing * hb.offsetX
       const hy = GROUND_Y + hb.offsetY
       const box = centeredBox(hx, hy, hb.width, hb.height)
-      const mBox = centeredBox(this.monsterState.x, GROUND_Y, 120, 140)
-      if (!overlaps(box, mBox)) return
-      this.skillHitQueue.push({ attackId: ++this.skillAttackId, damage: dmg })
-      this.floatText(this.monsterState.x, GROUND_Y - 90, `-${dmg}`, '#7ac7ff')
+      // A skill box can strike several monsters; queue the hit into each.
+      for (const e of this.aliveMonsters()) {
+        const mBox = centeredBox(e.state.x, GROUND_Y, 120, 140)
+        if (!overlaps(box, mBox)) continue
+        const attackId = ++this.skillAttackId
+        if (e.state.resolvedAttackIds.includes(attackId)) continue
+        e.hitQueue.push({ attackId, damage: dmg })
+        this.floatText(e.state.x, GROUND_Y - 90, `-${dmg}`, '#7ac7ff')
+      }
     }
     if (hb.activeAfterMs > 0) this.time.delayedCall(hb.activeAfterMs, fire)
     else fire()
@@ -582,7 +698,16 @@ export class BattleScene extends Phaser.Scene {
     // layers. It is now a slow covering Image behind everything. bg13 (南天门
     // gate panorama) and bg12 (lotus railing) are TRANSPARENT 4900px-wide
     // panoramas that parallax on top and never wrap within the camera's range.
-    this.add
+    // Reset accumulators that persist across a scene restart (their old game
+    // objects were destroyed on shutdown; keeping stale refs crashes swapBackground).
+    this.bgTiles = []
+    this.debugTexts = []
+    this.drops = []
+    this.dropSprites.clear()
+    this.playedHitIds.clear()
+    this.monsters = []
+    this.bossEntity = null
+    this.bgBase = this.add
       .image(0, 0, 'bg11')
       .setOrigin(0, 0)
       .setScrollFactor(0.12, 0) // 1132px covers the 960 viewport across the pan
@@ -596,12 +721,32 @@ export class BattleScene extends Phaser.Scene {
     }
     // Ground band: a covering Image scaled to span the whole world width so it
     // never wraps at the right edge either.
-    const floor = this.add.image(0, FLOOR_LINE, 'floorBg1').setOrigin(0, 0).setScrollFactor(0.9, 0).setDepth(-10)
-    floor.scaleX = Math.max(1, (960 + (WORLD_W - 960) * 0.9 + 40) / floor.width)
+    this.floorImg = this.add.image(0, FLOOR_LINE, 'floorBg1').setOrigin(0, 0).setScrollFactor(0.9, 0).setDepth(-10)
+    this.floorImg.scaleX = Math.max(1, (960 + (WORLD_W - 960) * 0.9 + 40) / this.floorImg.width)
+  }
+
+  /** Swap the parallax + floor textures to a level's own art (L1 uses bg1x, L2
+   * bg2x, ...; L4 only has bg41 so its two detail layers reuse it). */
+  private swapBackground(levelIndex: number): void {
+    const n = levelIndex + 1
+    const base = n === 1 ? 'bg11' : `bg${n}1`
+    const far = n === 1 ? 'bg13' : this.textures.exists(`bg${n}3`) ? `bg${n}3` : base
+    const near = n === 1 ? 'bg12' : this.textures.exists(`bg${n}2`) ? `bg${n}2` : base
+    const floor = n === 1 ? 'floorBg1' : `floorBg${n}`
+    if (this.textures.exists(base)) this.bgBase?.setTexture(base)
+    if (this.bgTiles[0] && this.textures.exists(far)) this.bgTiles[0].img.setTexture(far)
+    if (this.bgTiles[1] && this.textures.exists(near)) this.bgTiles[1].img.setTexture(near)
+    if (this.floorImg && this.textures.exists(floor)) {
+      this.floorImg.setTexture(floor)
+      this.floorImg.scaleX = Math.max(1, (960 + (WORLD_W - 960) * 0.9 + 40) / this.floorImg.width)
+    }
   }
 
   private registerAnimations(data: RoleData, tex: string, loop: Set<string>, prefix: string): void {
     for (const [name, spec] of Object.entries(data.actions)) {
+      // Anims live on the global AnimationManager and survive scene restarts —
+      // don't re-create (which warns) when returning to a level we've seen.
+      if (this.anims.exists(prefix + name)) continue
       const frames = actionFrameTimings(data.sheet, spec as ActionSpec, TICK_MS).map((t) => ({
         key: tex,
         frame: t.index,
@@ -616,6 +761,7 @@ export class BattleScene extends Phaser.Scene {
    * exist for this repurposed boss art, so use a uniform slow per-frame duration.
    */
   private registerNpcIdle(): void {
+    if (this.anims.exists(NPC_ANIM_PREFIX + 'wait')) return
     const frames = []
     for (let i = 0; i < NPC_WAIT_FRAMES; i++) {
       frames.push({ key: NPC_TEX, frame: i, duration: NPC_IDLE_FRAME_MS })
@@ -628,21 +774,182 @@ export class BattleScene extends Phaser.Scene {
     return [0, dur('hit1'), dur('hit2'), dur('hit3'), dur('hit4'), dur('hit5')]
   }
 
-  private setupMonster(): void {
-    const dur = (a: string): number => actionDurationMs(monsterData.actions[a] as ActionSpec, TICK_MS)
-    this.monsterConfig = {
-      stats: MONSTER30_STATS,
-      patrolMin: 720,
-      patrolMax: 1120,
-      hurtDurationMs: dur('hurt'),
-      attackDurationMs: dur('hit1'),
-      deadDurationMs: dur('dead'),
+  // ---------- level / monster manager ----------
+
+  /** (Re)start a campaign level: reset the wave/boss machine, clear monsters,
+   * swap the background art, and flash a name banner. */
+  private startLevel(index: number): void {
+    this.campaignIndex = Math.min(Math.max(0, index), CAMPAIGN.length - 1)
+    const def = CAMPAIGN[this.campaignIndex]
+    this.levelState = createLevelState(def)
+    for (const e of this.monsters) e.sprite.destroy()
+    this.monsters = []
+    this.bossEntity = null
+    this.portal?.setVisible(false)
+    this.swapBackground(this.campaignIndex)
+    this.showLevelBanner(def.name)
+  }
+
+  private showLevelBanner(name: string): void {
+    this.levelBanner?.destroy()
+    const t = this.add
+      .text(480, 120, `第 ${this.campaignIndex + 1} 关 · ${name}`, {
+        fontSize: '30px',
+        color: '#ffe9b0',
+        fontStyle: 'bold',
+        stroke: '#3a2a10',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(130)
+    this.levelBanner = t
+    this.tweens.add({ targets: t, alpha: 0, delay: 1600, duration: 900, onComplete: () => t.destroy() })
+  }
+
+  /** Build a monsterSim config for a species from its own action-table durations
+   * (hurt/hit1/dead) and the level pack's stats. */
+  private monsterConfigFor(species: string, stats: MonsterStats): MonsterConfig {
+    const data = MONSTER_DATA[species] ?? MONSTER_DATA.monster30
+    const dur = (a: string, fallback: number): number =>
+      data.actions[a] ? actionDurationMs(data.actions[a] as ActionSpec, TICK_MS) : fallback
+    return {
+      stats,
+      patrolMin: MIN_X + 80,
+      patrolMax: MAX_X - 80,
+      hurtDurationMs: dur('hurt', 260),
+      attackDurationMs: dur('hit1', 400),
+      deadDurationMs: dur('dead', 600),
       attackCooldownMs: 1000,
       decisionIntervalMs: 1000,
       tickMs: TICK_MS,
       rng: Math.random,
     }
-    this.monsterState = initMonster(this.monsterConfig, MON_START_X, GROUND_Y)
+  }
+
+  /** Raw (pre-mitigation) attack power a species deals to the hero. Bosses use
+   * recovered values (heroScale.BOSS_REFERENCE); grunts derive a modest value
+   * from their def so tougher grunts hit a bit harder. */
+  private monsterAttackPower(
+    species: string,
+    stats: MonsterStats,
+    isBoss: boolean,
+  ): { power: number; kind: AttackKind } {
+    if (isBoss && BOSS_ATTACK_POWER[species]) return BOSS_ATTACK_POWER[species]
+    // TODO-verify: grunt attack powers aren't in the level packs; this is a
+    // tuning heuristic, not a recovered value.
+    return { power: Math.min(60, 8 + stats.def * 1.5), kind: 'physics' }
+  }
+
+  private spawnEntity(species: string, stats: MonsterStats, x: number, isBoss: boolean): MonsterEntity {
+    const data = MONSTER_DATA[species] ?? MONSTER_DATA.monster30
+    const config = this.monsterConfigFor(species, stats)
+    const state = initMonster(config, x, GROUND_Y)
+    const tex = this.textures.exists(species) ? species : 'monster30'
+    const scale = (isBoss ? 2.0 : 1.5) * (200 / data.sheet.cellH)
+    const sprite = this.add.sprite(x, GROUND_Y, tex).setScale(scale).setDepth(isBoss ? 9 : 8)
+    const atk = this.monsterAttackPower(species, stats, isBoss)
+    const entity: MonsterEntity = {
+      species,
+      state,
+      config,
+      sprite,
+      data,
+      scale,
+      attackPower: atk.power,
+      attackKind: atk.kind,
+      isBoss,
+      attackId: 0,
+      burn: null,
+      frozenUntilMs: 0,
+      hitQueue: [],
+    }
+    this.monsters.push(entity)
+    return entity
+  }
+
+  private spawnActiveWave(): void {
+    const roster = getActiveWaveRoster(this.levelState)
+    roster.forEach((spec: MonsterSpawnSpec, i) => {
+      const x = Math.min(MAX_X - 120, Math.max(MIN_X + 120, 720 + i * 190))
+      this.spawnEntity(spec.species, spec.stats, x, false)
+    })
+  }
+
+  private aliveGruntCount(): number {
+    return this.monsters.filter(
+      (e) => !e.isBoss && e.state.mode !== 'dead' && e.state.mode !== 'gone',
+    ).length
+  }
+
+  // ---------- boss HP bar ----------
+
+  private buildBossHud(): void {
+    this.bossHpBar = this.add.graphics().setScrollFactor(0).setDepth(120).setVisible(false)
+    this.bossHpText = this.add
+      .text(480, 40, '', { fontSize: '16px', color: '#ffe9c0', fontStyle: 'bold', stroke: '#3a1010', strokeThickness: 3 })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(121)
+      .setVisible(false)
+  }
+
+  private updateBossHud(): void {
+    const bar = this.bossHpBar
+    const label = this.bossHpText
+    if (!bar || !label) return
+    const b = this.bossEntity
+    if (!b || b.state.mode === 'gone') {
+      bar.setVisible(false)
+      label.setVisible(false)
+      return
+    }
+    const maxHp = b.config.stats.hp
+    const frac = maxHp > 0 ? Math.max(0, b.state.hp) / maxHp : 0
+    bar.setVisible(true).clear()
+    bar.fillStyle(0x2a1010, 0.9).fillRoundedRect(240, 54, 480, 16, 4)
+    bar.fillStyle(0xd94a4a, 1).fillRoundedRect(240, 54, Math.max(2, 480 * frac), 16, 4)
+    bar.lineStyle(2, 0xd9b45a, 0.9).strokeRoundedRect(240, 54, 480, 16, 4)
+    label.setVisible(true).setText(
+      `${CAMPAIGN[this.campaignIndex].boss.label}　${Math.max(0, Math.round(b.state.hp))}/${maxHp}`,
+    )
+  }
+
+  // ---------- portal / level advance ----------
+
+  private showPortal(): void {
+    const door = this.levelState.arena.door
+    const cx = door.x + door.width / 2
+    const cy = GROUND_Y - 40
+    if (!this.portal) {
+      const glow = this.add.rectangle(0, 0, 70, 150, 0x7ac7ff, 0.35).setStrokeStyle(3, 0x9fd8ff, 0.9)
+      const swirl = this.add.star(0, -10, 6, 12, 26, 0xbfe4ff, 0.7)
+      const label = this.add.text(0, -95, '↑ 传送', { fontSize: '16px', color: '#dff0ff', fontStyle: 'bold' }).setOrigin(0.5)
+      this.portal = this.add.container(cx, cy, [glow, swirl, label]).setDepth(7)
+      this.tweens.add({ targets: swirl, angle: 360, duration: 3000, repeat: -1 })
+    }
+    this.portal.setPosition(cx, cy).setVisible(true)
+    this.showToast('妖王已除！走进传送门 (↑) 进入下一关', '#9fd8ff')
+  }
+
+  /** If the portal is open and the hero stands in it, clear the arena and go to
+   * the next level. Returns true if it consumed the interact press. */
+  private tryUsePortal(): boolean {
+    if (!this.levelState.arena.door.visible) return false
+    if (!tryClearArena(this.levelState, this.heroState.x, GROUND_Y, true)) return false
+    this.onAdvanceLevel()
+    return true
+  }
+
+  private onAdvanceLevel(): void {
+    const next = this.campaignIndex + 1
+    if (next >= CAMPAIGN.length) {
+      this.showToast('恭喜通关全部关卡！', '#ffe066')
+      return
+    }
+    this.heroState.x = HERO_START_X
+    this.startLevel(next)
+    this.saveToSlot()
   }
 
   private buildHud(): void {
@@ -921,32 +1228,11 @@ export class BattleScene extends Phaser.Scene {
     advanceHero(this.heroState, edges, delta, this.heroConfig)
     if (jumped) this.playSfx('heroJump', 0.4)
 
-    const monsterAlive = this.monsterState.mode !== 'dead' && this.monsterState.mode !== 'gone'
-    // A single incoming-hit channel: prefer the hero's melee hit; otherwise let
-    // a due burn tick ride it (deferred a frame when they collide).
-    let incomingHit = this.resolveHeroHit()
-    // Skill hits ride the same channel as the combo (one per frame), so
-    // monsterSim resolves them with its normal dedup/hurt/death path.
-    if (!incomingHit && monsterAlive && this.skillHitQueue.length > 0) {
-      incomingHit = this.skillHitQueue.shift()!
-    }
-    if (!incomingHit && monsterAlive && this.burn && this.simClockMs >= this.burn.nextAtMs) {
-      incomingHit = { attackId: ++this.burnAttackId, damage: this.burn.power }
-      this.burn.ticksLeft -= 1
-      this.burn.nextAtMs = this.simClockMs + BURN_INTERVAL_MS
-      this.floatText(this.monsterState.x, GROUND_Y - 70, `烧 -${this.burn.power}`, '#ff7a4d')
-      if (this.burn.ticksLeft <= 0) this.burn = null
-    }
-    // Freeze = a heavy slow (keeps hit resolution working, unlike a hard skip).
-    const frozen = this.simClockMs < this.frozenUntilMs
-    const heroAlive = !isHeroDead(this.identity)
-    const events = advanceMonster(
-      this.monsterState,
-      { heroX: this.heroState.x, heroAlive, incomingHit },
-      frozen ? delta * 0.15 : delta,
-      this.monsterConfig,
-    )
-    this.handleMonsterEvents(events)
+    // Hero melee: push combo damage into every monster the swing overlaps.
+    this.resolveHeroHits()
+    // Level machine: spawn waves, advance every monster + the boss, reveal the
+    // portal on boss death, and hand off to the next level when used.
+    this.updateLevel(delta)
     // Hero combat upkeep: hurt->ready, i-frame expiry, knockback integration,
     // and auto-respawn (in place near the level start, clear of the monster).
     const combatEvents = updateHeroIdentity(
@@ -963,44 +1249,117 @@ export class BattleScene extends Phaser.Scene {
     this.stepDropsAndPickup()
 
     this.applyHeroRender(this.heroState.action)
-    this.applyMonsterRender(frozen)
+    this.renderMonsters()
     this.updateHud()
+    this.updateBossHud()
     this.updateParallax()
     this.updateNpcUi()
     this.dialogue.advanceTypewriter()
   }
 
-  private resolveHeroHit(): { attackId: number; damage: number } | null {
+  private aliveMonsters(): MonsterEntity[] {
+    return this.monsters.filter((e) => e.state.mode !== 'dead' && e.state.mode !== 'gone')
+  }
+
+  /** Push one swing's combo damage into every alive monster its box overlaps
+   * (monsterSim dedups by attackId, so a monster is hit at most once per swing).
+   * onHit procs + sfx fire once per swing, on the first monster struck. */
+  private resolveHeroHits(): void {
     const s = this.heroState
-    if (s.combo.stage === 0) return null
-    if (this.monsterState.mode === 'dead' || this.monsterState.mode === 'gone') return null
+    if (s.combo.stage === 0) return
     const box = heroAttackBox(s.x, GROUND_Y, s.facing)
-    const mBox = centeredBox(this.monsterState.x, GROUND_Y, 120, 140)
-    if (!overlaps(box, mBox)) return null
-    // Normal-attack damage at the original SWF scale: coefficient(hitN) × Hurt
-    // (Hurt = hero total atk), crit rolled from the equipment crit stat.
-    // heroScale.ts recovered the real per-hit coefficients (0.707/1.183/1.304).
     const hitKey = COMBO_STAGE_HIT[s.combo.stage] ?? 'hit1'
     const atk = heroTotalAtk(this.identity, this.equipment)
     const crit = heroStats(this.identity, this.equipment).crit
     const damage = Math.max(1, Math.round(calculateNormalAttackPower(hitKey, atk, { critChance: crit })))
-    // First frame this swing connects: play sfx, roll onHit procs, and float the
-    // damage number so the equip/level atk increase is visible on screen.
-    if (!this.playedHitIds.has(s.attackId)) {
+    let firstHit: MonsterEntity | null = null
+    for (const e of this.aliveMonsters()) {
+      const mBox = centeredBox(e.state.x, GROUND_Y, 120, 140)
+      if (!overlaps(box, mBox)) continue
+      if (e.state.resolvedAttackIds.includes(s.attackId)) continue
+      if (e.hitQueue.some((h) => h.attackId === s.attackId)) continue
+      e.hitQueue.push({ attackId: s.attackId, damage })
+      this.floatText(e.state.x, GROUND_Y - 90, `-${damage}`, '#ffe37a')
+      if (!firstHit) firstHit = e
+    }
+    if (firstHit && !this.playedHitIds.has(s.attackId)) {
       this.playedHitIds.add(s.attackId)
       this.playSfx(this.hitSfxKey(s.combo.stage), 0.5)
-      this.rollHitProcs()
-      this.floatText(this.monsterState.x, GROUND_Y - 90, `-${damage}`, '#ffe37a')
+      this.rollHitProcs(firstHit)
     }
-    return { attackId: s.attackId, damage }
   }
 
-  private rollHitProcs(): void {
+  private rollHitProcs(target: MonsterEntity): void {
     for (const p of rollOnHitProcs(equippedList(this.equipment), Math.random)) {
       if (p.effect === 'lifesteal') this.applyLifesteal(p.power)
-      else if (p.effect === 'burn') this.burn = { ticksLeft: BURN_TICKS, nextAtMs: this.simClockMs, power: p.power }
-      else if (p.effect === 'freeze') this.frozenUntilMs = this.simClockMs + FREEZE_MS
+      else if (p.effect === 'burn') target.burn = { ticksLeft: BURN_TICKS, nextAtMs: this.simClockMs, power: p.power }
+      else if (p.effect === 'freeze') target.frozenUntilMs = this.simClockMs + FREEZE_MS
     }
+  }
+
+  // ---------- level tick ----------
+
+  private updateLevel(delta: number): void {
+    const heroAlive = !isHeroDead(this.identity)
+    // Spawn the next wave when the machine says so.
+    if (updateLevelSpawn(this.levelState, this.aliveGruntCount())) this.spawnActiveWave()
+    // All stops cleared -> spawn the arena boss (once).
+    if (isBossZoneTriggered(this.levelState)) {
+      markBossTriggered(this.levelState)
+      this.spawnBoss()
+    }
+    for (const e of this.monsters) this.advanceEntity(e, delta, heroAlive)
+    this.reapMonsters()
+    // Boss down -> open the transfer portal.
+    if (this.bossEntity && isBossDead(this.bossEntity.state) && !this.levelState.arena.door.visible) {
+      revealTransferDoor(this.levelState)
+      this.showPortal()
+    }
+  }
+
+  private advanceEntity(e: MonsterEntity, delta: number, heroAlive: boolean): void {
+    if (e.state.mode === 'gone') return
+    // Burn tick -> queue as an incoming hit (monsterSim resolves it normally).
+    if (e.state.mode !== 'dead' && e.burn && this.simClockMs >= e.burn.nextAtMs) {
+      e.hitQueue.push({ attackId: ++this.burnAttackId, damage: e.burn.power })
+      this.floatText(e.state.x, GROUND_Y - 70, `烧 -${e.burn.power}`, '#ff7a4d')
+      e.burn.ticksLeft -= 1
+      e.burn.nextAtMs = this.simClockMs + BURN_INTERVAL_MS
+      if (e.burn.ticksLeft <= 0) e.burn = null
+    }
+    const frozen = this.simClockMs < e.frozenUntilMs
+    const incomingHit = e.hitQueue.shift() ?? null
+    const events = advanceMonster(
+      e.state,
+      { heroX: this.heroState.x, heroAlive, incomingHit },
+      frozen ? delta * 0.15 : delta,
+      e.config,
+    )
+    for (const ev of events) {
+      if (ev.type === 'hurt') this.playSfx('monHurt', 0.6)
+      else if (ev.type === 'attack-start') this.monsterHitsHero(e)
+      else if (ev.type === 'death') {
+        this.spawnDrops(ev.x, ev.y)
+        this.npcClient.worldEvent('monster_killed', { monster: MONSTER_NAMES[e.species] ?? e.species })
+        this.awardKillExp(ev.x, ev.y)
+      }
+    }
+  }
+
+  private reapMonsters(): void {
+    for (const e of this.monsters) {
+      if (e.state.mode === 'gone' && e !== this.bossEntity) e.sprite.destroy()
+    }
+    this.monsters = this.monsters.filter((e) => e.state.mode !== 'gone' || e === this.bossEntity)
+  }
+
+  private spawnBoss(): void {
+    const def = CAMPAIGN[this.campaignIndex]
+    const boss = this.spawnEntity(def.boss.species, def.boss.stats, MON_START_X, true)
+    this.bossEntity = boss
+    this.levelState.arena.state = 'active'
+    this.levelState.arena.boss = boss.state
+    this.showToast(`BOSS · ${def.boss.label}`, '#ff9a5a')
   }
 
   private applyLifesteal(power: number): void {
@@ -1019,22 +1378,10 @@ export class BattleScene extends Phaser.Scene {
     return 'hit5'
   }
 
-  private handleMonsterEvents(events: { type: string; x: number; y: number }[]): void {
-    for (const e of events) {
-      if (e.type === 'hurt') this.playSfx('monHurt', 0.6)
-      else if (e.type === 'attack-start') this.monsterHitsHero()
-      else if (e.type === 'death') {
-        this.spawnDrops(e.x, e.y)
-        this.npcClient.worldEvent('monster_killed', { monster: MONSTER_DISPLAY_NAME })
-        this.awardKillExp(e.x, e.y)
-      }
-    }
-  }
-
   // Kill reward: feed the exp through the identity host so a level-up grows the
   // hero's stats. Show light feedback (float text + a level-up toast/flash).
   private awardKillExp(x: number, y: number): void {
-    const result = gainHeroExp(this.identity, MONSTER30_KILL_EXP)
+    const result = gainHeroExp(this.identity, MONSTER_KILL_EXP)
     this.floatText(x, y - 40, `+${result.appliedExp} EXP`, '#c8b0ff')
     if (result.levelsGained > 0) {
       this.showToast(`升级！ Lv.${result.levelAfter}`, '#ffe066')
@@ -1047,31 +1394,28 @@ export class BattleScene extends Phaser.Scene {
     this.saveToSlot() // autosave: exp/level changed
   }
 
-  // A monster swing lands: subtract the hero's def, then run it through the
-  // combat model (i-frames / death / respawn are all decided there). Feedback
-  // (hurt tint, damage number, death toast) is driven off the returned events.
-  private monsterHitsHero(): void {
+  // A monster swing lands: route its raw attack power through the original
+  // two-way defense formula (heroScale.resolveIncomingHeroDamage; heroCombat
+  // applies none itself), then into the combat model (i-frames/death/respawn).
+  private monsterHitsHero(e: MonsterEntity): void {
     if (isHeroDead(this.identity)) return
-    if (Math.abs(this.heroState.x - this.monsterState.x) > MONSTER30_STATS.attackRange) return
+    if (Math.abs(this.heroState.x - e.state.x) > e.config.stats.attackRange) return
     if (isHeroInvincible(this.identity, this.simClockMs)) return
-    // Route the monster's raw attack power through the original two-way defense
-    // formula (heroScale.resolveIncomingHeroDamage; heroCombat applies no
-    // mitigation itself). L1 monster is physics; no hero magic-def stat yet (0).
     const mitigated = Math.max(
       1,
       Math.round(
         resolveIncomingHeroDamage(
-          MONSTER_ATTACK_DMG,
-          'physics',
+          e.attackPower,
+          e.attackKind,
           heroTotalDef(this.identity, this.equipment),
           0,
         ),
       ),
     )
-    const knockbackX = this.heroState.x < this.monsterState.x ? -1 : 1
+    const knockbackX = this.heroState.x < e.state.x ? -1 : 1
     const hit: HeroHit = {
-      sourceId: 'monster30',
-      attackId: ++this.monsterAttackId,
+      sourceId: e.species,
+      attackId: ++e.attackId,
       damage: mitigated,
       knockbackX,
     }
@@ -1208,23 +1552,26 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private applyMonsterRender(frozen: boolean): void {
-    if (this.monsterState.mode === 'gone') {
-      this.monster.setVisible(false)
+  private renderMonsters(): void {
+    for (const e of this.monsters) this.renderEntity(e)
+  }
+
+  private renderEntity(e: MonsterEntity): void {
+    if (e.state.mode === 'gone') {
+      e.sprite.setVisible(false)
       return
     }
-    const key = MON_ANIM_PREFIX + this.monsterState.action
-    if (this.monster.anims.currentAnim?.key !== key) this.monster.play(key)
-    this.monster.setFlipX(this.monsterState.facing === 1)
-    // Elemental tints: freeze = blue, burn = red, otherwise normal.
-    if (frozen) this.monster.setTint(0x8fc7ff)
-    else if (this.burn) this.monster.setTint(0xff8a5a)
-    else this.monster.clearTint()
-    const off = monsterData.offset
-    this.monster.setPosition(
-      this.monsterState.x + off.x * MON_SCALE,
-      this.monsterState.y + MON_RENDER_OFFSET_Y + off.y * MON_SCALE,
-    )
+    const key = e.species + '_' + e.state.action
+    // Some species omit a 'dead' row (level 4 monsters fade out with no frame);
+    // only switch animations that actually exist, else hold the current pose.
+    if (this.anims.exists(key) && e.sprite.anims.currentAnim?.key !== key) e.sprite.play(key)
+    e.sprite.setFlipX(e.state.facing === 1)
+    const frozen = this.simClockMs < e.frozenUntilMs
+    if (frozen) e.sprite.setTint(0x8fc7ff)
+    else if (e.burn) e.sprite.setTint(0xff8a5a)
+    else e.sprite.clearTint()
+    const off = e.data.offset
+    e.sprite.setPosition(e.state.x + off.x * e.scale, e.state.y + MON_RENDER_OFFSET_Y + off.y * e.scale)
   }
 
   private updateParallax(): void {
@@ -1241,8 +1588,12 @@ export class BattleScene extends Phaser.Scene {
         `NPC: ${this.npcStatusLabel()}`,
       ].join('\n'),
     )
-    const m = this.monsterState
-    this.mhpText.setText(`${MONSTER_DISPLAY_NAME}  hp: ${m.hp}/${MONSTER30_STATS.hp}  ${m.mode}`)
+    const alive = this.aliveMonsters()
+    this.mhpText.setText(
+      `Lv${this.campaignIndex + 1} 怪物:${alive.length}${
+        this.bossEntity ? `  BOSS hp:${this.bossEntity.state.hp}` : ''
+      }`,
+    )
     const stacks = listStacks(this.inventory)
     const body = stacks.length ? stacks.map((st) => `${st.item.name} ×${st.qty}`).join('\n') : '(空)'
     this.invText.setText('背包\n' + body)
@@ -1367,24 +1718,42 @@ export class BattleScene extends Phaser.Scene {
       attackId: this.heroState.attackId,
       facing: this.heroState.facing,
     })
-    w.__worldState = () => ({
-      monster: { x: this.monsterState.x, hp: this.monsterState.hp, mode: this.monsterState.mode },
-      drops: this.drops.map((d) => ({ id: d.item.id, x: Math.round(d.x), grounded: d.grounded })),
-      inventory: listStacks(this.inventory).map((s) => ({ id: s.item.id, name: s.item.name, qty: s.qty })),
-      heroHp: Math.round(this.identity.combat.hp),
-      heroMaxHp: this.identity.combat.maxHp,
-      heroDead: isHeroDead(this.identity),
-      heroState: this.identity.combat.state,
-      level: this.identity.progression.level,
-      exp: this.identity.progression.exp,
-      expToNext: this.identity.progression.expToNext,
-      atk: heroTotalAtk(this.identity, this.equipment),
-      def: heroTotalDef(this.identity, this.equipment),
-      weapon: this.equipment.weapon ? this.equipment.weapon.name : null,
-      weaponVisible: this.weaponSprite.visible,
-      frozen: this.simClockMs < this.frozenUntilMs,
-      burning: this.burn !== null,
-    })
+    const nearestMonster = (): MonsterEntity | null => {
+      let best: MonsterEntity | null = null
+      let bestD = Infinity
+      for (const e of this.aliveMonsters()) {
+        const d = Math.abs(e.state.x - this.heroState.x)
+        if (d < bestD) { bestD = d; best = e }
+      }
+      return best
+    }
+    w.__worldState = () => {
+      const nm = nearestMonster()
+      return {
+        level: this.identity.progression.level,
+        campaignIndex: this.campaignIndex,
+        levelName: CAMPAIGN[this.campaignIndex].name,
+        aliveMonsters: this.aliveMonsters().length,
+        boss: this.bossEntity
+          ? { species: this.bossEntity.species, hp: Math.round(this.bossEntity.state.hp), maxHp: this.bossEntity.config.stats.hp, mode: this.bossEntity.state.mode }
+          : null,
+        portalOpen: this.levelState.arena.door.visible,
+        // Back-compat: report the nearest monster under the old `monster` key.
+        monster: nm ? { species: nm.species, x: Math.round(nm.state.x), hp: Math.round(nm.state.hp), mode: nm.state.mode } : null,
+        drops: this.drops.map((d) => ({ id: d.item.id, x: Math.round(d.x), grounded: d.grounded })),
+        inventory: listStacks(this.inventory).map((s) => ({ id: s.item.id, name: s.item.name, qty: s.qty })),
+        heroHp: Math.round(this.identity.combat.hp),
+        heroMaxHp: this.identity.combat.maxHp,
+        heroDead: isHeroDead(this.identity),
+        heroState: this.identity.combat.state,
+        exp: this.identity.progression.exp,
+        expToNext: this.identity.progression.expToNext,
+        atk: heroTotalAtk(this.identity, this.equipment),
+        def: heroTotalDef(this.identity, this.equipment),
+        weapon: this.equipment.weapon ? this.equipment.weapon.name : null,
+        weaponVisible: this.weaponSprite.visible,
+      }
+    }
     w.__teleportTo = (x: number) => {
       this.heroState.x = x
     }
@@ -1393,7 +1762,7 @@ export class BattleScene extends Phaser.Scene {
     w.__damageHero = (dmg: number) => {
       const hit: HeroHit = {
         sourceId: 'debug',
-        attackId: ++this.monsterAttackId,
+        attackId: ++this.skillAttackId,
         damage: dmg,
         knockbackX: -1,
       }
@@ -1405,7 +1774,7 @@ export class BattleScene extends Phaser.Scene {
       this.identity.combat.meterInvulnerableUntilMs = undefined
       const hit: HeroHit = {
         sourceId: 'debug',
-        attackId: ++this.monsterAttackId,
+        attackId: ++this.skillAttackId,
         damage: this.identity.combat.maxHp + 999,
         knockbackX: -1,
       }
@@ -1522,14 +1891,13 @@ export class BattleScene extends Phaser.Scene {
     // Skill / MP acceptance hooks.
     w.__castSkill = (skillId: Role1SkillId) => {
       const mpBefore = Math.round(this.mp.mp)
-      const monsterHpBefore = this.monsterState.hp
+      const monsterHpBefore = Math.round(this.aliveMonsters()[0]?.state.hp ?? 0)
       this.castSkill(skillId)
       return {
         cast: this.skillAnim?.action ?? null,
         mpBefore,
         mpAfter: Math.round(this.mp.mp),
         cooldownMs: Math.round(this.skillRuntime.cooldownMs),
-        queuedHits: this.skillHitQueue.length,
         monsterHpBefore,
       }
     }
@@ -1538,12 +1906,47 @@ export class BattleScene extends Phaser.Scene {
       maxMp: this.mp.maxMp,
       cooldownMs: Math.round(this.skillRuntime.cooldownMs),
       levels: this.skillRuntime.levels,
-      monsterHp: this.monsterState.hp,
-      queuedHits: this.skillHitQueue.length,
+      monsterHp: Math.round(this.aliveMonsters()[0]?.state.hp ?? 0),
     })
     w.__setSkillLevels = (levels: Partial<Role1SkillLevels>) => {
       syncRole1SkillLevels(this.skillRuntime, levels)
       return this.skillRuntime.levels
+    }
+    // Level-chain acceptance hooks.
+    w.__levelState = () => ({
+      campaignIndex: this.campaignIndex,
+      name: CAMPAIGN[this.campaignIndex].name,
+      aliveMonsters: this.aliveMonsters().map((e) => ({ species: e.species, hp: Math.round(e.state.hp), isBoss: e.isBoss })),
+      boss: this.bossEntity
+        ? { species: this.bossEntity.species, hp: Math.round(this.bossEntity.state.hp), maxHp: this.bossEntity.config.stats.hp, dead: isBossDead(this.bossEntity.state) }
+        : null,
+      portalOpen: this.levelState.arena.door.visible,
+      bossTriggered: this.levelState.bossTriggered,
+    })
+    // Queue a lethal hit into every live grunt (drives the wave machine forward).
+    w.__killGrunts = () => {
+      let n = 0
+      for (const e of this.aliveMonsters()) {
+        if (e.isBoss) continue
+        e.hitQueue.push({ attackId: ++this.skillAttackId, damage: e.state.hp + e.config.stats.def + 99999 })
+        n++
+      }
+      return n
+    }
+    // Queue a lethal hit into the boss.
+    w.__killBoss = () => {
+      if (!this.bossEntity || isBossDead(this.bossEntity.state)) return false
+      this.bossEntity.hitQueue.push({
+        attackId: ++this.skillAttackId,
+        damage: this.bossEntity.state.hp + this.bossEntity.config.stats.def + 99999,
+      })
+      return true
+    }
+    // Walk into the portal (teleports the hero to the door first) and advance.
+    w.__usePortal = () => {
+      const d = this.levelState.arena.door
+      this.heroState.x = d.x + d.width / 2
+      return this.tryUsePortal()
     }
     w.__toggleDebug = () => {
       this.debugVisible = !this.debugVisible
