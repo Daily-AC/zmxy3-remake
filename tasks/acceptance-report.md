@@ -83,3 +83,64 @@ home 侧被清理后触发）。
   home 原地编译）；本工具链只验证"能不能跑通"，不是最终交付形态，Tauri 化
   时这套 build-and-ship/run-and-capture 脚本需要重写（WebView2 没有
   `capturePage()` 的直接等价物，需要另找方法，如 `CapturePreview` API）。
+
+## 追加验收：master 中间态冒烟测试（终包风险前置，2026-07-07 18:09）
+
+**背景**：距上次验收后 repo 内容体量翻倍（技能/MP、炼丹炉、存档、四关关卡数据、
+84 个音频 mp3、大量新素材、主菜单/选人/存档等新场景）；同时 `BattleScene.ts` 正
+在被另一个 agent 做阶段 B 大重构，工作树处于半成品状态（`git status` 显示
+`BattleScene.ts`/`hudTheme.ts`/`ui-preview.ts` modified + 一个未跟踪的
+`placeholder-online/` 目录）。目的是在半成品还没合完之前，先确认"代码体量翻倍
+后打包链路是否还成立"，不是测半成品本身。
+
+**方法**：没有直接对着脏工作树跑（会把半成品打进中间包），也没有用 `git stash`
+（多 team 并行同一 checkout，stash 会把其他 agent 未提交的改动一并抽走，太危险）。
+改用 `git worktree add --detach <scratchpad路径> master` 开一个独立干净副本
+（`master` 此时与 `origin/master` 完全同步，0 commits 差异，即"当前 master"=
+"origin/master"，两者本次没有歧义）。`game/node_modules` 和
+`tools/packaging/electron/node_modules` 用符号链接指回主 checkout 已装好的目录
+复用（纯 tooling 依赖，跟具体素材无关，省了重装 electron 二进制的时间），跑完
+`git worktree remove` 干净移除，不留痕迹。
+
+**结果：PASSED，且发现的都是"变多了"而不是"变坏了"**：
+
+1. `vite build` 干净通过（`tsc --noEmit` 零错误，40 modules，JS bundle 1.77MB/
+   gzip 410KB——比上次 spike 的 1.73MB 只涨了一点点，符合预期，新增内容主要是
+   `public/` 静态资源而非 JS 逻辑膨胀）。
+2. **`dist/` 总体积从上次量级涨到 96MB**（本报告没记录上次的精确 dist 体积，
+   量级判断来自本次现场检查），构成：`dist/assets/audio/` 84 个 mp3 全部正确
+   出现在 `dist/` 里（12MB，个数验证过是 84，不多不少）；`dist/assets/extracted/`
+   下 `level1`~`level4`/`menu`/`npc`/`icons`/`ui` 全部 8 个子目录都在。`vite.config.ts`
+   的 `base: './'` 没被改动，`dist/index.html` 引用仍是相对路径
+   `./assets/index-*.js`，源码里也没有新引入 `/assets/...` 绝对路径写法（Electron
+   打包最常见的相对路径坑没有复发）。**结论：体积暴涨（96MB）是真实内容增长，
+   不是资源误打包/重复打包的信号**，但如果后续还要塞更多素材，这个体积迟早要
+   考虑分层/压缩策略，先记一笔。
+3. **capturePage 截图确认新入口正确渲染**：`tmp/debug-shots/smoke-master-
+   capturePage.png`——不再是直接进战斗，而是 `MainMenuScene`：标题 logo（用的
+   正是上次从 Online 客户端逆向出的水墨 logo 素材）、"进入游戏"按钮、"游客登录 ·
+   本地存档 · 回车 / 点击进入" 提示文字，全部正确渲染，不是白屏/资源404。这是
+   本次验收的核心新证据——证明"入口场景换了之后，新场景本身的素材加载链路没
+   有断"。
+4. **验证缺口（诚实记录，没有强行绕过）**：现有 `run-and-capture.ps1` 的
+   capturePage 机制只在启动后固定等待再触发一次截帧，**没有模拟点击/回车**，
+   所以这次没能独立证实"点进游戏后能到战斗场景"这一步（任务书要求的第2条
+   验收点的后半段）。本次严格遵守"不改任何代码，纯验证"的边界，没有为了让
+   这条链路更完整而去改 `main.js`/`run-and-capture.ps1` 加交互模拟能力，把这个
+   验证缺口如实记在这里而不是假装测过。**如果需要坐实这一步**，需要单独一个
+   小任务给 capture 协议加"发送一次 Enter/点击"的能力（main.js 已经支持
+   `CAPTURE_NOW` 信号文件轮询机制，理论上可以照同样思路加一个 `ADVANCE_NOW`
+   信号在截帧前先模拟输入，但这是新功能，不在本次纯验证范围内）。
+5. `spike.log` 尾部检查：GPU 子进程崩溃+自动降级重启一次的模式跟以前完全一致
+   （`exitCode 34`→ `disableHardwareAcceleration()` 重启），Phaser 4.2.0 正常打
+   出 banner，控制台没有任何资源 404/加载失败的错误行。**没有发现新失败模式**。
+6. 桌面截图（非判定，如实记录）：`tmp/debug-shots/smoke-master-desktop.png`——
+   跟已知限制一致，内容区仍然空白（这次前台还叠了用户自己在操作的浏览器窗口，
+   碰巧连带印证了 CLAUDE.md 新记录的"Online「大闹天庭篇」就是官方造3入口"这
+   条情报——截图里能看到用户当时在看的 4399 系列页面有"4 洪荒大劫篇/5 上古
+   天帝篇"分集入口，与"3 大闹天庭篇=造3"的说法自洽，纯属捎带观察，不是本次
+   任务目标）。
+
+**结论**：当前 master 的打包链路在内容体量翻倍后依然成立，没有发现体积暴涨
+之外的新失败模式；新入口场景（MainMenuScene）资源加载正确。深入到战斗场景的
+验证需要一次单独的"给 capture 协议加交互模拟"的小任务，不在这次纯验证范围内。
