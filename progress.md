@@ -113,6 +113,36 @@
 - 18:25 **官方造3 UI 挖掘（9137ab8，已推 docs/reference/zmxy3-official/）**：入口=Online 客户端「3 大闹天庭篇」=官方造3；用户手动逛界面让资源流入缓存，acceptance 抓 5 新包。**保真验证彩蛋**：官方强化面板"打造"页头就叫「炼丹炉」——我们炼丹炉的命名是原版原词非自造；官方合成配方图（主装备+副装备+神火+神铁→生成物+所需灵魂）是我们"投料合成"的官方视觉原型；一品～五品丹分级证明"丹"分级是原版词汇。**真源结论**：vendor「再续天庭 0.72」作核心系统真源基线（symbol-count diff 证其更全：OtherMat 304 vs 78，带整套 SelectRole/SelectPlace）；Online「大闹天庭篇」furnace/skill UI 作视觉对照。诚实记录反例：MagicWeapon 是 Online 更大（90 vs 36），"vendor 严格超集"不成立。开放项：vendor backpack1.swf export.strength.* 的呈现完整度未与官方 furnace UI 交叉核对（README 记档）。
 - 打包链路冒烟通过（158977e）：干净 master worktree 出 96MB dist，84 音频/四关素材全进包、相对路径无 file:// 陷阱、home 拉起进主菜单渲染正确。缺口：未模拟点击验证进战斗（终包前补交互验收）。UI 全组件交付待用户终审（壳/主菜单/五组件/微调/SkillBar+ResultBanner）。
 
+- 19:xx **用户亲测反馈(转折,主会话优先级纠偏)**:功能骨架真机验证通过(acceptance 28步交互脚本+真LLM炼宝往返确认,home exe 登录→选人→战斗→技能→炼宝→boss→传送门→L2 全通;主会话另在浏览器亲验登录→选人→战斗掉血),**但UI/UX是核心短板**:①战斗HUD仍是脚手架文字块——RoleInfoHud/SkillBarHud/BackpackWindow/BossHpBar 真组件早做好(ui-round2)却从没接进BattleScene(换装棒被功能棒一路挤后);②波次乱序(boss当小兵混进普通波);③登录流Online版式(b2f37fe)未集成到用户构建;④切场景对话框残留(acceptance报)。**根因=主会话把"能玩通"排在"玩起来像"之前,判断错。已掉头**:派UI换装棒(最高优先,删脚手架接真组件,对照用户Online实机battle-hud.png+kagami SkillUISystem 371行布局)+波次修复棒(小兵波→sub-boss→boss分层)。kagami repo结论:有UI布局代码(SkillUISystem/EquipmentUISystem/PetPanel)无资源图(素材gitignored);资源图从SWF+Online逆向88件已备。
+- acceptance 真机交互验收能力就绪(3057502,executeJavaScript驱动__inject钩子,不靠OS键盘,隐藏窗口也稳),待UI换装+波次改完跑对比验收。**push策略**:等UI到位+真机验收过再统一推里程碑,不推UI脚手架中间态。
+
+### === 会话交接 session2 → session3（2026-07-07 19:35）===
+
+换会话原因:session2 上下文长(45%)+ 用户要求。remote(Daily-AC/zmxy3-remake)是代码真源,读 CLAUDE.md + 本文件即可接手。
+
+**remote 状态**:已 push 6 个已验收 commit——3b75c1f(阶段B四关链)、b2f37fe(登录流Online版式+6槽)、fa55ea1(官方资源manifest+88件批量下载文档)、8061749(真L1巫鹰关做链头)、3057502(acceptance 28步真机交互验收脚本)、a0a41f3(波次乱序修复)。全部主会话独立验收过(跑测试/亲看截图/真机)。
+
+**⚠️ 在途未 commit(新会话从工作树/git log 捡起,无法 SendMessage 旧 agent)**:
+- **integration-batch 的 UI 换装(BattleScene.ts 未提交)= session3 第一优先**。已让它尽快 commit + 落 report;接手先 `git log`/`git status` 看它 commit 没,没有就从工作树 BattleScene 改动 + tasks/ 里它的 report 捡起。
+
+**🔑 session3 第一件事 = 验收/完成 UI 换装(用户亲测的核心痛点)**:
+战斗 HUD 现在还是最早的脚手架(左上文字血条+右上文字背包)。真组件早做好在 `game/src/ui/hud/`(RoleInfoHud 头像+HP/MP/EXP三条、SkillBarHud 左下YUIOL坞、BackpackWindow 背包窗、BossHpBar、Toast/飘字),ui-round2 已验收,**只差接进 BattleScene**。判据:真机截图与用户 Online 实机图 `docs/reference/zmxy-online-screens/battle-hud.png` 并排对比,逐项核(头像框/三条/YUIOL坞/背包窗格子化)。接口签名 tasks/ui-round2-report.md §4;技能图标 docs/reference/zmxy-online-extracted/skill-icons/(9个对应Role1SkillId);kagami 布局参考 vendor/kagami-phaser/src/systems/SkillUISystem.ts(371行)。顺带修:切场景对话框残留 bug。
+
+**用户 4 点反馈状态**:①UI脚手架未换装(换装中,最高优先)②波次乱序(已修 a0a41f3✓)③登录流Online版式(b2f37fe已commit,随UI换装集成进用户构建)④对话框切场景残留(并进UI换装棒)。
+
+**⚠️ 已知遗留/待用户拍板**:
+- **承伤致命(重要)**:英雄 maxHp/def 曲线太小(L20仅1030血),真怪攻击279~1658,L2+ 一两下秒死;验收靠 __setHeroHp 续命。根治需放大 progression.ts maxHp/def 曲线(耦合决策,倍率未拍)。原版靠装备/宝石把裸血抬到几万(Online截图HP19335),我们缺那层养成。见 tasks/hero-scale-report.md。**真人从主菜单手玩到第2关会死得很惨,这是数值不是bug。**
+- 炼炉服务端 clamp 已确认是 200(craft-validate.ts,不是integration-batch说的50)。
+- monsterBehaviors(Monster3/7/13弹体)未接,全走近战回落;二郎神heal-block未接;哮天犬companion机制未接(stats/JSON保留)。
+- 26张怪sheet全量预加载(解码~400-600MB GPU纹理),真机WebView2可能慢/压力;integration-batch建议改按关懒加载,未决(先真机验没炸就不改)。
+- npm run build 曾被 RoleInfoHud.ts:44 tsc 卡(unused param),需确认 meta-shell 修没修。
+
+**agent 状态(新会话需重派或从盘捡)**:integration-batch(UI换装在途)、meta-shell(登录流b2f37fe完+SkillBar/ResultBanner组件6dc6f9f,待命)、level-pipeline(波次修完待命)、acceptance(真机验收能力就绪待命)、skill-tree-port(丹药consumables 3fd6ca5完,待命)、furnace(待命)。
+
+**素材大捷**:Online客户端逆向出完整资源manifest(loader反编译,decrypt参数PIVOT=300/END=325写进canonical-art-hunt.md),88官方文件已批量下 vendor/canonical-hunt/official_4399/batch/(gitignored,随需FFDec解),docs/reference/zmxy-online-extracted/(技能图标40/HUD件/结算横幅)+ zmxy3-official/(官方炼丹炉UI/合成配方图,验证我们炼丹炉命名=原版)。kagami repo有UI布局代码无资源图。
+
+**基建/纪律**:git push 用 `git -c http.proxy=http://127.0.0.1:7897 push`;vite dev 用 nohup(run_in_background 会被环境杀 exit144);agent-server 部署 home wss://zm-dev.qmledmq.cn:8443;真机验收 tools/acceptance/acceptance.sh(28步交互脚本,executeJavaScript驱动__钩子);素材按收益选不按本体/后作教条(用户纠偏"别轴");移植>重写;素材/数值真源=原版AS3反编译,kagami二手仅结构参考。
+
 ### 赛后路线图（终包后）
 - **NPC Agent 能力架构**（游戏作为 MCP、每 NPC 受限工具集=权限边界、动态权限；炼丹炉照配方合成 / 老君概率交易以贱换尊）：用户 2026-07-07 提出的拓展构想，是"agent 驱动 NPC"愿景的完全体，需深入设计再做，**暂缓**。完整记录见 docs/design/npc-agent-mcp.md。
 - 关卡流水线：16 个同构关卡包可多 agent 并行移植（导包→抠怪物动作表→接波次→对 kagami 文档验数值）；每关 Boss 专属机制（HP_REJECT/弹幕MC）是硬骨头逐个啃。
