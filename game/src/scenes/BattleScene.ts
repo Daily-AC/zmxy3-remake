@@ -62,8 +62,8 @@ import {
   isBossDead,
   revealTransferDoor,
   tryClearArena,
-  LEVEL_1,
 } from '../systems/level'
+import { LEVEL_1_WUYING, LEVEL1_MONSTER_NAMES } from '../data/levels/level1'
 import { LEVEL_2_TIANWANG, LEVEL2_MONSTER_NAMES } from '../data/levels/level2'
 import { LEVEL_3_ERLANGSHEN, LEVEL3_MONSTER_NAMES } from '../data/levels/level3'
 import { LEVEL_4_XIENIAN, LEVEL4_MONSTER_NAMES } from '../data/levels/level4'
@@ -135,6 +135,7 @@ for (const [dir, ids] of [
 }
 // Names for boss HP-bar labels, merged from each level pack.
 const MONSTER_NAMES: Record<string, string> = {
+  ...LEVEL1_MONSTER_NAMES,
   ...LEVEL2_MONSTER_NAMES,
   ...LEVEL3_MONSTER_NAMES,
   ...LEVEL4_MONSTER_NAMES,
@@ -142,7 +143,7 @@ const MONSTER_NAMES: Record<string, string> = {
 // Per-boss raw attack power (pre-mitigation), from heroScale.BOSS_REFERENCE /
 // level packs. Grunts derive a modest value from their def (see monsterAttackPower).
 const BOSS_ATTACK_POWER: Record<string, { power: number; kind: AttackKind }> = {
-  monster3: { power: 40, kind: 'physics' }, // L1 boss (level.ts tuning)
+  monster3: { power: 14, kind: 'physics' }, // 巫鹰 (L1 boss) hit1 physical (level1.ts)
   monster15: { power: 186, kind: 'physics' }, // 多闻天王 hit1
   monster22: { power: 345, kind: 'physics' }, // 二郎神 hit1 (post-buff)
   monster34: { power: 829, kind: 'physics' }, // 邪·悟空 hit1
@@ -234,7 +235,7 @@ type CraftedGameItem = Item & { effects?: CraftEffect[] }
 
 /** The campaign level chain L1 -> L2 -> L3 -> L4. L1 keeps its small invented
  * numbers (level.ts LEVEL_1); L2-L4 are the real-scale ports in data/levels/. */
-const CAMPAIGN: LevelDef[] = [LEVEL_1, LEVEL_2_TIANWANG, LEVEL_3_ERLANGSHEN, LEVEL_4_XIENIAN]
+const CAMPAIGN: LevelDef[] = [LEVEL_1_WUYING, LEVEL_2_TIANWANG, LEVEL_3_ERLANGSHEN, LEVEL_4_XIENIAN]
 
 /** One live monster: its sim state + config, its sprite, and the render/combat
  * facts (data table, per-monster elemental status, attack power). */
