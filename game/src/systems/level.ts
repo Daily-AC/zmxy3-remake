@@ -54,7 +54,18 @@
 import type { MonsterStats, MonsterConfig, MonsterState } from './monsterSim'
 import { MONSTER30_STATS, initMonster } from './monsterSim'
 
-export type MonsterSpeciesId =
+/**
+ * Species ids are open strings: level packs (data/levels/) introduce new
+ * original-game species per level (L2: monster6/9/10/15/16/19, …) and carry
+ * their own stats, so a closed union can't scale to 16 levels. level.ts
+ * treats species as an opaque label and only ever reads the stats it's
+ * handed alongside it.
+ */
+export type MonsterSpeciesId = string
+
+/** Level-1's built-in species, kept as a closed union so the in-file stats
+ * table and spawn helpers below stay typo-checked. */
+type BuiltinSpeciesId =
   | 'monster2'
   | 'monster3'
   | 'monster4'
@@ -69,7 +80,7 @@ export type MonsterSpeciesId =
  * see file header. `monster3` is reserved as the boss species, matching
  * kagami's own choice.
  */
-export const MONSTER_SPECIES_STATS: Record<MonsterSpeciesId, MonsterStats> = {
+export const MONSTER_SPECIES_STATS: Record<BuiltinSpeciesId, MonsterStats> = {
   monster30: MONSTER30_STATS,
   monster2: { hp: 90, speed: 6, attackRange: 200, alertRange: 900, normalAttackRate: 0.4, def: 2 },
   monster4: { hp: 130, speed: 6, attackRange: 220, alertRange: 950, normalAttackRate: 0.45, def: 3 },
@@ -95,11 +106,11 @@ export interface MonsterSpawnSpec {
   stats: MonsterStats
 }
 
-function spawn(species: MonsterSpeciesId): MonsterSpawnSpec {
+function spawn(species: BuiltinSpeciesId): MonsterSpawnSpec {
   return { species, stats: MONSTER_SPECIES_STATS[species] }
 }
 
-function spawnScaled(species: MonsterSpeciesId, hpMultiplier: number, defBonus: number): MonsterSpawnSpec {
+function spawnScaled(species: BuiltinSpeciesId, hpMultiplier: number, defBonus: number): MonsterSpawnSpec {
   return { species, stats: scaleMonsterStats(MONSTER_SPECIES_STATS[species], hpMultiplier, defBonus) }
 }
 
