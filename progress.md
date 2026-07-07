@@ -44,11 +44,10 @@
 
 **⚠️ 换会话即中断的在途 agent**（新会话无法 SendMessage 旧会话的 agent，从工作树捡起或重派）：
 - combat-slice：装备闭环**阶段A**（数值接入 applyEquipStats 进连击伤害 + 武器视觉 role1_equip0 叠加 + onHit 吸血/灼烧/冰冻结算 + 面板显示 atk）。判据未验：炼杖→穿→悟空手里出现金箍棒→打怪伤害变高→吸血回血。工作树可能有半成品。
-- port-progression → 移植 SaveSystem → systems/save.ts（未完成）
-- port-hero-damage → 移植 LevelSystem → systems/level.ts（2 关 + 难度墙，未完成）
+- port-hero-damage → 移植 LevelSystem → systems/level.ts（2 关 + 难度墙）：**工作树可能已有半成品（vitest 计数涨到 126 疑似含 level 测试），新会话先 git status 检查再决定捡起/重派**
 
 **已移植完成、已合入 remote（纯逻辑在 repo，但都还没接进 BattleScene）**：
-- systems/progression.ts（等级/经验，359672f）、systems/heroCombat.ts（受伤/死亡/i-frame/原创复活 1500ms）
+- systems/progression.ts（等级/经验）、systems/heroCombat.ts（受伤/死亡/i-frame/原创复活 1500ms）、systems/save.ts（版本化存档 v1+迁移机制，550071a）
 - systems/equipment.ts（穿脱）、effects.ts（applyEquipStats/rollOnHitProcs）、inventory/dropRoll/items（背包掉落，codex）
 
 **🔑 下一个关键节点 = 集成批次**（把移植成果变可玩）：heroSim 目前只是物理/连招状态机，**没有英雄身份状态（hp/atk/level）宿主**；progression/heroCombat/equipment 各自独立。集成时在 BattleScene 建一个统一 HeroIdentityState（hp/mp/atk/def/level/exp）供它们共同挂靠，然后接线：怪命中→applyHeroDamage（悟空会死+血条+复活）、杀怪→gainExp（升级）、装备→applyEquipStats 进伤害。做完游戏里才看得到"会死/升级/装备生效"。动 BattleScene，单支笔串行。
