@@ -19,11 +19,9 @@ const CLUSTER_W = 108 // left 无双+buttons region of the dock art (slots start
 // Slot centers measured in the native 320x144 dock art (see ui-finish-report).
 const SLOT_CX = [127, 167, 207, 247, 287]
 const SLOT_CY = 72
-// The ss_*.png icons already carry their OWN carved frame, so size them to the
-// slot SPACING (40px) — they tile edge-to-edge, their frame becomes the slot
-// border, and the dock's grey empty slots are fully covered (no muddy double
-// border). Matches the Online bar where the icon-frames sit flush.
-const SLOT_FIT = 44
+// Bright frameless sb_* icons sit inside a drawn 40px slot cell; fit them a
+// touch smaller so the carved frame border reads around each.
+const SLOT_FIT = 36
 
 export interface SkillSlotData {
   skillId?: string
@@ -111,23 +109,23 @@ export class SkillBarHud {
   private buildSlot(i: number, d: SkillSlotData): void {
     const cx = SLOT_CX[i] * this.scale
     const cy = SLOT_CY * this.scale
+    const cell = 40 * this.scale // slot cell = spacing, so cells tile edge-to-edge
     const size = SLOT_FIT * this.scale
 
-    // Icon tiles the slot; ADD-blend a faint copy under it to lift the dark
-    // extracted art toward the brighter Online look.
+    // Carved slot frame: dark cell + gold hairline, cells touching to form the
+    // continuous bar (the sb_* icons are frameless, so the frame is drawn here).
+    const frame = this.scene.add.graphics()
+    frame.fillStyle(0x1a0e08, 1).fillRoundedRect(cx - cell / 2, cy - cell / 2, cell, cell, 5)
+    frame.lineStyle(2, 0x6b4a24, 1).strokeRoundedRect(cx - cell / 2, cy - cell / 2, cell, cell, 5)
+    this.slotLayer.add(frame)
+
+    // Bright edge-to-edge icon inside the frame.
     const iconKey = this.iconKeyFor(d)
     if (iconKey && this.scene.textures.exists(iconKey)) {
       const icon = this.scene.add.image(cx, cy, iconKey)
       icon.setScale(size / Math.max(icon.width, icon.height))
+      if (d.disabled) icon.setTint(0x777777)
       this.slotLayer.add(icon)
-      if (d.disabled) {
-        icon.setTint(0x777777)
-      } else {
-        // ADD-blend copy on top lifts the fire toward the brighter Online read.
-        const glow = this.scene.add.image(cx, cy, iconKey).setScale(icon.scale)
-        glow.setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5)
-        this.slotLayer.add(glow)
-      }
     }
 
     // Cooldown sweep (top-down dark wipe).
