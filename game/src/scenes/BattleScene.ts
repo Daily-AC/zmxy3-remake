@@ -30,9 +30,19 @@ import {
   unequip,
   equippedList,
   slotForItem,
-  heroAtk,
-  comboHitDamage,
 } from '../systems/equipment'
+import {
+  HeroIdentityState,
+  createHeroIdentity,
+  gainHeroExp,
+  damageHero,
+  updateHeroIdentity,
+  heroTotalAtk,
+  heroTotalDef,
+  isHeroDead,
+  isHeroInvincible,
+} from '../systems/heroIdentity'
+import type { HeroHit } from '../systems/heroCombat'
 import { rollOnHitProcs } from '../systems/effects'
 import {
   NpcClient,
@@ -55,9 +65,17 @@ const HERO_TEX = 'role1_0'
 // ZERO offset (art-verified: the grip lands in the fist). Only 8 weapon skins
 // exist (EQUIP_6/7 are absent in every pack); Stage A uses the default EQUIP_0.
 const WEAPON_TEX = 'role1_equip0'
-const HERO_MAX_HP = 500
-const HERO_BASE_ATK = 20 // nominal base for the atk readout; combo damage uses STAGE_DAMAGE + equip atk
-const MONSTER_TOUCH_DMG = 14 // light chip so lifesteal has something to heal back
+const HERO_ID = 1 as const // 悟空 = kagami hero curve #1 (progression.ts)
+// Monster30's swing damage before the hero's def is subtracted. TODO-verify: no
+// per-attack damage exists in kagami's Monster30 record (it was a ranged bullet
+// monster, see monsterSim.ts DIVERGENCE); tuned so a level-1 hero (80 hp) can
+// take a handful of hits before going down.
+const MONSTER_ATTACK_DMG = 14
+// Exp per Monster30 kill. TODO-verify: monster JSON carries no exp field yet
+// (progression.ts note); this clears level 1 (needs 135) in ~2 kills for a
+// demo-visible level-up.
+const MONSTER30_KILL_EXP = 80
+const HERO_START_X = 480
 const BURN_TICKS = 4
 const BURN_INTERVAL_MS = 260
 const FREEZE_MS = 1200
@@ -143,7 +161,10 @@ export class BattleScene extends Phaser.Scene {
   // Equipment / hero combat state
   private equipment: Equipment = createEquipment()
   private weaponSprite!: Phaser.GameObjects.Sprite
-  private heroHp = HERO_MAX_HP
+  // Unified hero identity: level/exp (progression) + live hp/death (heroCombat),
+  // with equipment layering atk/def on top. Created in create().
+  private identity!: HeroIdentityState
+  private monsterAttackId = 0 // per-swing dedup key for incoming monster hits
   private statsText!: Phaser.GameObjects.Text
   private heroHpBar!: Phaser.GameObjects.Graphics
   // onHit effect state, applied scene-side without touching the locked
@@ -240,7 +261,8 @@ export class BattleScene extends Phaser.Scene {
       comboStageDurationsMs: this.comboStageDurations(),
       comboGraceMs: COMBO_GRACE_MS,
     })
-    this.heroState = initHeroState(this.heroConfig, 480)
+    this.heroState = initHeroState(this.heroConfig, HERO_START_X)
+    this.identity = createHeroIdentity(HERO_ID)
     this.setupMonster()
 
     this.pickupCfg = { gravity: 2, groundY: GROUND_Y, pickupRadius: DEFAULT_PICKUP_RADIUS, tickMs: TICK_MS }
@@ -359,11 +381,11 @@ export class BattleScene extends Phaser.Scene {
       .setDepth(100)
       .setOrigin(0.5)
 
-    // Hero stat panel (top-left): HP bar + current attack + equipped weapon.
-    this.add.rectangle(12, 10, 260, 68, 0x0c0d12, 0.5).setOrigin(0, 0).setScrollFactor(0).setDepth(99)
+    // Hero stat panel (top-left): level/exp + HP bar + attack + equipped weapon.
+    this.add.rectangle(12, 10, 280, 84, 0x0c0d12, 0.5).setOrigin(0, 0).setScrollFactor(0).setDepth(99)
     this.heroHpBar = this.add.graphics().setScrollFactor(0).setDepth(100)
     this.statsText = this.add
-      .text(22, 46, '', { fontSize: '13px', color: '#e8ecff' })
+      .text(22, 42, '', { fontSize: '13px', color: '#e8ecff', lineSpacing: 3 })
       .setScrollFactor(0)
       .setDepth(100)
 
@@ -474,13 +496,27 @@ export class BattleScene extends Phaser.Scene {
     }
     // Freeze = a heavy slow (keeps hit resolution working, unlike a hard skip).
     const frozen = this.simClockMs < this.frozenUntilMs
+    const heroAlive = !isHeroDead(this.identity)
     const events = advanceMonster(
       this.monsterState,
-      { heroX: this.heroState.x, heroAlive: true, incomingHit },
+      { heroX: this.heroState.x, heroAlive, incomingHit },
       frozen ? delta * 0.15 : delta,
       this.monsterConfig,
     )
     this.handleMonsterEvents(events)
+    // Hero combat upkeep: hurt->ready, i-frame expiry, knockback integration,
+    // and auto-respawn (in place near the level start, clear of the monster).
+    const combatEvents = updateHeroIdentity(
+      this.identity,
+      this.heroState,
+      { minX: MIN_X, maxX: MAX_X },
+      this.simClockMs,
+      delta,
+      HERO_START_X,
+    )
+    for (const e of combatEvents) {
+      if (e.type === 'respawn') this.onHeroRespawn()
+    }
     this.stepDropsAndPickup()
 
     this.applyHeroRender(this.heroState.action)
@@ -498,13 +534,18 @@ export class BattleScene extends Phaser.Scene {
     const box = heroAttackBox(s.x, GROUND_Y, s.facing)
     const mBox = centeredBox(this.monsterState.x, GROUND_Y, 120, 140)
     if (!overlaps(box, mBox)) return null
-    // First frame this swing connects: play sfx and roll the weapon's onHit procs.
+    // Combo damage = stage base + the hero's total atk (level curve + equipment),
+    // so both leveling up and equipping a weapon raise the numbers the player sees.
+    const damage = STAGE_DAMAGE[s.combo.stage] + heroTotalAtk(this.identity, this.equipment)
+    // First frame this swing connects: play sfx, roll onHit procs, and float the
+    // damage number so the equip/level atk increase is visible on screen.
     if (!this.playedHitIds.has(s.attackId)) {
       this.playedHitIds.add(s.attackId)
       this.playSfx(this.hitSfxKey(s.combo.stage), 0.5)
       this.rollHitProcs()
+      this.floatText(this.monsterState.x, GROUND_Y - 90, `-${damage}`, '#ffe37a')
     }
-    return { attackId: s.attackId, damage: comboHitDamage(STAGE_DAMAGE[s.combo.stage], this.equipment) }
+    return { attackId: s.attackId, damage }
   }
 
   private rollHitProcs(): void {
@@ -516,9 +557,10 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private applyLifesteal(power: number): void {
-    const before = this.heroHp
-    this.heroHp = Math.min(HERO_MAX_HP, this.heroHp + power)
-    const healed = this.heroHp - before
+    const c = this.identity.combat
+    const before = c.hp
+    c.hp = Math.min(c.maxHp, c.hp + power)
+    const healed = c.hp - before
     this.floatText(this.heroState.x, GROUND_Y - 90, `+${healed || power}`, '#6ef07a')
     this.hero.setTint(0xd6ffd6)
     this.time.delayedCall(120, () => this.hero.clearTint())
@@ -537,18 +579,64 @@ export class BattleScene extends Phaser.Scene {
       else if (e.type === 'death') {
         this.spawnDrops(e.x, e.y)
         this.npcClient.worldEvent('monster_killed', { monster: MONSTER_DISPLAY_NAME })
+        this.awardKillExp(e.x, e.y)
       }
     }
   }
 
-  // Light chip damage so lifesteal has something to heal back (the full
-  // hero-damage/death pass is a later slice; this just closes the equip loop).
+  // Kill reward: feed the exp through the identity host so a level-up grows the
+  // hero's stats. Show light feedback (float text + a level-up toast/flash).
+  private awardKillExp(x: number, y: number): void {
+    const result = gainHeroExp(this.identity, MONSTER30_KILL_EXP)
+    this.floatText(x, y - 40, `+${result.appliedExp} EXP`, '#c8b0ff')
+    if (result.levelsGained > 0) {
+      this.showToast(`升级！ Lv.${result.levelAfter}`, '#ffe066')
+      this.floatText(this.heroState.x, GROUND_Y - 110, `LEVEL UP!`, '#ffe066')
+      this.hero.setTint(0xfff2a8)
+      this.time.delayedCall(220, () => {
+        if (!isHeroDead(this.identity)) this.hero.clearTint()
+      })
+    }
+  }
+
+  // A monster swing lands: subtract the hero's def, then run it through the
+  // combat model (i-frames / death / respawn are all decided there). Feedback
+  // (hurt tint, damage number, death toast) is driven off the returned events.
   private monsterHitsHero(): void {
+    if (isHeroDead(this.identity)) return
     if (Math.abs(this.heroState.x - this.monsterState.x) > MONSTER30_STATS.attackRange) return
-    this.heroHp = Math.max(0, this.heroHp - MONSTER_TOUCH_DMG)
-    this.floatText(this.heroState.x, GROUND_Y - 60, `-${MONSTER_TOUCH_DMG}`, '#ff5a5a')
-    this.hero.setTint(0xff9a9a)
-    this.time.delayedCall(120, () => this.hero.clearTint())
+    if (isHeroInvincible(this.identity, this.simClockMs)) return
+    const mitigated = Math.max(1, MONSTER_ATTACK_DMG - heroTotalDef(this.identity, this.equipment))
+    const knockbackX = this.heroState.x < this.monsterState.x ? -1 : 1
+    const hit: HeroHit = {
+      sourceId: 'monster30',
+      attackId: ++this.monsterAttackId,
+      damage: mitigated,
+      knockbackX,
+    }
+    const events = damageHero(this.identity, hit, this.simClockMs)
+    for (const e of events) {
+      if (e.type === 'hurt') {
+        this.floatText(this.heroState.x, GROUND_Y - 60, `-${mitigated}`, '#ff5a5a')
+        this.hero.setTint(0xff9a9a)
+        this.time.delayedCall(120, () => {
+          if (!isHeroDead(this.identity)) this.hero.clearTint()
+        })
+      } else if (e.type === 'death') {
+        this.floatText(this.heroState.x, GROUND_Y - 60, `-${mitigated}`, '#ff5a5a')
+        this.showToast(`${'悟空倒地'}…`, '#ff6b6b')
+      }
+    }
+  }
+
+  private onHeroRespawn(): void {
+    this.hero.clearTint()
+    this.hero.setAlpha(1)
+    this.hero.setAngle(0)
+    this.showToast('复活！', '#6ef0a0')
+    this.floatText(this.heroState.x, GROUND_Y - 90, '复活', '#6ef0a0')
+    this.hero.setTint(0xd6ffd6)
+    this.time.delayedCall(200, () => this.hero.clearTint())
   }
 
   private floatText(x: number, y: number, text: string, color: string): void {
@@ -599,7 +687,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private collectEdges(): HeroEdges {
-    if (this.dialogue.isOpen) {
+    if (this.dialogue.isOpen || isHeroDead(this.identity)) {
       this.injected = { ...NO_EDGES }
       return { ...NO_EDGES }
     }
@@ -617,7 +705,24 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private applyHeroRender(action: string): void {
-    if (this.hero.anims.currentAnim?.key !== action) this.hero.play(action)
+    const dead = isHeroDead(this.identity)
+    if (dead) {
+      // 倒地: no dedicated death frame on role1, so hold the hurt pose, tip the
+      // sprite over and gray it out. Re-applied every frame so transient tints
+      // (hurt/heal delayedCalls) can't clear it before respawn.
+      if (this.hero.anims.currentAnim?.key !== 'hurt') this.hero.play('hurt')
+      this.hero.setAngle(this.heroState.facing === 1 ? 90 : -90)
+      this.hero.setAlpha(1)
+      this.hero.setTint(0x777777)
+    } else {
+      if (this.hero.anims.currentAnim?.key !== action) this.hero.play(action)
+      this.hero.setAngle(0)
+      // Flicker while the per-hit / meter i-frames are up (clear read that the
+      // hero is briefly untargetable after a hit).
+      const flicker =
+        isHeroInvincible(this.identity, this.simClockMs) && Math.floor(this.simClockMs / 90) % 2 === 0
+      this.hero.setAlpha(flicker ? 0.4 : 1)
+    }
     this.hero.setFlipX(this.heroState.facing === 1)
     const off = roleData.offset
     const px = this.heroState.x + off.x * HERO_SCALE
@@ -628,6 +733,8 @@ export class BattleScene extends Phaser.Scene {
       this.weaponSprite.setVisible(true)
       this.weaponSprite.setFrame(this.hero.frame.name)
       this.weaponSprite.setFlipX(this.heroState.facing === 1)
+      this.weaponSprite.setAngle(this.hero.angle)
+      this.weaponSprite.setAlpha(this.hero.alpha)
       this.weaponSprite.setPosition(px, py)
     } else {
       this.weaponSprite.setVisible(false)
@@ -674,15 +781,21 @@ export class BattleScene extends Phaser.Scene {
     this.invText.setText('背包\n' + body)
 
     // Hero HP bar + stats.
+    const c = this.identity.combat
+    const hp = Math.round(c.hp)
     const bar = this.heroHpBar
     bar.clear()
     bar.fillStyle(0x2a1414, 1).fillRoundedRect(22, 20, 200, 16, 4)
-    const frac = this.heroHp / HERO_MAX_HP
-    bar.fillStyle(0xd94a4a, 1).fillRoundedRect(22, 20, Math.max(2, 200 * frac), 16, 4)
+    const frac = c.maxHp > 0 ? c.hp / c.maxHp : 0
+    const barColor = isHeroDead(this.identity) ? 0x555555 : 0xd94a4a
+    bar.fillStyle(barColor, 1).fillRoundedRect(22, 20, Math.max(2, 200 * frac), 16, 4)
     bar.lineStyle(1, 0xd9b45a, 0.8).strokeRoundedRect(22, 20, 200, 16, 4)
-    const atk = heroAtk(HERO_BASE_ATK, this.equipment)
+    const atk = heroTotalAtk(this.identity, this.equipment)
     const weaponName = this.equipment.weapon ? this.equipment.weapon.name : '空手'
-    this.statsText.setText(`HP ${this.heroHp}/${HERO_MAX_HP}　攻击 ${atk}　武器: ${weaponName}`)
+    const p = this.identity.progression
+    this.statsText.setText(
+      `Lv.${p.level}  EXP ${p.exp}/${p.expToNext}\nHP ${hp}/${c.maxHp}　攻击 ${atk}　武器: ${weaponName}`,
+    )
   }
 
   // ---------- equipment ----------
@@ -781,8 +894,15 @@ export class BattleScene extends Phaser.Scene {
       monster: { x: this.monsterState.x, hp: this.monsterState.hp, mode: this.monsterState.mode },
       drops: this.drops.map((d) => ({ id: d.item.id, x: Math.round(d.x), grounded: d.grounded })),
       inventory: listStacks(this.inventory).map((s) => ({ id: s.item.id, name: s.item.name, qty: s.qty })),
-      heroHp: this.heroHp,
-      atk: heroAtk(HERO_BASE_ATK, this.equipment),
+      heroHp: Math.round(this.identity.combat.hp),
+      heroMaxHp: this.identity.combat.maxHp,
+      heroDead: isHeroDead(this.identity),
+      heroState: this.identity.combat.state,
+      level: this.identity.progression.level,
+      exp: this.identity.progression.exp,
+      expToNext: this.identity.progression.expToNext,
+      atk: heroTotalAtk(this.identity, this.equipment),
+      def: heroTotalDef(this.identity, this.equipment),
       weapon: this.equipment.weapon ? this.equipment.weapon.name : null,
       weaponVisible: this.weaponSprite.visible,
       frozen: this.simClockMs < this.frozenUntilMs,
@@ -790,6 +910,47 @@ export class BattleScene extends Phaser.Scene {
     })
     w.__teleportTo = (x: number) => {
       this.heroState.x = x
+    }
+    // Combat acceptance hooks: drive death/respawn and leveling deterministically
+    // without having to grind the live monster.
+    w.__damageHero = (dmg: number) => {
+      const hit: HeroHit = {
+        sourceId: 'debug',
+        attackId: ++this.monsterAttackId,
+        damage: dmg,
+        knockbackX: -1,
+      }
+      return damageHero(this.identity, hit, this.simClockMs).map((e) => e.type)
+    }
+    w.__killHero = () => {
+      // Debug kill bypasses any active i-frames so it always lands.
+      this.identity.combat.invulnerableUntilMs = 0
+      this.identity.combat.meterInvulnerableUntilMs = undefined
+      const hit: HeroHit = {
+        sourceId: 'debug',
+        attackId: ++this.monsterAttackId,
+        damage: this.identity.combat.maxHp + 999,
+        knockbackX: -1,
+      }
+      const evs = damageHero(this.identity, hit, this.simClockMs).map((e) => e.type)
+      if (evs.includes('death')) this.showToast(`${'悟空倒地'}…`, '#ff6b6b')
+      return evs
+    }
+    // Acceptance helpers to hold a death frame regardless of wall-clock: kill
+    // and suspend the auto-respawn timer, then release it on demand.
+    w.__killHeroSticky = () => {
+      const evs = (w.__killHero as () => string[])()
+      this.identity.combat.respawnAtMs = Number.POSITIVE_INFINITY
+      return evs
+    }
+    w.__respawnHero = () => {
+      // Make the respawn due now; updateHeroIdentity fires it next frame.
+      this.identity.combat.respawnAtMs = this.simClockMs
+    }
+    w.__gainExp = (amount: number) => {
+      const r = gainHeroExp(this.identity, amount)
+      if (r.levelsGained > 0) this.showToast(`升级！ Lv.${r.levelAfter}`, '#ffe066')
+      return { level: r.levelAfter, levelsGained: r.levelsGained, exp: this.identity.progression.exp }
     }
     // Equipment acceptance hooks.
     w.__equip = (itemId?: string) => {
@@ -800,7 +961,7 @@ export class BattleScene extends Phaser.Scene {
     }
     w.__unequip = () => this.doUnequip('weapon')
     w.__setHeroHp = (hp: number) => {
-      this.heroHp = Math.max(0, Math.min(HERO_MAX_HP, hp))
+      this.identity.combat.hp = Math.max(0, Math.min(this.identity.combat.maxHp, hp))
     }
     w.__giveCraftedWeapon = () => {
       // A test weapon with atk + guaranteed lifesteal, mirroring an NPC craft.
