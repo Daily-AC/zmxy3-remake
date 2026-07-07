@@ -185,7 +185,8 @@ tsc `--noEmit` 干净；`vitest run` 401 全绿（HUD 组件无测试，纯渲�
 DIFF 底部整条白色胶囊件全亮，是 RoleInfo 对象树里我组装时跳过的子件。查实：
 - **chid262 `herobeattacktimes`**，323×11 白色圆角空条，PlaceObject 于 (111.7, 78.0) sx=0.68（在 EXP 条下方）。
 - **语义 = 怒气/无双充能条**：名字"被攻击次数"+ OtherMat1 XML 里 `rage`/`RAGE` 命中 + kagami `DropSystem.ts`/`SaveSystem.ts` 都有 `rage` 字段（掉落给怒气、存档持久化怒气）——是原版真机制，挨打/攻击攒满驱动坞上的「无双」大招。
-- **处置（按 team-lead 规则"没有的系统→暂缺不造假"）**：本项目**没有怒气系统**（坞上无双按钮目前是装饰），故**不渲染**这条（渲染一条永远空的怒气条=给没有的系统造视觉假象）。**暂缺、点名记录于此**。kagami 侧已有 rage 逻辑，将来接怒气/无双系统时可移植，届时按 chid262 原坐标 (111.7,78,sx0.68) 渲染。可选：若要视觉完整，可加一条空 chid262 chrome，一行的事，待 team-lead/用户定。
+- **处置（team-lead 2026-07-07 拍板：渲染空 chrome）**：一致性理由——坞上无双按钮已作装饰件渲染，空怒气槽同属"仪表存在、未充能"的原版视觉件，不算造假。故按原件恒空态渲染进 `RoleInfoHud`（`hud_ri_rage` = chid262）。**放置坐标**：对象树 translate 是 (111.7, 78) sx0.68，但 sprite 的 shape 有约 -109px 内部 x 偏移，实际左边缘落在 x≈3；x/y 用 min 像素-diff 对复合图校准为 **(3, 87) sx0.666**（非眼调）。补齐后重出 DIFF：怒气条亮区 1715px→242px（仅剩边缘AA），总亮区 3073→967px，与"只剩标签/数字/AA"一致（`ui-finish-hud-overlay-vendor.png` DIFF 底部怒气条已变暗=对齐）。
+- **功能缺口记录**：**怒气/无双系统本身未实现**（现为空仪表 + 装饰无双按钮，攒怒气/放大招的机制无）。kagami `DropSystem.ts`/`SaveSystem.ts` 已有 rage 逻辑，赛后可移植接上。
 
 ## 裁决规则（team-lead 2026-07-07 补，写进 report）
 

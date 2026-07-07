@@ -44,6 +44,11 @@ const BARS = [
 const NUM_X = 140 // "9999" centre over the bar (matches the composite)
 const LABELS = ['HP', 'MP', 'EXP']
 const LEVEL = { x: 22, y: 79 }
+// chid262 怒气/无双 charge meter — rendered empty (no rage system yet). Object-tree
+// translate is (111.7, 78) sx 0.68, but the sprite's shape has a ~-109px internal
+// x-offset, so the bar's left edge lands at x≈3 (calibrated by min-diff / white-bar
+// bbox vs the composite). Native 323x11.
+const RAGE = { x: 3, y: 87, sx: 0.666 }
 
 export class RoleInfoHud {
   readonly container: Phaser.GameObjects.Container
@@ -70,6 +75,13 @@ export class RoleInfoHud {
     }
     const head = img('hud_ri_head', HEAD.x, HEAD.y)
     if (head) children.push(head)
+
+    // Empty 怒气/无双 charge meter (chid262) at its object-tree coord + own scaleX.
+    if (scene.textures.exists('hud_ri_rage')) {
+      children.push(
+        scene.add.image(RAGE.x * s, RAGE.y * s, 'hud_ri_rage').setOrigin(0, 0).setScale(RAGE.sx * s, s),
+      )
+    }
 
     // Bar fills (cropped by fraction each frame) + labels + numbers.
     BARS.forEach((b, i) => {

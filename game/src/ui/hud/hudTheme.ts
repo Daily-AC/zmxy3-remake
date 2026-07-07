@@ -62,6 +62,7 @@ export const HUD_TEXTURES: TextureRef[] = [
   { key: 'hud_ri_hp', url: `${UI}hud_ri_hp.png` },
   { key: 'hud_ri_mp', url: `${UI}hud_ri_mp.png` },
   { key: 'hud_ri_exp', url: `${UI}hud_ri_exp.png` },
+  { key: 'hud_ri_rage', url: `${UI}hud_ri_rage.png` }, // chid262 怒气/无双 charge meter (rendered empty — no rage system yet)
 ]
 
 /** Item icon keys (21 extracted). Host scene loads these; BackpackWindow maps item.id -> key. */
