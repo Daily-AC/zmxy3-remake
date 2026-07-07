@@ -2,6 +2,8 @@ node_modules/
 dist/
 vendor/
 tools/ffdec/
+tools/packaging/electron/out/
+tools/packaging/electron/renderer/
 tmp/
 *.swf
 .DS_Store
