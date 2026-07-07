@@ -125,8 +125,11 @@
 **⚠️ 在途未 commit(新会话从工作树/git log 捡起,无法 SendMessage 旧 agent)**:
 - **integration-batch 的 UI 换装(BattleScene.ts 未提交)= session3 第一优先**。已让它尽快 commit + 落 report;接手先 `git log`/`git status` 看它 commit 没,没有就从工作树 BattleScene 改动 + tasks/ 里它的 report 捡起。
 
-**🔑 session3 第一件事 = 验收/完成 UI 换装(用户亲测的核心痛点)**:
-战斗 HUD 现在还是最早的脚手架(左上文字血条+右上文字背包)。真组件早做好在 `game/src/ui/hud/`(RoleInfoHud 头像+HP/MP/EXP三条、SkillBarHud 左下YUIOL坞、BackpackWindow 背包窗、BossHpBar、Toast/飘字),ui-round2 已验收,**只差接进 BattleScene**。判据:真机截图与用户 Online 实机图 `docs/reference/zmxy-online-screens/battle-hud.png` 并排对比,逐项核(头像框/三条/YUIOL坞/背包窗格子化)。接口签名 tasks/ui-round2-report.md §4;技能图标 docs/reference/zmxy-online-extracted/skill-icons/(9个对应Role1SkillId);kagami 布局参考 vendor/kagami-phaser/src/systems/SkillUISystem.ts(371行)。顺带修:切场景对话框残留 bug。
+**✅ UI 换装已完成(015602d,已push,主会话亲看21号截图验收)**:BattleScene 脚手架文字 HUD 全删,接入真组件——左上 RoleInfoHud(墨框头像+等级徽章+HP/MP/EXP三条)、左下 SkillBarHud(9格技能坞+真图标+热键+CD)、B键 BackpackWindow(原版背包全窗)、顶部 BossHpBar(名牌+红笔刷条)、MonsterHpBar、Toast/飘字。跟实机图 battle-hud.png 结构对上。387绿、只动显示层。
+
+**🔑 session3 第一件事 = 承伤数值拍板(用户会玩,现在手玩到L2会死得惨)**:见下方"承伤致命"。这是从"能看"到"能玩得下去"的关卡。需要用户拍 maxHp/def 放大方案(放大progression曲线 / 靠炼装+拾取球养成 / 组合)。
+
+**UI 换装的诚实遗留(session3 可继续,非阻塞)**:①技能坞热键显示 1-9 不是 YUIOL——键位实际绑1-9,换YUIOL需改键位映射(功能变更);②FurnacePanel 没换,炼宝仍走水墨对话框overlay(已是真水墨非调试);③ResultBanner 没接,boss死→传送门无结算modal;④切场景对话框残留 bug 需确认修没修。
 
 **用户 4 点反馈状态**:①UI脚手架未换装(换装中,最高优先)②波次乱序(已修 a0a41f3✓)③登录流Online版式(b2f37fe已commit,随UI换装集成进用户构建)④对话框切场景残留(并进UI换装棒)。
 
