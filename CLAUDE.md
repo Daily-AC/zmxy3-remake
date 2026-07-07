@@ -53,6 +53,13 @@
 - **源优先级（2026-07-07 hero-scale 教训）**：数值/公式以原版主逻辑 SWF 反编译 AS3 为真源；kagami 是二手源（已实证含占位符：普攻写死 30-34、技能公式与原版差 6.6x），只作结构参考与对照，移植数值前先对 AS3 验一遍。
 - **成长曲线校验状态（2026-07-07 独立审计，tasks/audit-numbers-report.md）**：progression.ts 中仅 Role1 悟空/Role2 已对原版 AS3（RoleN.upGrade）逐字验证；Role3/Role4 的 atk 曲线 kagami 改过（原版 20+6/16+4 vs 代码 15+8/9+4），Role5 原版根本不存在（kagami 臆造）。放开多角色前必须先对 AS3 重验，别把 progression.ts 当"全体=原版"。monsterBehaviors 的 monster3 数值亦来自 kagami（hp926 vs 原版巫鹰 300），对齐手感时需改回。
 
+## UI 复刻管线（2026-07-08 三源交叉验证定稿）
+
+- **双源提取**：UI 皮（控件坐标/尺寸/层级）在 timeline，骨（动态布局/事件/帧语义）在主 SWF AS3，物理分离必须都读。完整流程 + 逐屏源码归属 + 四个"必须读 AS3"信号见 `docs/playbooks/ui-port-dual-source.md`。旧的"照截图手工像素校准"作废。
+- 三条铁律：①类代码只认主 SWF `打开我开始玩.swf`（OtherMat1 有旧副本，版本分歧）；②子 SWF 用 `out_res/` 解密版（`assets/` 下是加密态，FFDec 静默导 0 类不报错）；③坐标用 `-export xfl` 精确矩阵，不手工校准。
+- **重编译回 SWF/AIR 改原版：no-go**（复活死运行时承载现代增量，零净收益，与 Phaser+TS+Tauri+WS 栈方向相反）。反编译产物只当只读规格源。
+- 屏幕流结构缺口：原版有世界地图 hub（保存/炼丹炉/学技能/任务挂地图、从地图进关），我们缺整层——见 `docs/design/screen-fidelity-spec.md`（主会话逐屏判读 + 用户 14 张全流程参照图 `docs/reference/user-flow-refs/`）。
+
 ## 工程约定
 
 - 进度真源：progress.md（每次 session 结束前更新）
