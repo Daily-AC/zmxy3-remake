@@ -1,0 +1,13 @@
+{
+  "source": "export.monster.Monster23.initBBDC()+setAction() in 打开我开始玩.swf; sheet 3.swf chid5 Monster23. 哮天犬 (Xiaotian Dog), 二郎神's companion. Single-branch constructor. In the original, Monster22's __added() override auto-spawns this species at the boss's position (`MainGame.getInstance().createMonster(23,...)`) — it is not part of any StageListener's waitForRegisterDataArray. hp is 9999999 (effectively unkillable by design; it's a scripted companion, not a normal kill target) — recorded verbatim per the fidelity mandate; level3.ts folds it into the final grunt wave as a documented adaptation since the LevelDef schema has no companion/escort concept. setAction's \"dead\" case has NO bbdc frame row — it calls dropAura()+destroy() immediately, so this species has no death animation asset (not an omission bug, confirmed by rows 0-5 covering exactly wait/walk/hurt/hit1/hit2/hit3 with none left over for dead).",
+  "sheet": { "cols": 6, "rows": 6, "cellW": 250, "cellH": 200, "facing": "left" },
+  "offset": { "x": 15, "y": -15 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "hit1": { "col": 0, "row": 3, "frames": 4, "stopCounts": [2, 2, 8, 4], "frameCount": 4 },
+    "hit2": { "col": 0, "row": 4, "frames": 2, "stopCounts": [9, 26], "frameCount": 2 },
+    "hit3": { "col": 0, "row": 5, "frames": 2, "stopCounts": [6, 14], "frameCount": 2 }
+  }
+}

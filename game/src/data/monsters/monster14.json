@@ -1,0 +1,13 @@
+{
+  "source": "export.monster.Monster14.initBBDC()+setAction() in 打开我开始玩.swf; sheet 3.swf chid1 Monster14. Single-branch grunt. Roster member of StageListener33 (final scene) only. Clean 6-row sheet, no out-of-bounds action rows.",
+  "sheet": { "cols": 6, "rows": 6, "cellW": 200, "cellH": 200, "facing": "left" },
+  "offset": { "x": 10, "y": -28 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 5, "stopCounts": [2, 2, 2, 2, 7], "frameCount": 5 },
+    "hit1": { "col": 0, "row": 4, "frames": 4, "stopCounts": [2, 2, 2, 14], "frameCount": 4 },
+    "hit2": { "col": 0, "row": 5, "frames": 2, "stopCounts": [2, 58], "frameCount": 2 }
+  }
+}

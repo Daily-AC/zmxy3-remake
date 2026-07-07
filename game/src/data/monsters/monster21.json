@@ -1,0 +1,15 @@
+{
+  "source": "export.monster.Monster21.initBBDC()+setAction() in 打开我开始玩.swf; sheet 3.swf chid7 Monster21. 朱子真 (Zhu Zizhen). Branch: `gc.curStage==3 && gc.curLevel==3 || gc.curStage==8` -> hp 20000, isBoss=false (the level-3 branch used here, a heavy elite, NOT the arena boss); else-branch hp 25000/isBoss=true is a different level's boss tuning, not used. Roster member of StageListener31 (scene 1) and StageListener33 (final scene). hit3's attackBackInfoDict carries a STUN addEffect (2s) — a real recovered mechanic, not modeled in monsterSim yet (TODO-verify, non-blocking).",
+  "sheet": { "cols": 8, "rows": 8, "cellW": 400, "cellH": 300, "facing": "left" },
+  "offset": { "x": 15, "y": -50 },
+  "actions": {
+    "wait": { "col": 0, "row": 0, "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 6 },
+    "walk": { "col": 0, "row": 1, "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "hurt": { "col": 0, "row": 2, "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "dead": { "col": 0, "row": 3, "frames": 6, "stopCounts": [2, 2, 2, 2, 2, 10], "frameCount": 6 },
+    "hit2": { "col": 0, "row": 4, "frames": 8, "stopCounts": [2, 2, 2, 3, 3, 3, 3, 12], "frameCount": 8 },
+    "hit3": { "col": 0, "row": 5, "frames": 5, "stopCounts": [2, 2, 1, 1, 20], "frameCount": 5 },
+    "hit4": { "col": 0, "row": 6, "frames": 4, "stopCounts": [2, 2, 31, 20], "frameCount": 4 },
+    "hit1": { "col": 0, "row": 7, "frames": 4, "stopCounts": [2, 2, 5, 15], "frameCount": 4 }
+  }
+}
