@@ -117,6 +117,7 @@ import { RoleInfoHud } from '../ui/hud/RoleInfoHud'
 import { SkillBarHud, SkillSlotData } from '../ui/hud/SkillBarHud'
 import { BossHpBar, MonsterHpBar } from '../ui/hud/MonsterHpBar'
 import { BackpackWindow } from '../ui/hud/BackpackWindow'
+import { FurnacePanel } from '../ui/hud/FurnacePanel'
 import { Toast, spawnFloatingText } from '../ui/hud/Toast'
 import roleRaw from '../data/roles/role1.json'
 
@@ -311,6 +312,7 @@ export class BattleScene extends Phaser.Scene {
   private roleInfoHud!: RoleInfoHud
   private skillBar!: SkillBarHud
   private backpack!: BackpackWindow
+  private furnacePanel!: FurnacePanel
   private bossBar!: BossHpBar
   private toastUi!: Toast
   // F1 debug telemetry (hidden by default).
@@ -827,6 +829,7 @@ export class BattleScene extends Phaser.Scene {
     // backpack, boss bar) never bleed over the next level's banner.
     this.dialogue?.close()
     this.backpack?.close()
+    this.furnacePanel?.close()
     this.swapBackground(this.campaignIndex)
     this.showLevelBanner(def.name)
   }
@@ -991,6 +994,13 @@ export class BattleScene extends Phaser.Scene {
       iconKeyFor: (item) => (this.textures.exists('icon_' + item.id) ? 'icon_' + item.id : ICON_FALLBACK_KEY),
       onClose: () => {},
     })
+    // 炼丹炉 forge window (replaces the old ink-dialogue craft overlay). Same
+    // craft protocol: budget preview + submit run through the scene unchanged.
+    this.furnacePanel = new FurnacePanel(this, {
+      iconKeyFor: (item) => (this.textures.exists('icon_' + item.id) ? 'icon_' + item.id : ICON_FALLBACK_KEY),
+      budgetPreview: (lots) => this.craftBudgetLine(lots),
+      onCraftSubmit: (description, lots) => this.submitCraft(description, lots),
+    })
     this.toastUi = new Toast(this)
     this.refreshSkillBar()
 
@@ -1038,8 +1048,6 @@ export class BattleScene extends Phaser.Scene {
         this.input.keyboard!.enabled = true
       },
       onCraftEnter: () => this.openCraftMode(),
-      onCraftSubmit: (description, lots) => this.submitCraft(description, lots),
-      craftBudgetPreview: (lots) => this.craftBudgetLine(lots),
     })
   }
 
@@ -1061,7 +1069,7 @@ export class BattleScene extends Phaser.Scene {
       this.dialogue.pushLog('（囊中空空，先去打些妖怪取材吧）')
       return
     }
-    this.dialogue.openCraft(mats.map((m) => ({ item: m.item, owned: m.qty })))
+    this.furnacePanel.open(mats.map((m) => ({ item: m.item, owned: m.qty })))
   }
 
   private craftBudgetLine(lots: MaterialLot[]): string {
@@ -1106,18 +1114,19 @@ export class BattleScene extends Phaser.Scene {
     }
     const timer = this.time.delayedCall(20000, () => this.onCraftTimeout(requestId))
     this.craftPending = { requestId, tx, budget: payload.budget, timer }
-    this.dialogue.setCraftLocked(true)
+    this.furnacePanel.setCraftLocked(true)
     this.dialogue.pushLog(`悟空：${description}`)
     this.dialogue.pushLog('（老君将材料投入八卦炉，炉火渐炽…）')
-    this.dialogue.clearInput()
-    this.dialogue.closeCraft()
+    this.furnacePanel.clearInput()
+    // Back to the dialogue: 老君's flavor/result types out there (as before).
+    this.furnacePanel.close()
   }
 
   private clearCraftPending(): void {
     if (!this.craftPending) return
     this.craftPending.timer.remove(false)
     this.craftPending = null
-    this.dialogue.setCraftLocked(false)
+    this.furnacePanel.setCraftLocked(false)
   }
 
   private onCraftResult(item: CraftedItem, flavor: string, requestId: string): void {
@@ -1872,7 +1881,7 @@ export class BattleScene extends Phaser.Scene {
     w.__openCraft = () => {
       if (!this.dialogue.isOpen) this.tryOpenDialogue()
       this.openCraftMode()
-      return this.dialogue.craftMode
+      return this.furnacePanel.isOpen
     }
     w.__submitCraft = (description: string, sel: { id: string; qty: number }[]) => {
       const stacks = listStacks(this.inventory)
@@ -1887,7 +1896,7 @@ export class BattleScene extends Phaser.Scene {
     w.__craftState = () => ({
       pending: !!this.craftPending,
       requestId: this.craftPending?.requestId ?? null,
-      craftMode: this.dialogue.craftMode,
+      craftMode: this.furnacePanel.isOpen,
       materials: this.bagMaterials().map((m) => ({ id: m.item.id, name: m.item.name, qty: m.qty })),
     })
     // Save-slot acceptance hooks.

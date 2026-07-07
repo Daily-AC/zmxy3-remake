@@ -52,6 +52,7 @@ export const HUD_TEXTURES: TextureRef[] = [
   { key: 'backpack_slot', url: `${UI}backpack_slot_cell.png` }, // single grid cell
   { key: 'furnace_making', url: `${UI}furnace_making.png` }, // 制作 craft panel (export.strength.Making)
   { key: 'furnace_fusion', url: `${UI}furnace_fusion.png` }, // 合成 fusion panel (export.strength.Fusion)
+  { key: 'furnace_frame', url: `${UI}furnace_frame.png` }, // 炼丹炉 ink window frame (official StrengthEquipment 打造 tab header)
 ]
 
 /** Item icon keys (21 extracted). Host scene loads these; BackpackWindow maps item.id -> key. */
