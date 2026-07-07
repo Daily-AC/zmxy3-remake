@@ -11,6 +11,7 @@ import {
   isHeroDead,
 } from '../src/systems/heroIdentity'
 import { getLevelStats, getExpToNextLevel } from '../src/systems/progression'
+import { heroEffectiveMaxHp, heroEffectiveDef } from '../src/systems/heroSurvivability'
 import { HeroCombatTuning } from '../src/systems/heroCombat'
 import { createEquipment } from '../src/systems/equipment'
 import type { Equipment } from '../src/systems/equipment'
@@ -38,11 +39,11 @@ function armed(atk: number, def = 0): Equipment {
 }
 
 describe('heroIdentity (统一身份宿主：三系统挂靠)', () => {
-  it('seeds hp/maxHp/mp from the level curve, full at creation', () => {
+  it('seeds hp/maxHp/mp from the level curve (HP scaled by the survivability layer), full at creation', () => {
     const id = createHeroIdentity(1)
     const lvl1 = getLevelStats(1, 1)
-    expect(id.combat.maxHp).toBe(lvl1.maxHp)
-    expect(id.combat.hp).toBe(lvl1.maxHp)
+    expect(id.combat.maxHp).toBe(heroEffectiveMaxHp(lvl1.maxHp))
+    expect(id.combat.hp).toBe(heroEffectiveMaxHp(lvl1.maxHp))
     expect(id.maxMp).toBe(lvl1.maxMp)
     expect(id.mp).toBe(lvl1.maxMp)
     // The level curve overrides heroCombat's own default pool.
@@ -54,15 +55,16 @@ describe('heroIdentity (统一身份宿主：三系统挂靠)', () => {
     const base = heroBaseStats(id)
     expect(heroTotalAtk(id, createEquipment())).toBe(base.atk)
     expect(heroTotalAtk(id, armed(45))).toBe(base.atk + 45)
-    expect(heroTotalDef(id, armed(0, 12))).toBe(base.def + 12)
+    // def = SCALED level base (survivability layer) + equipment, added unscaled.
+    expect(heroTotalDef(id, armed(0, 12))).toBe(heroEffectiveDef(base.def) + 12)
   })
 
-  it('heroStats sums all equipped stat effects onto the level base', () => {
+  it('heroStats sums all equipped stat effects onto the level base (def scaled, atk not)', () => {
     const id = createHeroIdentity(1)
     const s = heroStats(id, armed(10, 5))
     const base = heroBaseStats(id)
     expect(s.atk).toBe(base.atk + 10)
-    expect(s.def).toBe(base.def + 5)
+    expect(s.def).toBe(heroEffectiveDef(base.def) + 5)
   })
 
   it('gainExp levels up and grows the pools, healing the growth delta', () => {
@@ -77,9 +79,11 @@ describe('heroIdentity (统一身份宿主：三系统挂靠)', () => {
     expect(result.levelsGained).toBe(1)
     expect(id.progression.level).toBe(2)
     const after = getLevelStats(1, 2)
-    expect(id.combat.maxHp).toBe(after.maxHp)
-    // Healed by exactly the maxHp growth (still below the new cap here).
-    expect(id.combat.hp).toBe(hpAfterHit + (after.maxHp - before.maxHp))
+    expect(id.combat.maxHp).toBe(heroEffectiveMaxHp(after.maxHp))
+    // Healed by exactly the SCALED maxHp growth (still below the new cap here).
+    expect(id.combat.hp).toBe(
+      hpAfterHit + (heroEffectiveMaxHp(after.maxHp) - heroEffectiveMaxHp(before.maxHp)),
+    )
     expect(id.maxMp).toBe(after.maxMp)
   })
 
@@ -121,6 +125,6 @@ describe('heroIdentity (统一身份宿主：三系统挂靠)', () => {
     gainHeroExp(id, getExpToNextLevel(1))
     // Pool grew, but the corpse's hp stays 0 until respawn.
     expect(id.combat.hp).toBe(0)
-    expect(id.combat.maxHp).toBe(getLevelStats(1, 2).maxHp)
+    expect(id.combat.maxHp).toBe(heroEffectiveMaxHp(getLevelStats(1, 2).maxHp))
   })
 })

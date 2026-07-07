@@ -44,6 +44,11 @@ import {
 import type { Equipment } from './equipment'
 import { equippedList } from './equipment'
 import { applyEquipStats, BaseStats } from './effects'
+import {
+  heroEffectiveMaxHp,
+  heroEffectiveDef,
+  heroMagicDefFraction,
+} from './heroSurvivability'
 
 export interface HeroIdentityState {
   heroId: HeroId
@@ -58,8 +63,12 @@ export function createHeroIdentity(heroId: HeroId, level = 1): HeroIdentityState
   const progression = createProgression(heroId, level)
   const combat = createHeroCombat()
   const stats = getLevelStats(heroId, progression.level)
-  combat.maxHp = stats.maxHp
-  combat.hp = stats.maxHp
+  // Adapted: the growth-substitute layer (heroSurvivability.ts) scales the
+  // original level-curve maxHp — the original game's equipment/gem HP growth
+  // this project lacks. progression.ts's curve numbers are untouched.
+  const maxHp = heroEffectiveMaxHp(stats.maxHp)
+  combat.maxHp = maxHp
+  combat.hp = maxHp
   return { heroId, progression, combat, mp: stats.maxMp, maxMp: stats.maxMp }
 }
 
@@ -71,8 +80,21 @@ export function heroBaseStats(id: HeroIdentityState): HeroLevelStats {
 /** Full stats = level base + every equipped item's stat effects. */
 export function heroStats(id: HeroIdentityState, eq: Equipment): BaseStats {
   const lvl = heroBaseStats(id)
-  const base: BaseStats = { atk: lvl.atk, def: lvl.def, hp: 0, mp: 0, crit: 0 }
+  // Adapted: def is scaled by the growth-substitute layer here at the
+  // aggregation seam (heroSurvivability.ts), THEN crafted-equipment def is
+  // added on top unscaled — real gear is additive, the substitute layer is the
+  // stand-in for the missing gem growth. atk/hp/mp/crit are not scaled.
+  const base: BaseStats = { atk: lvl.atk, def: heroEffectiveDef(lvl.def), hp: 0, mp: 0, crit: 0 }
   return applyEquipStats(base, equippedList(eq))
+}
+
+/** Hero magic-def as a 0-1 fraction at the current level (growth curve in
+ * heroSurvivability.ts). Feed this into heroScale.resolveIncomingHeroDamage's
+ * `heroMagicDefFraction` param when wiring a magic monster hit — the two
+ * deadliest boss hits in the game are magic, and that param was previously
+ * hardcoded 0 at the BattleScene call site. */
+export function heroMagicDef(id: HeroIdentityState): number {
+  return heroMagicDefFraction(id.progression.level)
 }
 
 export function heroTotalAtk(id: HeroIdentityState, eq: Equipment): number {
@@ -93,9 +115,13 @@ export function heroTotalDef(id: HeroIdentityState, eq: Equipment): number {
 export function gainHeroExp(id: HeroIdentityState, amount: number): GainExpResult {
   const result = gainExp(id.progression, amount)
   if (result.levelsGained > 0) {
-    const hpGain = Math.max(0, result.statsAfter.maxHp - result.statsBefore.maxHp)
+    // Growth delta measured on the SCALED pool so the mid-fight level-up heal
+    // matches the (scaled) maxHp jump, not the raw-curve delta.
+    const maxHpBefore = heroEffectiveMaxHp(result.statsBefore.maxHp)
+    const maxHpAfter = heroEffectiveMaxHp(result.statsAfter.maxHp)
+    const hpGain = Math.max(0, maxHpAfter - maxHpBefore)
     const mpGain = Math.max(0, result.statsAfter.maxMp - result.statsBefore.maxMp)
-    id.combat.maxHp = result.statsAfter.maxHp
+    id.combat.maxHp = maxHpAfter
     if (!isHeroCombatDead(id.combat)) {
       id.combat.hp = Math.min(id.combat.maxHp, id.combat.hp + hpGain)
     }
