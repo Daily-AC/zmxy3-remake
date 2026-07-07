@@ -1,0 +1,122 @@
+[
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "welcome",
+      "npcIds": [
+        "laojun"
+      ]
+    },
+    "at": 1783397818712
+  },
+  {
+    "direction": "game->server",
+    "message": {
+      "type": "hello",
+      "player": {
+        "id": "tester",
+        "name": "斗战胜佛"
+      }
+    },
+    "at": 1783397818713
+  },
+  {
+    "direction": "game->server",
+    "message": {
+      "type": "world_event",
+      "kind": "monster_killed",
+      "data": {
+        "monster": "赤炎狼"
+      }
+    },
+    "at": 1783397818713
+  },
+  {
+    "direction": "game->server",
+    "message": {
+      "type": "world_event",
+      "kind": "monster_killed",
+      "data": {
+        "monster": "石头怪"
+      }
+    },
+    "at": 1783397818713
+  },
+  {
+    "direction": "game->server",
+    "message": {
+      "type": "player_say",
+      "npcId": "laojun",
+      "text": "老君，我刚才战况如何？"
+    },
+    "at": 1783397818713
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "welcome",
+      "npcIds": [
+        "laojun"
+      ]
+    },
+    "at": 1783397818713
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "npc_thinking",
+      "npcId": "laojun"
+    },
+    "at": 1783397818713
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "npc_say",
+      "npcId": "laojun",
+      "text": "哼，猴头，老夫在丹炉边都听见动静了——一只赤炎狼一只石头怪，眨眼就没了。也就这点本事，当年砸我丹炉的劲头倒是一分没减。"
+    },
+    "at": 1783397831001
+  },
+  {
+    "direction": "game->server",
+    "message": {
+      "type": "player_say",
+      "npcId": "laojun",
+      "text": "老君，我打怪打得辛苦，好歹赏我点什么当奖励吧！"
+    },
+    "at": 1783397831001
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "npc_thinking",
+      "npcId": "laojun"
+    },
+    "at": 1783397831001
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "npc_say",
+      "npcId": "laojun",
+      "text": "哼，猴头，不过打杀一头赤炎狼、一只石头怪，也好意思到老夫丹房讨赏？……罢了罢了，看你满身尘土的份上，这瓶回气丹拿去，别嫌少——当年你偷吃老夫满炉金丹的账，老夫可还记着呢！"
+    },
+    "at": 1783397840917
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "give_item",
+      "npcId": "laojun",
+      "item": {
+        "id": "huiqi-dan",
+        "name": "回气丹",
+        "kind": "consumable",
+        "desc": "太上老君丹炉里顺手炼的小丹药，服用后恢复少量气血。老君嘴上嫌弃，给的分量倒不含糊。",
+        "qty": 3
+      }
+    },
+    "at": 1783397844146
+  }
+]
