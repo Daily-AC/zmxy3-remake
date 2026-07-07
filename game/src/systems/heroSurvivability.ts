@@ -20,9 +20,13 @@
 // ## Adapted (not original): the scale + the magic-def curve
 //
 // SURVIVABILITY_MAXHP_SCALE / SURVIVABILITY_DEF_SCALE stand in for the missing
-// equipment/gem HP+defense growth. When a real gem system lands, drop both
-// back to 1 and this whole layer disappears with a single edit — the original
-// progression.ts curve is untouched underneath.
+// GEM growth layer specifically. Crafted-equipment hp/def are REAL gear that
+// this project does have (the furnace) and are added additively on top of the
+// scaled level curve — the scale does not stand in for them. (Equipment hp is
+// wired into the combat pool via heroIdentity.syncHeroEquipment; def via
+// heroTotalDef.) When a real gem system lands, drop both scales back to 1 and
+// this whole layer disappears with a single edit — the original progression.ts
+// curve is untouched underneath.
 //
 // heroMagicDefFraction is a genuinely NEW hero stat. The original client's
 // base.BaseHero.countHurt() already routes magic hits through
@@ -51,11 +55,12 @@ import { getLevelStats, type HeroId } from './progression'
 
 // ---------- HP / physical-defense growth-substitute multipliers ----------
 
-/** Effective maxHp = level-curve maxHp * this. Stands in for the missing
- * equipment/gem HP layer (equipment hp is not wired into the combat pool in
- * this build, so this multiplier absorbs that contribution too). Set to 1 when
- * a real gem system lands. */
-export const SURVIVABILITY_MAXHP_SCALE = 3.5
+/** Effective maxHp = level-curve maxHp * this, BEFORE crafted-equipment hp is
+ * added on top (that stays additive and unscaled — it's real gear wired into
+ * the combat pool by heroIdentity.syncHeroEquipment, not the substitute layer).
+ * Stands in for the missing GEM HP layer only. Set to 1 when a real gem system
+ * lands. */
+export const SURVIVABILITY_MAXHP_SCALE = 3.0
 
 /** Effective base def = level-curve def * this, BEFORE crafted-equipment def is
  * added on top (that stays additive and unscaled — it's real gear, not the

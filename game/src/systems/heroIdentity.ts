@@ -56,20 +56,70 @@ export interface HeroIdentityState {
   combat: HeroCombatModel
   mp: number
   maxMp: number
+  /** Crafted-equipment hp/mp contribution currently folded into the pools.
+   * Cached here so level-up growth (gainHeroExp) preserves the gear bonus
+   * without needing the Equipment passed in; refreshed by syncHeroEquipment
+   * whenever gear changes. */
+  equipMaxHpBonus: number
+  equipMaxMpBonus: number
 }
 
-/** Fresh identity at `level` for `heroId`, HP/MP full at the level curve. */
+/** Fresh identity at `level` for `heroId`, HP/MP full at the level curve. No
+ * equipment bonus yet — call syncHeroEquipment once the hero's gear is loaded. */
 export function createHeroIdentity(heroId: HeroId, level = 1): HeroIdentityState {
   const progression = createProgression(heroId, level)
   const combat = createHeroCombat()
   const stats = getLevelStats(heroId, progression.level)
   // Adapted: the growth-substitute layer (heroSurvivability.ts) scales the
-  // original level-curve maxHp — the original game's equipment/gem HP growth
-  // this project lacks. progression.ts's curve numbers are untouched.
+  // original level-curve maxHp — the original game's gem HP growth this project
+  // lacks. progression.ts's curve numbers are untouched. Crafted-equipment hp
+  // is added later, additively, by syncHeroEquipment.
   const maxHp = heroEffectiveMaxHp(stats.maxHp)
   combat.maxHp = maxHp
   combat.hp = maxHp
-  return { heroId, progression, combat, mp: stats.maxMp, maxMp: stats.maxMp }
+  return {
+    heroId,
+    progression,
+    combat,
+    mp: stats.maxMp,
+    maxMp: stats.maxMp,
+    equipMaxHpBonus: 0,
+    equipMaxMpBonus: 0,
+  }
+}
+
+/**
+ * Fold the current equipment's hp/mp stat effects into the live maxHp/maxMp
+ * pools. Call after seeding gear and after every equip/unequip — crafted gear
+ * with hp/mp effects was previously inert (heroStats summed it but nothing grew
+ * the pool). A positive change tops the current hp/mp up by the delta (like a
+ * partial heal on gearing up); a negative change clamps down. A dead hero's hp
+ * is left at 0 (respawn refills). maxHp base is re-derived from the (scaled)
+ * level curve each call, so this stays correct across level-ups too.
+ *
+ * NOTE: the in-game MP pool is currently BattleScene's separate MpModel
+ * (getRole1MaxMp), not this identity.maxMp — so the mp side of this is only
+ * self-consistent bookkeeping until the wiring layer routes MP through the
+ * identity or adds heroEquipMaxMpBonus to its Mp sizing (see report §5).
+ */
+export function syncHeroEquipment(id: HeroIdentityState, eq: Equipment): void {
+  const stats = heroStats(id, eq) // base hp/mp = 0, so .hp/.mp are the equip sums
+  const hpDelta = stats.hp - id.equipMaxHpBonus
+  const mpDelta = stats.mp - id.equipMaxMpBonus
+  id.equipMaxHpBonus = stats.hp
+  id.equipMaxMpBonus = stats.mp
+
+  const curve = getLevelStats(id.heroId, id.progression.level)
+  id.combat.maxHp = heroEffectiveMaxHp(curve.maxHp) + id.equipMaxHpBonus
+  if (!isHeroCombatDead(id.combat)) {
+    id.combat.hp =
+      hpDelta > 0
+        ? Math.min(id.combat.maxHp, id.combat.hp + hpDelta)
+        : Math.min(id.combat.hp, id.combat.maxHp)
+  }
+
+  id.maxMp = curve.maxMp + id.equipMaxMpBonus
+  id.mp = mpDelta > 0 ? Math.min(id.maxMp, id.mp + mpDelta) : Math.min(id.mp, id.maxMp)
 }
 
 /** Level-curve base stats (before any equipment bonus). */
@@ -121,11 +171,13 @@ export function gainHeroExp(id: HeroIdentityState, amount: number): GainExpResul
     const maxHpAfter = heroEffectiveMaxHp(result.statsAfter.maxHp)
     const hpGain = Math.max(0, maxHpAfter - maxHpBefore)
     const mpGain = Math.max(0, result.statsAfter.maxMp - result.statsBefore.maxMp)
-    id.combat.maxHp = maxHpAfter
+    // Keep the cached equipment bonus in the pool across the level-up — only
+    // the scaled-level portion grows here (the equip delta is 0, gear unchanged).
+    id.combat.maxHp = maxHpAfter + id.equipMaxHpBonus
     if (!isHeroCombatDead(id.combat)) {
       id.combat.hp = Math.min(id.combat.maxHp, id.combat.hp + hpGain)
     }
-    id.maxMp = result.statsAfter.maxMp
+    id.maxMp = result.statsAfter.maxMp + id.equipMaxMpBonus
     id.mp = Math.min(id.maxMp, id.mp + mpGain)
   }
   return result

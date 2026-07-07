@@ -9,6 +9,7 @@ import {
   damageHero,
   updateHeroIdentity,
   isHeroDead,
+  syncHeroEquipment,
 } from '../src/systems/heroIdentity'
 import { getLevelStats, getExpToNextLevel } from '../src/systems/progression'
 import { heroEffectiveMaxHp, heroEffectiveDef } from '../src/systems/heroSurvivability'
@@ -65,6 +66,48 @@ describe('heroIdentity (统一身份宿主：三系统挂靠)', () => {
     const base = heroBaseStats(id)
     expect(s.atk).toBe(base.atk + 10)
     expect(s.def).toBe(heroEffectiveDef(base.def) + 5)
+  })
+
+  it('syncHeroEquipment folds equipment hp into the combat pool (crafted hp now real)', () => {
+    const id = createHeroIdentity(1)
+    const scaledLevelMaxHp = id.combat.maxHp
+    const hpGear: Item = {
+      id: 'armor1',
+      name: 'test-armor',
+      kind: 'equip',
+      rarity: 1,
+      effects: [{ type: 'stat', stat: 'hp', value: 400 }],
+    }
+    const eq = createEquipment()
+    eq.weapon = hpGear
+    syncHeroEquipment(id, eq)
+    // maxHp grew by exactly the equip hp; full hero tops up to the new cap.
+    expect(id.combat.maxHp).toBe(scaledLevelMaxHp + 400)
+    expect(id.combat.hp).toBe(scaledLevelMaxHp + 400)
+    expect(id.equipMaxHpBonus).toBe(400)
+
+    // Unequipping removes the bonus and clamps hp back down.
+    syncHeroEquipment(id, createEquipment())
+    expect(id.combat.maxHp).toBe(scaledLevelMaxHp)
+    expect(id.combat.hp).toBe(scaledLevelMaxHp)
+    expect(id.equipMaxHpBonus).toBe(0)
+  })
+
+  it('level-up preserves the equipment hp bonus in the pool', () => {
+    const id = createHeroIdentity(1)
+    const eq = createEquipment()
+    eq.weapon = {
+      id: 'armor1',
+      name: 'test-armor',
+      kind: 'equip',
+      rarity: 1,
+      effects: [{ type: 'stat', stat: 'hp', value: 400 }],
+    }
+    syncHeroEquipment(id, eq)
+    gainHeroExp(id, getExpToNextLevel(1))
+    // Scaled L2 curve + the still-equipped +400, not the bare scaled curve.
+    expect(id.combat.maxHp).toBe(heroEffectiveMaxHp(getLevelStats(1, 2).maxHp) + 400)
+    expect(id.equipMaxHpBonus).toBe(400)
   })
 
   it('gainExp levels up and grows the pools, healing the growth delta', () => {
