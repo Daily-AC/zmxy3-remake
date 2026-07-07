@@ -78,30 +78,30 @@ describe('monsterExp: AS3-recovered values', () => {
     expect(MONSTER_BASE_EXP.monster30).toBe(4) // swarm imp
   })
 
-  it('ships faithful (multiplier 1) — no auto-放大', () => {
-    expect(CAMPAIGN_EXP_MULTIPLIER).toBe(1)
-    expect(monsterExp('monster22')).toBe(430)
-    expect(monsterExp('unknown-species')).toBe(10) // DEFAULT fallback
+  it('ships at multiplier 6 (structural-compression compensation, team-lead sign-off)', () => {
+    expect(CAMPAIGN_EXP_MULTIPLIER).toBe(6)
+    expect(monsterExp('monster22')).toBe(2580) // 430 * 6
+    expect(monsterExp('unknown-species')).toBe(60) // DEFAULT 10 * 6
   })
 })
 
 describe('monsterExp: natural-playthrough trajectory', () => {
-  it('at faithful multiplier 1, falls SHORT of the survivability 到关等级 target', () => {
+  it('faithful base values ALONE (multiplier 1) fall SHORT of the 到关等级 target', () => {
     const lv = bossArrivalLevels(1)
-    // Documents the gap: real exp + steep curve + compressed levels -> underleveled.
+    // Documents WHY the multiplier is needed: real exp + steep curve +
+    // compressed levels -> underleveled (L3/L4 boss reached at lv8/lv11).
     expect(lv[2]).toBe(3)
     expect(lv[3]).toBe(8)
     expect(lv[4]).toBe(11)
-    // Target is L3 lv15±1, L4 lv21±2 — not met at multiplier 1.
-    expect(lv[3]).toBeLessThan(14)
-    expect(lv[4]).toBeLessThan(19)
+    expect(lv[3]).toBeLessThan(14) // below L3 target 15±1
+    expect(lv[4]).toBeLessThan(19) // below L4 target 21±2
   })
 
-  it('the proposed ~6 multiplier lands both bosses inside the target band', () => {
-    const lv = bossArrivalLevels(6)
+  it('the SHIPPED multiplier lands both bosses inside the target band', () => {
+    const lv = bossArrivalLevels(CAMPAIGN_EXP_MULTIPLIER)
     expect(lv[3]).toBeGreaterThanOrEqual(14)
-    expect(lv[3]).toBeLessThanOrEqual(16) // L3 15±1
+    expect(lv[3]).toBeLessThanOrEqual(16) // L3 15±1 -> ~16
     expect(lv[4]).toBeGreaterThanOrEqual(19)
-    expect(lv[4]).toBeLessThanOrEqual(23) // L4 21±2
+    expect(lv[4]).toBeLessThanOrEqual(23) // L4 21±2 -> ~20
   })
 })
