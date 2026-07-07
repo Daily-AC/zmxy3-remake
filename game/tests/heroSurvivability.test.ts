@@ -41,19 +41,21 @@ import { getLevelStats } from '../src/systems/progression'
 // 到关等级 = max(exp-economy floor, DPS-and-survivability winnable level).
 // Exp floor (natural single clean playthrough at BattleScene's flat
 // MONSTER_KILL_EXP=80): L2=8, L3=9, L4=10. Winnable level (out-DPS boss in
-// <=90s AND survive its nuke at <=40% eff HP): L2=~2, L3=15, L4=21. Max:
-const STAGE_LEVEL: Record<2 | 3 | 4, number> = { 2: 8, 3: 15, 4: 21 }
+// <=90s AND survive its nuke at <=40% eff HP): L2=~1, L3=15, L4=22. Max:
+const STAGE_LEVEL: Record<2 | 3 | 4, number> = { 2: 8, 3: 15, 4: 22 }
 
-// Mid-tier crafted gear ("中等炼装" = ~half the furnace field caps). Only the
-// def contribution matters for survivability and IS wired (heroTotalDef sums
-// equipment); equipment hp is NOT wired into the combat pool in this build, so
-// the maxHp scale absorbs that contribution and no gear-hp term appears here.
+// Mid-tier crafted gear ("中等炼装" = ~half the furnace field caps: hp+400,
+// def+100). Both are now REAL wired gear: def via heroTotalDef, hp via
+// heroIdentity.syncHeroEquipment folding it into the combat pool. So the eff
+// HP here is scaled-level-curve + gear hp, and the maxHp scale (3.0) no longer
+// has to absorb the gear-hp contribution.
 const MID_GEAR_DEF = 100
+const MID_GEAR_HP = 400
 
 const HERO_ID = 1 // 悟空, the only playable hero
 
 function effMaxHp(level: number): number {
-  return heroEffectiveMaxHpAt(HERO_ID, level)
+  return heroEffectiveMaxHpAt(HERO_ID, level) + MID_GEAR_HP
 }
 function effDef(level: number): number {
   return heroEffectiveBaseDefAt(HERO_ID, level) + MID_GEAR_DEF
@@ -78,16 +80,16 @@ function basicAndWorst(level: 2 | 3 | 4) {
 }
 
 describe('heroSurvivability: growth-substitute scale', () => {
-  it('maxHp scale is 3.5 and rounds the scaled pool', () => {
-    expect(SURVIVABILITY_MAXHP_SCALE).toBe(3.5)
-    expect(heroEffectiveMaxHp(getLevelStats(1, 15).maxHp)).toBe(2730) // 780 * 3.5
-    expect(heroEffectiveMaxHp(getLevelStats(1, 1).maxHp)).toBe(280) // 80 * 3.5
+  it('maxHp scale is 3.0 and rounds the scaled pool', () => {
+    expect(SURVIVABILITY_MAXHP_SCALE).toBe(3)
+    expect(heroEffectiveMaxHp(getLevelStats(1, 15).maxHp)).toBe(2340) // 780 * 3
+    expect(heroEffectiveMaxHp(getLevelStats(1, 1).maxHp)).toBe(240) // 80 * 3
   })
 
   it('def scale is 2.0, applied to the level base only', () => {
     expect(SURVIVABILITY_DEF_SCALE).toBe(2)
     expect(heroEffectiveDef(getLevelStats(1, 15).def)).toBe(60) // 30 * 2
-    expect(heroEffectiveDef(getLevelStats(1, 21).def)).toBe(84) // 42 * 2
+    expect(heroEffectiveDef(getLevelStats(1, 22).def)).toBe(88) // 44 * 2
   })
 })
 
@@ -110,31 +112,31 @@ describe('heroSurvivability: magic-def growth curve', () => {
 describe('heroSurvivability: acceptance band at 到关等级 + 中等炼装', () => {
   it('L3 二郎神 (reference boss) — hardest hit 25-40%, basic 5-10%', () => {
     const { worstFrac, basicFrac } = basicAndWorst(3)
-    // 1299 magic nuke at L15 (mdef 16.25%) over 2730 eff HP -> ~39.9%.
+    // 1299 magic nuke at L15 (mdef 16.25%) over 2740 eff HP -> ~39.7%.
     expect(worstFrac).toBeGreaterThanOrEqual(0.25)
     expect(worstFrac).toBeLessThanOrEqual(0.4)
-    // 345 physical basic minus 160 eff def over 2730 -> ~6.8%.
+    // 345 physical basic minus 160 eff def over 2740 -> ~6.8%.
     expect(basicFrac).toBeGreaterThanOrEqual(0.05)
     expect(basicFrac).toBeLessThanOrEqual(0.1)
   })
 
   it('L4 邪.悟空 — hardest hit in band (25-40%); basic pinned hot (~17%, documented)', () => {
     const { worstFrac, basicFrac } = basicAndWorst(4)
-    // 1658 physical hit6 minus 184 eff def over 3780 -> ~39.0%.
+    // 1658 physical hit6 minus 188 eff def over 3790 -> ~38.8%.
     expect(worstFrac).toBeGreaterThanOrEqual(0.25)
     expect(worstFrac).toBeLessThanOrEqual(0.4)
-    // 829 physical basic minus 184 over 3780 -> ~17.1%, structurally above the
+    // 829 physical basic minus 188 over 3790 -> ~16.9%, structurally above the
     // 5-10% band (a final boss's basic is genuinely punishing). Pinned, not
     // banded, so a curve change still trips this.
-    expect(basicFrac).toBeCloseTo(0.171, 2)
+    expect(basicFrac).toBeCloseTo(0.169, 2)
   })
 
   it('L2 多闻天王 — under the band (weak early boss), pinned', () => {
     const { worstFrac, basicFrac } = basicAndWorst(2)
-    // 120 magic at L8 (mdef 7.5%) over 1505 eff HP -> ~7.4% (below 25%).
-    expect(worstFrac).toBeCloseTo(0.074, 2)
-    // 186 physical basic minus 132 over 1505 -> ~3.6% (below 5%).
-    expect(basicFrac).toBeCloseTo(0.036, 2)
+    // 120 magic at L8 (mdef 7.5%) over 1690 eff HP -> ~6.6% (below 25%).
+    expect(worstFrac).toBeCloseTo(0.066, 2)
+    // 186 physical basic minus 132 over 1690 -> ~3.2% (below 5%).
+    expect(basicFrac).toBeCloseTo(0.032, 2)
   })
 
   it('the two lethal-magic bosses now survive at least 2 of their hardest hit', () => {
