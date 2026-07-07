@@ -118,6 +118,7 @@ import { SkillBarHud, SkillSlotData } from '../ui/hud/SkillBarHud'
 import { BossHpBar, MonsterHpBar } from '../ui/hud/MonsterHpBar'
 import { BackpackWindow } from '../ui/hud/BackpackWindow'
 import { FurnacePanel } from '../ui/hud/FurnacePanel'
+import { ResultBanner } from '../ui/hud/ResultBanner'
 import { Toast, spawnFloatingText } from '../ui/hud/Toast'
 import roleRaw from '../data/roles/role1.json'
 
@@ -313,6 +314,9 @@ export class BattleScene extends Phaser.Scene {
   private skillBar!: SkillBarHud
   private backpack!: BackpackWindow
   private furnacePanel!: FurnacePanel
+  private resultBanner!: ResultBanner
+  // Boss-clear result banner -> portal handoff (auto-continues after a beat).
+  private bannerTimer?: Phaser.Time.TimerEvent
   private bossBar!: BossHpBar
   private toastUi!: Toast
   // F1 debug telemetry (hidden by default).
@@ -679,8 +683,13 @@ export class BattleScene extends Phaser.Scene {
     for (const hb of result.hitboxes) this.scheduleSkillHit(hb, skillLevel, atk)
   }
 
-  /** Up/W: use the transfer portal if open + standing in it, else talk to 老君. */
+  /** Up/W: dismiss the clear banner (-> portal) first, else use the portal if
+   * standing in it, else talk to 老君. */
   private onInteract(): void {
+    if (this.resultBanner.isOpen) {
+      this.dismissResultBanner()
+      return
+    }
     if (this.tryUsePortal()) return
     this.tryOpenDialogue()
   }
@@ -830,6 +839,8 @@ export class BattleScene extends Phaser.Scene {
     this.dialogue?.close()
     this.backpack?.close()
     this.furnacePanel?.close()
+    this.resultBanner?.hide()
+    this.bannerTimer?.remove(false)
     this.swapBackground(this.campaignIndex)
     this.showLevelBanner(def.name)
   }
@@ -1000,6 +1011,15 @@ export class BattleScene extends Phaser.Scene {
       iconKeyFor: (item) => (this.textures.exists('icon_' + item.id) ? 'icon_' + item.id : ICON_FALLBACK_KEY),
       budgetPreview: (lots) => this.craftBudgetLine(lots),
       onCraftSubmit: (description, lots) => this.submitCraft(description, lots),
+    })
+    // Stage-clear result banner (boss death -> banner -> portal).
+    this.resultBanner = new ResultBanner(this, {
+      onContinue: () => this.dismissResultBanner(),
+      onRetry: () => {
+        this.resultBanner.hide()
+        this.bannerTimer?.remove(false)
+        this.startLevel(this.campaignIndex)
+      },
     })
     this.toastUi = new Toast(this)
     this.refreshSkillBar()
@@ -1334,11 +1354,39 @@ export class BattleScene extends Phaser.Scene {
     }
     for (const e of this.monsters) this.advanceEntity(e, delta, heroAlive)
     this.reapMonsters()
-    // Boss down -> open the transfer portal.
+    // Boss down -> stage-clear banner, then the portal on confirm/timeout. The
+    // door is revealed now (so the portal is reachable the moment the banner is
+    // dismissed and __usePortal keeps working), but its glow only shows on
+    // dismiss.
     if (this.bossEntity && isBossDead(this.bossEntity.state) && !this.levelState.arena.door.visible) {
       revealTransferDoor(this.levelState)
-      this.showPortal()
+      this.showResultBanner()
     }
+  }
+
+  /** Boss cleared: play the 挑战成功 banner with a short stat line, then hand
+   * off to the portal on 继续 / timeout. */
+  private showResultBanner(): void {
+    const bossName = this.bossEntity ? MONSTER_NAMES[this.bossEntity.species] ?? '妖王' : '妖王'
+    this.resultBanner.showSuccess({
+      stats: [
+        CAMPAIGN[this.campaignIndex].name,
+        `${bossName}已除`,
+        `境界 Lv${this.identity.progression.level}`,
+      ],
+    })
+    this.playSfx('pickup', 0.7)
+    this.bannerTimer?.remove(false)
+    this.bannerTimer = this.time.delayedCall(6000, () => this.dismissResultBanner())
+  }
+
+  /** Close the result banner and reveal the transfer portal glow. */
+  private dismissResultBanner(): void {
+    if (!this.resultBanner.isOpen) return
+    this.bannerTimer?.remove(false)
+    this.bannerTimer = undefined
+    this.resultBanner.hide()
+    this.showPortal()
   }
 
   private advanceEntity(e: MonsterEntity, delta: number, heroAlive: boolean): void {
@@ -1977,7 +2025,9 @@ export class BattleScene extends Phaser.Scene {
       return true
     }
     // Walk into the portal (teleports the hero to the door first) and advance.
+    // Dismiss the clear banner first if it's still up (boss just died).
     w.__usePortal = () => {
+      if (this.resultBanner.isOpen) this.dismissResultBanner()
       const d = this.levelState.arena.door
       this.heroState.x = d.x + d.width / 2
       return this.tryUsePortal()
