@@ -29,6 +29,33 @@ export class Toast {
     this.y = y
   }
 
+  /**
+   * Ink-brush combo banner ("N 连击!!"), styled after the 造梦 series hit banner
+   * (docs/reference/zmxy-online-screens/combat-damage.png): a dark brushstroke
+   * strip with bold orange text that pops in, holds, and fades. Shown near the
+   * action rather than centered. `worldX/worldY` default to a right-of-center
+   * screen spot.
+   */
+  combo(count: number, worldX = 640, worldY = 190): void {
+    const label = this.scene.add
+      .text(0, 0, `${count} 连击!!`, { fontSize: '30px', fontStyle: 'bold', color: '#ff9a2e', stroke: '#3a1408', strokeThickness: 5 })
+      .setOrigin(0.5)
+    const w = label.width + 70
+    const children: Phaser.GameObjects.GameObject[] = []
+    if (this.scene.textures.exists(INK_TEX)) {
+      this.ensureBrushFrames()
+      children.push(this.scene.add.image(0, 0, INK_TEX, BRUSH_TOP).setDisplaySize(w, 40).setOrigin(0.5).setTint(0x000000).setAlpha(0.9))
+    } else {
+      const g = this.scene.add.graphics()
+      g.fillStyle(0x000000, 0.82).fillRoundedRect(-w / 2, -20, w, 40, 10)
+      children.push(g)
+    }
+    children.push(label)
+    const c = this.scene.add.container(worldX, worldY, children).setScrollFactor(0).setDepth(212).setScale(0.6)
+    this.scene.tweens.add({ targets: c, scale: 1, duration: 160, ease: 'Back.easeOut' })
+    this.scene.tweens.add({ targets: c, alpha: 0, delay: 650, duration: 400, onComplete: () => c.destroy(true) })
+  }
+
   private ensureBrushFrames(): void {
     const tex = this.scene.textures.get(INK_TEX)
     // 942x114 band: top and bottom ~20px strips are brushstroke only (no text).

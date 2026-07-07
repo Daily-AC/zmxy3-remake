@@ -84,14 +84,21 @@ export class SlotSelectScene extends Phaser.Scene {
     frame.lineStyle(1, 0xd9b45a, 0.8).strokeRoundedRect(cx - CARD_W / 2 + 4, top + 4, CARD_W - 8, CARD_H - 8, 11)
     this.cardLayer.add(frame)
 
-    const heading = this.add
-      .text(cx, top + 26, `存档 ${summary.slot + 1}`, {
-        fontSize: '20px',
+    // Big orange slot numeral + small label, echoing the 造梦 series save panel
+    // (docs/reference/zmxy-online-screens/save-slots.png).
+    const numeral = this.add
+      .text(cx - 26, top + 24, `${summary.slot + 1}`, {
+        fontSize: '30px',
         fontStyle: 'bold',
-        color: '#f0d99a',
+        color: '#ff9a3d',
+        stroke: '#3a1c08',
+        strokeThickness: 4,
       })
       .setOrigin(0.5)
-    this.cardLayer.add(heading)
+    const heading = this.add
+      .text(cx + 4, top + 26, '存档', { fontSize: '19px', fontStyle: 'bold', color: '#f0d99a' })
+      .setOrigin(0, 0.5)
+    this.cardLayer.add([numeral, heading])
 
     if (!summary.occupied) {
       this.buildEmptyCard(cx, top)

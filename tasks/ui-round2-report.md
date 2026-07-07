@@ -58,12 +58,16 @@ furnace.open(); furnace.close(); furnace.isOpen
 
 ### Toast + 飘字 — `src/ui/hud/Toast.ts` + `hudTheme.ts`
 ```ts
-new Toast(scene, x=480, y=150); toast.show(text, color?)   // 拾取/升级/炼成横幅
+new Toast(scene, x=480, y=150)
+toast.show(text, color?)                 // 拾取/升级/炼成横幅
+toast.combo(count, worldX?, worldY?)     // 水墨"N 连击!!"横幅（Online combat-damage 参考）
 // 伤害/治疗/经验飘字：参数表在 hudTheme.FLOAT_STYLES（brief 要的"参数表"），渲染便捷函数：
 spawnFloatingText(scene, x, y, text, kind: 'damage'|'crit'|'heal'|'burn'|'exp')
 ```
 Toast 背景：原版水墨文字条中段有烘焙剧情文字，故**只取其上/下无字笔触边**（同 DialogueBox 手法）叠在净色墨底上。
-飘字样式表（FLOAT_STYLES）：普通白金 damage / 大号橙 crit / 绿 heal / 橙 burn / 紫 exp，各含 color/fontSize/risePx/durationMs/stroke。
+飘字样式表（FLOAT_STYLES，按 `docs/reference/zmxy-online-screens/combat-damage.png` 校准）：
+普通黄 damage / **暴击红·大号 crit**（对齐 Online 暴击=红更大）/ 绿 heal / 橙 burn / 紫 exp，各含 color/fontSize/risePx/durationMs/stroke。
+`toast.combo()` = 黑笔刷横幅 + 橙字，对应 Online 的"连击!!"横幅。
 
 ## 2. 品质色映射（纯逻辑，带单测）— `src/ui/hud/rarity.ts`
 原版无稀有度边框素材，只用**文字颜色**区分。我们 Item.rarity 是 3 档（items.ts 1|2|3），映射到 BattleScene 掉落星已用的同一套色（5fd6a0/6ba8ff/d9a441），保持代码库内一致：

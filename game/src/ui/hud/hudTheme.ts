@@ -21,10 +21,13 @@ export const HUD_COLORS = {
   textGold: '#f0d99a',
 } as const
 
-/** Damage / status floating-text style spec (rendering done by the caller). */
+// Damage / status floating-text style spec (rendering done by the caller).
+// Calibrated to the 造梦 series look (docs/reference/zmxy-online-screens/
+// combat-damage.png): normal hits are yellow, crits are RED and noticeably
+// larger.
 export const FLOAT_STYLES = {
   damage: { color: '#ffe37a', fontSize: 18, fontStyle: 'bold', risePx: 34, durationMs: 700, stroke: '#3a2410', strokeThickness: 3 },
-  crit: { color: '#ff8a3d', fontSize: 30, fontStyle: 'bold', risePx: 46, durationMs: 850, stroke: '#3a1408', strokeThickness: 4 },
+  crit: { color: '#ff2d2d', fontSize: 34, fontStyle: 'bold', risePx: 52, durationMs: 900, stroke: '#4a0808', strokeThickness: 5 },
   heal: { color: '#6ef07a', fontSize: 18, fontStyle: 'bold', risePx: 34, durationMs: 700, stroke: '#123a16', strokeThickness: 3 },
   burn: { color: '#ff7a4d', fontSize: 17, fontStyle: 'bold', risePx: 30, durationMs: 650, stroke: '#3a1408', strokeThickness: 3 },
   exp: { color: '#c8b0ff', fontSize: 16, fontStyle: 'bold', risePx: 30, durationMs: 700, stroke: '#241a3a', strokeThickness: 3 },

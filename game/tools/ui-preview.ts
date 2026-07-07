@@ -38,6 +38,7 @@ class PreviewScene extends Phaser.Scene {
   private toast!: Toast
   private t = 0
   private floatTimer = 0
+  private comboN = 0
 
   constructor() {
     super('preview')
@@ -123,8 +124,10 @@ class PreviewScene extends Phaser.Scene {
       this.floatTimer = 0
       const kinds = ['damage', 'crit', 'heal', 'exp', 'burn'] as const
       const k = kinds[Math.floor(Math.random() * kinds.length)]
-      const txt = k === 'heal' ? '+38' : k === 'exp' ? '+80 EXP' : k === 'crit' ? '暴击 -156' : k === 'burn' ? '烧 -22' : '-84'
+      const txt = k === 'heal' ? '+38' : k === 'exp' ? '+80 EXP' : k === 'crit' ? '暴击 156' : k === 'burn' ? '烧 -22' : '-84'
       spawnFloatingText(this, 480 + Math.random() * 40 - 20, 300, txt, k)
+      this.comboN = (this.comboN % 9) + 1
+      if (this.comboN % 3 === 0) this.toast.combo(this.comboN, 640, 200)
     }
   }
 
@@ -136,6 +139,11 @@ class PreviewScene extends Phaser.Scene {
       openFurnace: () => this.furnace.open(),
       closeFurnace: () => this.furnace.close(),
       toast: (t: string) => this.toast.show(t),
+      burst: () => {
+        spawnFloatingText(this, 470, 300, '暴击 27998', 'crit')
+        spawnFloatingText(this, 560, 330, '5599', 'damage')
+        this.toast.combo(9, 640, 210)
+      },
       ready: true,
     }
   }
