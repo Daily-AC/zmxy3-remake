@@ -40,11 +40,15 @@ import {
   heroTotalAtk,
   heroTotalDef,
   heroMagicDef,
+  heroBaseStats,
   syncHeroEquipment,
   heroStats,
   isHeroDead,
   isHeroInvincible,
 } from '../systems/heroIdentity'
+import { rollDailyLuck } from '../systems/heroGrowth'
+import { computeCombatPower } from '../systems/combatPower'
+import { SoulPurse, createSoulPurse, sellCommonEquipment } from '../systems/soulPurse'
 import {
   AttackKind,
   NormalAttackHit,
@@ -86,7 +90,7 @@ import {
 import type { LoadedGameState } from '../systems/save'
 import { createGameSave } from '../systems/save'
 import type { SlotId } from '../systems/saveSlots'
-import { buildSlotEnvelope, writeSlot, readSlot } from '../systems/saveSlots'
+import { buildSlotEnvelope, writeSlot, readSlot, heroName } from '../systems/saveSlots'
 import { readCampaignIndex, writeCampaignIndex, advanceCampaignFrontier } from '../systems/campaignProgress'
 import { SCENE } from './shellShared'
 import { MpModel, createMp, getRole1MaxMp, setMaxMp, tickMpRegen } from '../systems/mp'
@@ -381,6 +385,11 @@ export class BattleScene extends Phaser.Scene {
   private identity!: HeroIdentityState
   private burnAttackId = 100000 // kept clear of hero attackIds (which start at 1)
   private simClockMs = 0
+  // S4 个人资料/背包: 灵魂 wallet (soulPurse.ts -- placeholder economy, see its
+  // header) + a once-per-load 幸运 roll (heroGrowth.rollDailyLuck, display-only:
+  // not wired into combat math, see combatPower.ts / report).
+  private soulPurse: SoulPurse = createSoulPurse()
+  private displayLuck = 0
 
   constructor() {
     super('battle')
@@ -556,6 +565,8 @@ export class BattleScene extends Phaser.Scene {
     }
     // Fold the equipped gear's hp/mp affixes into the live pools.
     syncHeroEquipment(this.identity, this.equipment)
+    this.soulPurse = createSoulPurse()
+    this.displayLuck = rollDailyLuck(this.identity.progression.level)
 
     // Continue accruing from the slot's stored playtime (lives only in slot meta).
     this.playtimeAccMs = 0
@@ -1062,7 +1073,10 @@ export class BattleScene extends Phaser.Scene {
     this.skillBar.container.setScrollFactor(0).setDepth(100)
     this.backpack = new BackpackWindow(this, {
       iconKeyFor: (item) => (this.textures.exists('icon_' + item.id) ? 'icon_' + item.id : ICON_FALLBACK_KEY),
-      onClose: () => {},
+      onClose: () => this.backpack.close(),
+      onEquip: (item) => this.doEquip(item),
+      onUnequip: (slot) => this.doUnequip(slot),
+      onSell: () => this.doSellCommonEquipment(),
     })
     // 炼丹炉 forge window (replaces the old ink-dialogue craft overlay). Same
     // craft protocol: budget preview + submit run through the scene unchanged.
@@ -1759,9 +1773,39 @@ export class BattleScene extends Phaser.Scene {
     if (this.backpack.isOpen) {
       this.backpack.close()
     } else {
-      this.backpack.setItems(listStacks(this.inventory))
+      this.refreshBackpackData()
       this.backpack.open()
     }
+  }
+
+  /** Push the current hero/equipment/bag/soul state into the backpack window.
+   * Called on open and after anything the panel displays changes (equip,
+   * unequip, sell) so an OPEN panel reflects the action immediately. */
+  private refreshBackpackData(): void {
+    const eq = this.equipment
+    const equipAtkBonus = heroTotalAtk(this.identity, eq) - heroBaseStats(this.identity).atk
+    this.backpack.setHeroStats({
+      name: heroName(this.identity.heroId),
+      level: this.identity.progression.level,
+      combatPower: computeCombatPower(this.identity.progression.level, equipAtkBonus),
+      hp: this.identity.combat.hp,
+      maxHp: this.identity.combat.maxHp,
+      mp: this.mp.mp,
+      maxMp: this.mp.maxMp,
+      atk: heroTotalAtk(this.identity, eq),
+      def: heroTotalDef(this.identity, eq),
+      luck: this.displayLuck,
+      magicDefPct: heroMagicDef(this.identity) * 100,
+      critPct: heroStats(this.identity, eq).crit * 100,
+      dodgePct: 0, // no dodge system in this project (see BackpackWindow.ts header)
+      hpRegen: 0, // no hp-regen-over-time system in this project
+      mpRegen: MP_REGEN_PER_SEC,
+      exp: this.identity.progression.exp,
+      expToNext: this.identity.progression.expToNext,
+      soul: this.soulPurse.value,
+    })
+    this.backpack.setEquipment(this.equipment)
+    this.backpack.setInventory(listStacks(this.inventory))
   }
 
   // ---------- equipment ----------
@@ -1778,6 +1822,7 @@ export class BattleScene extends Phaser.Scene {
     syncHeroEquipment(this.identity, this.equipment) // fold new gear hp/mp into pools
     this.showToast(`装备【${item.name}】`, '#ffd873')
     this.saveToSlot() // autosave: equipment/bag changed
+    if (this.backpack.isOpen) this.refreshBackpackData()
     return true
   }
 
@@ -1787,7 +1832,21 @@ export class BattleScene extends Phaser.Scene {
     syncHeroEquipment(this.identity, this.equipment) // drop the gear hp/mp from pools
     this.showToast(`卸下【${cur?.name ?? ''}】`, '#c8cfe6')
     this.saveToSlot() // autosave: equipment/bag changed
+    if (this.backpack.isOpen) this.refreshBackpackData()
     return true
+  }
+
+  /** 出售白装 -- ports export.pack.BackPack.as deleteWhiteEquipment (see
+   * soulPurse.ts's header for the exact mapping/adaptations). */
+  private doSellCommonEquipment(): void {
+    const result = sellCommonEquipment(this.inventory, this.soulPurse)
+    if (result.soldCount === 0) {
+      this.showToast('没有可出售的白装', '#c8cfe6')
+      return
+    }
+    this.showToast(`出售 ${result.soldCount} 件白装，获得灵魂 +${result.soulGained}`, '#ffd873')
+    this.saveToSlot()
+    if (this.backpack.isOpen) this.refreshBackpackData()
   }
 
   private npcStatusLabel(): string {

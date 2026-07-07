@@ -1,82 +1,303 @@
 import Phaser from 'phaser'
 import type { Item } from '../../systems/items'
+import type { EquipSlot, Equipment } from '../../systems/equipment'
 import { HUD_COLORS, ICON_FALLBACK_KEY } from './hudTheme'
 import { rarityCss, rarityName } from './rarity'
 
-// Backpack / 个人资料 window on the ORIGINAL art (backpack_window, export.pack.
-// BackPack from backpack1.swf, cropped). The window's right panel is an empty
-// brown area in the source; we tile the original single-cell art
-// (backpack_slot, export.pack.PackThings) into a 6x4 = 24 grid aligned to
-// inventory.ts capacity, drop item icons in, and show a hover tooltip. Rarity is
-// conveyed by the item NAME's text color only (no border art) -- the original's
-// own language, see rarity.ts + UI MANIFEST.
+// 个人资料/背包 window — S4 rebuild on the ORIGINAL layout, dual-source per
+// docs/playbooks/ui-port-dual-source.md:
 //
-// Pure view: `setItems(stacks)` drives it; icon lookup is injectable so this
-// never hard-codes the item.id -> icon mapping.
+//  - SKIN (out_res/backpack1.swf, export.pack.BackPack chid444): every baked
+//    button/label/tab/stat-box in `backpack_bg` (755x497) IS the real window
+//    art, re-rendered by FFDec at its default (no-AS3) state and cropped to
+//    its non-transparent bbox. All the coordinates below are that render's
+//    *named PlaceObject* translateX/Y (public var name -> instance, e.g.
+//    `zbwq`/`txt_hp`/`bpe`), converted BackPack-local px -> this 755x497
+//    crop's pixel space via one shared affine offset. That offset was solved
+//    empirically (NOT by trusting the analytic canvas math, which the S2/S3
+//    棒 already found off by ~170px for filtered symbols): template-match
+//    three independently-placed baked buttons (btn_close/sellwhite/prePage)
+//    against the fresh full-canvas render and take their common
+//    local->canvas delta (753.5-754.0, 480.5-481.15 across the three -- sub-
+//    pixel agreement). See tasks/profile-backpack-report.md for the numbers.
+//  - BONE (main SWF 打开我开始玩.swf, export.pack.BackPack.as /
+//    BackPackElement.as / PackThings.as): the 5x5 grid formula
+//    (`x=col*(w+11) y=row*(h+9)`, BackPackElement.as:197-198), the four real
+//    equip-type click zones (zbwq/zbfj/zbsp/zbfb = 武器/防具/饰品/法宝 --
+//    NOT "武器/头/衣/饰件" as glossed from the reference screenshot; the
+//    class's own baked button labels settle it, see report), and the level-
+//    badge digit-splice positions (`leveImage()`, BackPack.as:398-429).
+//
+// zbtx (头衔/title-badge) and zbsz (时装/costume) + their showszmc toggle are
+// real AS3 fields but have NO corresponding system in this project (no rank/
+// title system, no costume system) -- rendered as inert grey placeholders,
+// same treatment as the 时装/经书 right-panel tabs (brief: "无对应系统的页签
+// …不造内容", extended here to this analogous left-panel cluster).
 
 export interface BackpackStack {
   item: Item
   qty: number
 }
 
+export interface BackpackHeroStats {
+  name: string
+  level: number
+  /** systems/combatPower.ts computeCombatPower() -- 战斗力. */
+  combatPower: number
+  hp: number
+  maxHp: number
+  mp: number
+  maxMp: number
+  atk: number
+  def: number
+  /** 幸运 -- heroGrowth.ts rollDailyLuck() (AS3 user/User.as setTadayLuckValue, display-only). */
+  luck: number
+  /** 魔抗 as a 0-100 percentage (heroIdentity.heroMagicDef() * 100). */
+  magicDefPct: number
+  /** 暴击 as a 0-100 percentage (heroStats().crit * 100). */
+  critPct: number
+  /** 闪避 -- no dodge system in this project (AS3 getMiss() has no data-model
+   * counterpart here); always 0, kept as an explicit adaptation not a bug. */
+  dodgePct: number
+  /** 回血 -- no HP-regen-over-time system in this project; always 0. */
+  hpRegen: number
+  /** 回蓝 -- real value: BattleScene's MP_REGEN_PER_SEC (systems/mp.ts tickMpRegen rate). */
+  mpRegen: number
+  exp: number
+  expToNext: number
+  /** 灵魂 -- systems/soulPurse.ts SoulPurse.value (placeholder economy, see its header). */
+  soul: number
+}
+
+export type BackpackTab = 'equip' | 'item' | 'fashion' | 'script'
+
+const TAB_ORDER: BackpackTab[] = ['equip', 'item', 'fashion', 'script']
+/** fashion (时装) / script (经书) have no backing system yet -- brief: 置灰页签，不造内容. */
+const DISABLED_TABS: ReadonlySet<BackpackTab> = new Set(['fashion', 'script'])
+
 export interface BackpackWindowOptions {
-  x?: number
-  y?: number
-  cols?: number
-  rows?: number
   /** item -> loaded icon texture key. Default: icon_<id> if present else fallback. */
   iconKeyFor?: (item: Item) => string
   onClose?: () => void
+  /** Click an equip-kind item in the 装备 grid tab. */
+  onEquip?: (item: Item) => void
+  /** Click a filled equip slot on the left panel. */
+  onUnequip?: (slot: EquipSlot) => void
+  /** Click 出售白装. */
+  onSell?: () => void
 }
 
-const WINDOW_TEX = 'backpack_window'
-const SLOT_TEX = 'backpack_slot'
-// Grid region inside the 755x497 window art (right panel), in image-local coords
-// (origin = window center). Measured from the cropped window.
-const GRID_LEFT = 30
-const GRID_TOP = -150
-const CELL = 50
-const GAP = 5.5
+// ---- window geometry: 755x497 backpack_bg, centered in the 960x540 canvas ----
+const BG_W = 755
+const BG_H = 497
+const BG_X = (960 - BG_W) / 2 // 102.5
+const BG_Y = (540 - BG_H) / 2 // 21.5
+
+const CLOSE = { x: 699.2, y: 6.6, w: 40, h: 42 }
+const NAME_VALUE = { x: 127.1, y: 67.3 }
+const ZDL_VALUE = { x: 124.1, y: 93.1 }
+const LEVEL_BADGE = { x: 268.6, y: 52.6, w: 83, h: 59 }
+const PORTRAIT = { x: 280, y: 235 } // headSit mount (169.9,182.6) is empty in AS3; centered under the badge, feet near the equip-slot baseline
+
+interface SlotSpec {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+const EQUIP_SLOTS: Record<EquipSlot, SlotSpec> = {
+  weapon: { x: 251.7, y: 113.4, w: 50, h: 50 }, // zbwq 武器
+  accessory: { x: 322.7, y: 113.4, w: 50, h: 50 }, // zbsp 饰品
+  armor: { x: 251.7, y: 188.4, w: 50, h: 50 }, // zbfj 防具
+  talisman: { x: 322.7, y: 188.4, w: 50, h: 50 }, // zbfb 法宝
+}
+// No system backs these (头衔/时装) -- greyed placeholders, non-interactive.
+const TITLE_PLACEHOLDER: SlotSpec = { x: 54.1, y: 191.6, w: 50, h: 50 } // zbtx
+const FASHION_PLACEHOLDER: SlotSpec = { x: 57.7, y: 113.4, w: 50, h: 50 } // zbsz
+const FASHION_TOGGLE_PLACEHOLDER: SlotSpec = { x: 57.7, y: 165.6, w: 49, h: 18 } // showszmc
+
+// Left panel 10-stat table, 2 columns x 5 rows. Labels are baked into
+// backpack_bg; only the value text is drawn, left-top anchored at the AS3
+// TextField's own tx/ty (verified: markers land exactly at the start of each
+// box's inset value area, see report).
+const STAT_L = [
+  { key: 'hp', x: 104.2, y: 260.3 },
+  { key: 'atk', x: 104.9, y: 293.7 },
+  { key: 'luck', x: 103.2, y: 327.7 },
+  { key: 'crit', x: 103.2, y: 360.8 },
+  { key: 'hpRegen', x: 104.8, y: 394.2 },
+] as const
+const STAT_R = [
+  { key: 'mp', x: 268.0, y: 260.3 },
+  { key: 'def', x: 267.9, y: 293.7 },
+  { key: 'magicDef', x: 267.2, y: 327.7 },
+  { key: 'dodge', x: 265.8, y: 361.3 },
+  { key: 'mpRegen', x: 267.0, y: 393.8 },
+] as const
+
+const EXP_VALUE = { x: 127.1, y: 428.8 }
+const EXP_FILL = { x: 215, y: 450, w: 214, h: 20 } // empirically located (see header)
+
+// Right panel: 4 category tabs, baked labels, 73x27 each, 74px pitch.
+const TAB_ROW = { x: 405.9, y: 61.1, w: 73, h: 27, pitch: 74 }
+const GRID_ORIGIN = { x: 405.9, y: 99.1 }
+const CELL = { w: 50, h: 50, pitchX: 61, pitchY: 59 } // BackPackElement.as:197-198 -- x=col*(w+11) y=row*(h+9)
+const GRID_COLS = 5
+const GRID_ROWS = 5
+const PAGE_SIZE = GRID_COLS * GRID_ROWS
+
+const SOUL_VALUE = { x: 554.4, y: 397.2 }
+const SELL_BTN = { x: 637.2, y: 392.2, w: 62, h: 28 }
+const PREV_BTN = { x: 498.7, y: 419.2, w: 86, h: 34 }
+const NEXT_BTN = { x: 616.9, y: 419.2, w: 86, h: 34 }
+const NOWPAGE = { x: 580.3, y: 425.6 }
+
+const PORTRAIT_TEX = 'role1_0'
+const PORTRAIT_FRAME = 0
+
+const DEFAULT_STATS: BackpackHeroStats = {
+  name: '', level: 1, combatPower: 0, hp: 0, maxHp: 1, mp: 0, maxMp: 1, atk: 0, def: 0,
+  luck: 0, magicDefPct: 0, critPct: 0, dodgePct: 0, hpRegen: 0, mpRegen: 0, exp: 0, expToNext: 1, soul: 0,
+}
 
 export class BackpackWindow {
   readonly container: Phaser.GameObjects.Container
   private readonly scene: Phaser.Scene
-  private readonly opts: Required<Omit<BackpackWindowOptions, 'onClose'>> & Pick<BackpackWindowOptions, 'onClose'>
-  private readonly slotLayer: Phaser.GameObjects.Container
+  private readonly opts: Required<Pick<BackpackWindowOptions, 'iconKeyFor'>> &
+    Pick<BackpackWindowOptions, 'onClose' | 'onEquip' | 'onUnequip' | 'onSell'>
+
+  private readonly nameText: Phaser.GameObjects.Text
+  private readonly zdlText: Phaser.GameObjects.Text
+  private readonly levelLayer: Phaser.GameObjects.Container
+  private readonly statTexts: Record<string, Phaser.GameObjects.Text> = {}
+  private readonly expText: Phaser.GameObjects.Text
+  private readonly expFill: Phaser.GameObjects.Image | null
+  private readonly soulText: Phaser.GameObjects.Text
+  private readonly nowpageText: Phaser.GameObjects.Text
+  private readonly equipLayer: Phaser.GameObjects.Container
+  private readonly tabHighlight: Phaser.GameObjects.Rectangle
+  private readonly gridLayer: Phaser.GameObjects.Container
   private tooltip?: Phaser.GameObjects.Container
+
+  private stats: BackpackHeroStats = DEFAULT_STATS
+  private equipment: Equipment | null = null
+  private allStacks: BackpackStack[] = []
+  private tab: BackpackTab = 'equip'
+  private page = 1
 
   constructor(scene: Phaser.Scene, opts: BackpackWindowOptions = {}) {
     this.scene = scene
     this.opts = {
-      x: opts.x ?? 480,
-      y: opts.y ?? 270,
-      cols: opts.cols ?? 6,
-      rows: opts.rows ?? 4,
       iconKeyFor: opts.iconKeyFor ?? ((item) => (scene.textures.exists(`icon_${item.id}`) ? `icon_${item.id}` : ICON_FALLBACK_KEY)),
       onClose: opts.onClose,
+      onEquip: opts.onEquip,
+      onUnequip: opts.onUnequip,
+      onSell: opts.onSell,
     }
     const children: Phaser.GameObjects.GameObject[] = []
-
-    if (scene.textures.exists(WINDOW_TEX)) {
-      children.push(scene.add.image(0, 0, WINDOW_TEX))
-    } else {
-      const g = scene.add.graphics()
-      g.fillStyle(HUD_COLORS.panel, 0.98).fillRoundedRect(-377, -248, 755, 497, 16)
-      g.lineStyle(2, HUD_COLORS.gold, 0.9).strokeRoundedRect(-377, -248, 755, 497, 16)
-      children.push(g)
+    const add = <T extends Phaser.GameObjects.GameObject>(o: T): T => {
+      children.push(o)
+      return o
     }
 
-    // Close hotspot over the baked red X (top-right of the window art).
-    const close = scene.add
-      .rectangle(348, -232, 46, 46, 0xffffff, 0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.opts.onClose?.())
-    children.push(close)
+    // Dim backdrop over the battlefield.
+    add(scene.add.rectangle(480, 270, 960, 540, 0x000000, 0.55).setInteractive())
 
-    this.slotLayer = scene.add.container(0, 0)
-    children.push(this.slotLayer)
+    if (scene.textures.exists('backpack_bg')) {
+      add(scene.add.image(0, 0, 'backpack_bg').setOrigin(0, 0))
+    } else {
+      const g = scene.add.graphics()
+      g.fillStyle(HUD_COLORS.panel, 0.98).fillRoundedRect(0, 0, BG_W, BG_H, 16)
+      g.lineStyle(2, HUD_COLORS.gold, 0.9).strokeRoundedRect(0, 0, BG_W, BG_H, 16)
+      add(g)
+    }
 
-    this.container = scene.add.container(this.opts.x, this.opts.y, children).setScrollFactor(0).setDepth(200).setVisible(false)
+    // Close hotspot over the baked red X.
+    add(
+      scene.add
+        .rectangle(CLOSE.x + CLOSE.w / 2, CLOSE.y + CLOSE.h / 2, CLOSE.w, CLOSE.h, 0xffffff, 0)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.opts.onClose?.()),
+    )
+
+    this.nameText = add(this.makeValueText(NAME_VALUE.x, NAME_VALUE.y, 190))
+    this.zdlText = add(this.makeValueText(ZDL_VALUE.x, ZDL_VALUE.y, 150))
+
+    this.levelLayer = add(scene.add.container(0, 0))
+
+    // Portrait (adapted: original composites a fully-dressed dynamic render;
+    // this project has no equivalent pipeline, so the idle battle sprite
+    // stands in, centered under the level badge / between the equip columns).
+    if (scene.textures.exists(PORTRAIT_TEX)) {
+      const portrait = scene.add.image(PORTRAIT.x, PORTRAIT.y, PORTRAIT_TEX, PORTRAIT_FRAME).setOrigin(0.5, 0.85)
+      const fit = 150 / Math.max(portrait.width, portrait.height)
+      portrait.setScale(fit)
+      add(portrait)
+    }
+
+    this.equipLayer = add(scene.add.container(0, 0))
+    this.buildPlaceholderSlot(TITLE_PLACEHOLDER, children)
+    this.buildPlaceholderSlot(FASHION_PLACEHOLDER, children)
+    this.buildPlaceholderSlot(FASHION_TOGGLE_PLACEHOLDER, children)
+
+    // 10-stat table.
+    for (const s of STAT_L) this.statTexts[s.key] = add(this.makeValueText(s.x, s.y, 150))
+    for (const s of STAT_R) this.statTexts[s.key] = add(this.makeValueText(s.x, s.y, 150))
+
+    this.expText = add(this.makeValueText(EXP_VALUE.x, EXP_VALUE.y, 260, 12))
+    this.expFill = scene.textures.exists('backpack_exp_fill')
+      ? add(scene.add.image(EXP_FILL.x, EXP_FILL.y, 'backpack_exp_fill').setOrigin(0, 0))
+      : null
+
+    // Right panel: category tabs.
+    this.tabHighlight = add(
+      scene.add
+        .rectangle(TAB_ROW.x, TAB_ROW.y, TAB_ROW.w, TAB_ROW.h, HUD_COLORS.goldBright, 0.3)
+        .setOrigin(0, 0)
+        .setStrokeStyle(2, HUD_COLORS.goldBright, 0.9),
+    )
+    TAB_ORDER.forEach((tabId, i) => {
+      const tx = TAB_ROW.x + i * TAB_ROW.pitch
+      const disabled = DISABLED_TABS.has(tabId)
+      const hit = scene.add
+        .rectangle(tx + TAB_ROW.w / 2, TAB_ROW.y + TAB_ROW.h / 2, TAB_ROW.w, TAB_ROW.h, 0xffffff, 0)
+        .setInteractive({ useHandCursor: !disabled })
+      if (disabled) {
+        add(scene.add.rectangle(tx, TAB_ROW.y, TAB_ROW.w, TAB_ROW.h, 0x1a1a1a, 0.55).setOrigin(0, 0))
+      } else {
+        hit.on('pointerdown', () => this.setTab(tabId))
+      }
+      add(hit)
+    })
+
+    this.gridLayer = add(scene.add.container(0, 0))
+
+    this.soulText = add(this.makeValueText(SOUL_VALUE.x, SOUL_VALUE.y, 120))
+    add(
+      scene.add
+        .rectangle(SELL_BTN.x + SELL_BTN.w / 2, SELL_BTN.y + SELL_BTN.h / 2, SELL_BTN.w, SELL_BTN.h, 0xffffff, 0)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.opts.onSell?.()),
+    )
+    add(
+      scene.add
+        .rectangle(PREV_BTN.x + PREV_BTN.w / 2, PREV_BTN.y + PREV_BTN.h / 2, PREV_BTN.w, PREV_BTN.h, 0xffffff, 0)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.setPage(this.page - 1)),
+    )
+    add(
+      scene.add
+        .rectangle(NEXT_BTN.x + NEXT_BTN.w / 2, NEXT_BTN.y + NEXT_BTN.h / 2, NEXT_BTN.w, NEXT_BTN.h, 0xffffff, 0)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.setPage(this.page + 1)),
+    )
+    this.nowpageText = add(this.makeValueText(NOWPAGE.x, NOWPAGE.y, 70, 13))
+
+    this.container = scene.add
+      .container(BG_X, BG_Y, children)
+      .setScrollFactor(0)
+      .setDepth(200)
+      .setVisible(false)
   }
 
   open(): this {
@@ -94,62 +315,189 @@ export class BackpackWindow {
     return this.container.visible
   }
 
-  setItems(stacks: BackpackStack[]): void {
-    this.slotLayer.removeAll(true)
-    this.hideTooltip()
-    const { cols, rows } = this.opts
-    const total = cols * rows
-    for (let i = 0; i < total; i++) {
-      const col = i % cols
-      const row = Math.floor(i / cols)
-      const cx = GRID_LEFT + col * (CELL + GAP) + CELL / 2
-      const cy = GRID_TOP + row * (CELL + GAP) + CELL / 2
-      this.buildSlot(cx, cy, stacks[i])
-    }
+  setHeroStats(stats: BackpackHeroStats): void {
+    this.stats = stats
+    this.redrawStats()
   }
 
-  private buildSlot(cx: number, cy: number, stack: BackpackStack | undefined): void {
-    if (this.scene.textures.exists(SLOT_TEX)) {
-      this.slotLayer.add(this.scene.add.image(cx, cy, SLOT_TEX))
+  setEquipment(eq: Equipment): void {
+    this.equipment = eq
+    this.redrawEquip()
+  }
+
+  /** Full bag contents; the window filters by the active tab itself
+   * (装备=kind 'equip', 道具=everything else -- this project's single
+   * Inventory has no separate zblist/djlist arrays like AS3, see report). */
+  setInventory(stacks: BackpackStack[]): void {
+    this.allStacks = stacks
+    this.page = Math.min(this.page, this.totalPages())
+    if (this.page < 1) this.page = 1
+    this.redrawGrid()
+  }
+
+  // ---------- internals ----------
+
+  private makeValueText(x: number, y: number, wrapWidth: number, size = 14): Phaser.GameObjects.Text {
+    return this.scene.add
+      .text(x, y, '', { fontSize: `${size}px`, fontStyle: 'bold', color: HUD_COLORS.text, wordWrap: { width: wrapWidth } })
+      .setOrigin(0, 0)
+  }
+
+  private buildPlaceholderSlot(spec: SlotSpec, children: Phaser.GameObjects.GameObject[]): void {
+    children.push(
+      this.scene.add.rectangle(spec.x, spec.y, spec.w, spec.h, 0x0a0a0a, 0.45).setOrigin(0, 0),
+    )
+  }
+
+  private setTab(tab: BackpackTab): void {
+    if (DISABLED_TABS.has(tab) || this.tab === tab) return
+    this.tab = tab
+    this.page = 1
+    const i = TAB_ORDER.indexOf(tab)
+    this.tabHighlight.setPosition(TAB_ROW.x + i * TAB_ROW.pitch, TAB_ROW.y)
+    this.redrawGrid()
+  }
+
+  private setPage(page: number): void {
+    const clamped = Math.max(1, Math.min(this.totalPages(), page))
+    if (clamped === this.page) return
+    this.page = clamped
+    this.redrawGrid()
+  }
+
+  private filteredStacks(): BackpackStack[] {
+    return this.tab === 'equip'
+      ? this.allStacks.filter((s) => s.item.kind === 'equip')
+      : this.tab === 'item'
+        ? this.allStacks.filter((s) => s.item.kind !== 'equip')
+        : [] // fashion/script: no backing data
+  }
+
+  private totalPages(): number {
+    return Math.max(1, Math.ceil(this.filteredStacks().length / PAGE_SIZE))
+  }
+
+  private redrawStats(): void {
+    const s = this.stats
+    this.nameText.setText(s.name)
+    this.zdlText.setText(String(Math.round(s.combatPower)))
+    this.statTexts.hp.setText(`${Math.max(0, Math.round(s.hp))} / ${Math.round(s.maxHp)}`)
+    this.statTexts.mp.setText(`${Math.max(0, Math.round(s.mp))} / ${Math.round(s.maxMp)}`)
+    this.statTexts.atk.setText(String(Math.round(s.atk)))
+    this.statTexts.def.setText(String(Math.round(s.def)))
+    this.statTexts.luck.setText(String(Math.round(s.luck)))
+    this.statTexts.magicDef.setText(`${Math.round(s.magicDefPct)} %`)
+    this.statTexts.crit.setText(`${Math.round(s.critPct)} %`)
+    this.statTexts.dodge.setText(`${Math.round(s.dodgePct)} %`)
+    this.statTexts.hpRegen.setText(String(Math.round(s.hpRegen)))
+    this.statTexts.mpRegen.setText(String(Math.round(s.mpRegen)))
+    this.expText.setText(`${Math.round(s.exp)} / ${Math.round(s.expToNext)}`)
+    if (this.expFill) {
+      const f = s.expToNext > 0 ? Math.max(0, Math.min(1, s.exp / s.expToNext)) : 0
+      this.expFill.setCrop(0, 0, Math.max(0, EXP_FILL.w * f), EXP_FILL.h)
+    }
+    this.soulText.setText(String(Math.round(s.soul)))
+    this.redrawLevelBadge(Math.max(1, Math.floor(s.level)))
+  }
+
+  /** Ports BackPack.as leveImage(): single digit centered, multi-digit spliced
+   * left-to-right at a 26px pitch, both local to the level badge. */
+  private redrawLevelBadge(level: number): void {
+    this.levelLayer.removeAll(true)
+    const digits = String(level).split('')
+    digits.forEach((d, i) => {
+      const key = `backpack_digit_${d}`
+      if (!this.scene.textures.exists(key)) return
+      const x = digits.length === 1 ? LEVEL_BADGE.x + 21.8 : LEVEL_BADGE.x + 5.8 + i * 26
+      const y = LEVEL_BADGE.y + 13
+      this.levelLayer.add(this.scene.add.image(x, y, key).setOrigin(0, 0))
+    })
+  }
+
+  private redrawEquip(): void {
+    this.equipLayer.removeAll(true)
+    if (!this.equipment) return
+    ;(Object.keys(EQUIP_SLOTS) as EquipSlot[]).forEach((slot) => {
+      const item = this.equipment![slot]
+      if (!item) return
+      const spec = EQUIP_SLOTS[slot]
+      const cx = spec.x + spec.w / 2
+      const cy = spec.y + spec.h / 2
+      const key = this.opts.iconKeyFor(item)
+      if (this.scene.textures.exists(key)) {
+        const icon = this.scene.add.image(cx, cy, key)
+        icon.setScale(Math.min(1, (spec.w - 6) / Math.max(icon.width, icon.height)))
+        this.equipLayer.add(icon)
+      }
+      const hit = this.scene.add
+        .rectangle(cx, cy, spec.w, spec.h, 0xffffff, 0)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.opts.onUnequip?.(slot))
+        .on('pointerover', () => this.showEquipTooltip(cx, cy, item))
+        .on('pointerout', () => this.hideTooltip())
+      this.equipLayer.add(hit)
+    })
+  }
+
+  private redrawGrid(): void {
+    this.gridLayer.removeAll(true)
+    this.hideTooltip()
+    const items = this.filteredStacks().slice((this.page - 1) * PAGE_SIZE, this.page * PAGE_SIZE)
+    for (let row = 0; row < GRID_ROWS; row++) {
+      for (let col = 0; col < GRID_COLS; col++) {
+        const i = row * GRID_COLS + col
+        const x = GRID_ORIGIN.x + col * CELL.pitchX
+        const y = GRID_ORIGIN.y + row * CELL.pitchY
+        this.buildCell(x, y, items[i])
+      }
+    }
+    this.nowpageText.setText(`${this.page} / ${this.totalPages()}`)
+  }
+
+  private buildCell(x: number, y: number, stack: BackpackStack | undefined): void {
+    if (this.scene.textures.exists('backpack_slot')) {
+      this.gridLayer.add(this.scene.add.image(x, y, 'backpack_slot').setOrigin(0, 0))
     } else {
       const g = this.scene.add.graphics()
-      g.fillStyle(0x2a1c10, 1).fillRoundedRect(cx - CELL / 2, cy - CELL / 2, CELL, CELL, 6)
-      g.lineStyle(1, HUD_COLORS.gold, 0.5).strokeRoundedRect(cx - CELL / 2, cy - CELL / 2, CELL, CELL, 6)
-      this.slotLayer.add(g)
+      g.fillStyle(0x2a1c10, 1).fillRoundedRect(x, y, CELL.w, CELL.h, 6)
+      g.lineStyle(1, HUD_COLORS.gold, 0.5).strokeRoundedRect(x, y, CELL.w, CELL.h, 6)
+      this.gridLayer.add(g)
     }
     if (!stack) return
+    const cx = x + CELL.w / 2
+    const cy = y + CELL.h / 2
 
     const iconKey = this.opts.iconKeyFor(stack.item)
     if (this.scene.textures.exists(iconKey)) {
       const icon = this.scene.add.image(cx, cy, iconKey)
-      const s = Math.min(1, (CELL - 10) / Math.max(icon.width, icon.height))
-      icon.setScale(s)
-      this.slotLayer.add(icon)
+      icon.setScale(Math.min(1, (CELL.w - 10) / Math.max(icon.width, icon.height)))
+      this.gridLayer.add(icon)
     }
     if (stack.qty > 1) {
-      this.slotLayer.add(
+      this.gridLayer.add(
         this.scene.add
-          .text(cx + CELL / 2 - 4, cy + CELL / 2 - 3, String(stack.qty), {
-            fontSize: '12px',
-            fontStyle: 'bold',
-            color: '#ffffff',
-          })
+          .text(x + CELL.w - 4, y + CELL.h - 3, String(stack.qty), { fontSize: '12px', fontStyle: 'bold', color: '#ffffff' })
           .setOrigin(1, 1)
           .setShadow(1, 1, '#000000', 2),
       )
     }
-    // Hover: show a rarity-colored tooltip.
     const hit = this.scene.add
-      .rectangle(cx, cy, CELL, CELL, 0xffffff, 0)
+      .rectangle(cx, cy, CELL.w, CELL.h, 0xffffff, 0)
       .setInteractive({ useHandCursor: true })
-      .on('pointerover', () => this.showTooltip(cx, cy, stack))
+      .on('pointerover', () => this.showTooltip(cx, cy, stack.item))
       .on('pointerout', () => this.hideTooltip())
-    this.slotLayer.add(hit)
+      .on('pointerdown', () => {
+        if (stack.item.kind === 'equip') this.opts.onEquip?.(stack.item)
+      })
+    this.gridLayer.add(hit)
   }
 
-  private showTooltip(cx: number, cy: number, stack: BackpackStack): void {
+  private showEquipTooltip(cx: number, cy: number, item: Item): void {
+    this.showTooltip(cx, cy, item)
+  }
+
+  private showTooltip(cx: number, cy: number, item: Item): void {
     this.hideTooltip()
-    const item = stack.item
     const lines = [
       { t: item.name, c: rarityCss(item.rarity), size: 15, bold: true },
       { t: `品质：${rarityName(item.rarity)}`, c: HUD_COLORS.textDim, size: 12, bold: false },
@@ -169,10 +517,8 @@ export class BackpackWindow {
     bg.fillStyle(HUD_COLORS.ink, 0.95).fillRoundedRect(0, 0, w, h, 8)
     bg.lineStyle(1.5, HUD_COLORS.gold, 0.9).strokeRoundedRect(0, 0, w, h, 8)
     texts.forEach((t) => t.setPosition(10, 6 + (t.y as number)))
-    const tip = this.scene.add.container(cx + CELL / 2 + 6, cy - h / 2, [bg, ...texts])
-    // Keep the tooltip inside the window horizontally.
-    if (cx + CELL / 2 + 6 + w > 372) tip.setX(cx - CELL / 2 - 6 - w)
-    this.slotLayer.add(tip)
+    const tip = this.scene.add.container(Math.min(cx + 30, BG_W - w - 4), cy - h / 2, [bg, ...texts])
+    this.container.add(tip)
     this.tooltip = tip
   }
 

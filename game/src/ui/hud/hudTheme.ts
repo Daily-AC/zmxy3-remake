@@ -48,8 +48,15 @@ export const HUD_TEXTURES: TextureRef[] = [
   { key: 'hud_avatar_wukong', url: `${UI}hud_avatar_wukong.png` }, // extracted RoleInfo avatar (ink-framed 悟空 portrait)
   { key: 'hud_boss_bar_fill', url: `${UI}hud_boss_bar_fill.png` }, // extracted boss red-brush fill
   { key: 'hud_ink_band', url: `${UI}dialogue_textpanel_crop.png` }, // 水墨 text band for toasts
-  { key: 'backpack_window', url: `${UI}backpack_window_crop.png` }, // cropped 个人资料/背包 window
-  { key: 'backpack_slot', url: `${UI}backpack_slot_cell.png` }, // single grid cell
+  // S4: full BackPack window chrome, re-extracted from backpack1.swf's
+  // export.pack.BackPack (chid444) default-state render — every baked button/
+  // label/tab/stat-box comes from this one image; only dynamic text, the exp
+  // fill, level digits, portrait and item icons are drawn on top (see
+  // BackpackWindow.ts + tasks/profile-backpack-report.md).
+  { key: 'backpack_bg', url: `${UI}backpack_bg.png` }, // 755x497 window chrome
+  { key: 'backpack_exp_fill', url: `${UI}backpack_exp_fill.png` }, // EXP bar gold fill (frame 30 of mc_exp, cropped to content), setCrop by fraction
+  { key: 'backpack_slot', url: `${UI}backpack_slot.png` }, // 5x5 grid cell backdrop (export.pack.PackThings, chid114)
+  ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => ({ key: `backpack_digit_${d}`, url: `${UI}backpack_digit_${d}.png` })), // levelnum0-9 (level badge digits)
   { key: 'furnace_making', url: `${UI}furnace_making.png` }, // 制作 craft panel (export.strength.Making)
   { key: 'furnace_fusion', url: `${UI}furnace_fusion.png` }, // 合成 fusion panel (export.strength.Fusion)
   { key: 'furnace_frame', url: `${UI}furnace_frame.png` }, // 炼丹炉 ink window frame (official StrengthEquipment 打造 tab header)
