@@ -227,3 +227,5 @@
   - S3 Online 版式重做（Online SaveInter 纯矢量抠不出位图，走"图量"），终审揪出编号 +14px/标题错位双影，返修用加权质心法锁到 <2.3px 残差；红叉考古：参照图红 X 实属右侧常驻菜单条非存档弹窗控件，我方保留对话框级红叉（记档）。6 槽增删读回归绿。
   - 413 测试全绿 + build 过（主会话复跑）。终审两轮均主会话亲看 diff/blend，量化互证（我方互相关 vs 其质心法，编号偏移两法一致）。
 - 下一棒：S4 个人资料/背包（brief=tasks/profile-backpack-brief.md）。
+- 05:5x **S4 个人资料/背包棒完成并过终审**（3ac9ad6，未 push，s4-profile/codex 执行）：BackPack/BackPackElement/PackThings AS3 全读，5×5 网格公式 x=col*(w+11) y=row*(h+9) 直译；战斗力 getFightingForce() 四项中照译 ①level*15 ③装备攻击（②被动④roleid 专属无输入通道，诚实丢弃记档）；出售白装照译（普通且非头衔 → 灵魂+20）；装备槽真实语义纠正 spec 肉眼说法（zbfj=防具/zbsp=饰品/zbfb=法宝/zbtx=头衔/zbsz=时装）；闪避/回血原版本就是纯装备字段，UI 诚实显 0 非占位。origin 用三按钮模板互相关锁仿射偏移（analytic 法有 filter-padding 坑）。新增 combatPower/soulPurse 纯逻辑+8 测（421 全绿）。终审：结构层单线对齐；右下控制条与参照分歧经 vendor 烘焙底图裁决为版本差异、vendor 胜不返修；顺修面板红叉空实现 bug。遗留：armor/accessory/talisman 槽因 slotForItem Stage A 限制恒空（既有缺口）；装备图标 fallback。
+- 下一棒：S5 技能树（brief=tasks/skilltree-brief.md）。
