@@ -4,6 +4,36 @@ One section per ported level. Appended as levels land.
 
 ---
 
+## Level 1 — 巫鹰关 (climb to the demon bird)
+
+**Ported by:** pipeline main (Opus). **Source:** `out_res/1.swf` + `打开我开始玩.swf`. Landed last (2026-07-07) but is campaign level 1: it REPLACES the project's original hand-made level 1, which was the only non-original level left — `systems/level.ts`'s placeholder `LEVEL_1` uses invented small stats (e.g. monster30 hp 150). This pack carries the real recovered numbers so level 1 matches the original once the wiring pen swaps it in as the `LEVELS` chain head.
+
+### Assets — already extracted (reused, verified against SWF)
+`game/public/assets/extracted/level1/` (bg11/12/13, floorBg1, Monster2/3/4/5/7/8/30.png) and `game/src/data/monsters/monster{2,3,4,5,7,8,30}.json` already existed from the project's setup era. Verified: grids/cells match the SWF (`sips` + `new BaseBitmapDataClip(...)`), and `monster7.json` already omits its `hit2` per the known out-of-bounds-row bug. No re-extraction needed.
+
+### Level data (`game/src/data/levels/level1.ts`)
+`LEVEL_1_WUYING: LevelDef` — 4 stop-point waves + arena boss. Mirrors 1.swf's three sub-stages (StageListener11/12/13): stage 11 is a vertical climb through a Monster30 swarm that ends in `StageListener11.callBoss() -> createMonster(3)` = 巫鹰; stages 12/13 add grunts + mini-bosses. Compressed to: a Monster30-swarm wave, then escalating mini-boss waves 千里眼→顺风耳→巨灵神, then 巫鹰 as the arena boss.
+
+### Values / provenance
+**All stats recovered VERBATIM**, branch-selected for `gc.curStage==1 && gc.curLevel==1` (grunts/mini-bosses take the `else` branch of their `curStage==3&&curLevel==3 || curStage==8` guard):
+- grunts/swarm: Monster8 hp80/def2, Monster7 hp150/def4, **Monster30 hp1/def0/speed8** (a one-shot swarm imp — the headline correction vs the invented 150).
+- mini-bosses (isBoss=true in level 1): 千里眼 M4 hp1500/def8, 顺风耳 M2 hp2000/def10, 巨灵神 M5 hp4000/def12.
+- arena boss: 巫鹰 M3 hp300 (5*60)/def6, attacks hit1 phys 14 / hit2 magic 7, probability 1.
+- `normalAttackRate`: Monster5/Monster30 have literal `normalAttackRate` (0.8/0.25) used directly; others reuse `probability` (巫鹰 1.0, 顺风耳/千里眼 0.6, grunts 0.15).
+
+### Boss mechanics (巫鹰 / Monster3)
+Simple two-attack flyer: hit1 physical (power 14, knockback [6,-5]), hit2 magic (power 7, interval 4), skillCD1 3f, drops a boss-tier fallList in the boss branch. No special gimmick (unlike level 3's 二郎神). **Original quirk kept faithful:** 巫鹰 (300 hp) is far squishier than the mini-bosses preceding it (巨灵神 4000 hp) — it's a gimmick summit boss, not a tank; the arena boss is deliberately not the hp peak. Wave escalation (1500<2000<4000) is monotonic.
+
+### Acceptance
+- `game/tests/level1.test.ts` — 4 tests green: genuine full wave-clear sim, boss spawn (300 hp) → kill → door → clear, real-magnitude assertions (Monster30 hp==1, not 150), boss-not-in-waves. `npx vitest run tests/level1.test.ts tests/level.test.ts` → 14 passed. No tsc errors in level1 files.
+- Visual: `tools/level1-preview.html` (standalone) decodes all 7 sheets; screenshot `tmp/debug-shots/level1-monsters.png` — all frames align to cells cleanly; Monster7 correctly shows no hit2 row.
+
+### Leftover / TODO
+- Wiring (off-limits to this team): the wiring pen swaps `LEVEL_1_WUYING` in as the `LEVELS` head, replacing level.ts's invented `LEVEL_1`, and adds species→sprite mapping (the level-1 sheets are already in the repo and already render in the current game).
+- Balance: this pack is precisely the level-1 alignment the parallel hero-damage-口径 switch is targeting.
+
+---
+
 ## Level 2 — 天王关 (Four Heavenly Kings gauntlet) · pilot
 
 **Ported by:** pipeline main (Opus). **Source:** `out_res/2.swf` + `打开我开始玩.swf`.
