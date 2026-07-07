@@ -4,13 +4,16 @@
 
 ## 目标与边界
 
-- 现代浏览器（Chrome）直接玩；可打包 dmg/exe 桌面版。
+- **最终验收只看桌面安装包**（2026-07-07 用户拍板）：Windows exe 装到 home（zyl，走 wanctl）真实运行为准；dmg 本机顺手出。浏览器只是开发态迭代环境，不是交付物。
+- 澄清过的技术事实：Tauri exe 壳内是 WebView2（Chromium 内核），打包不改变渲染引擎；质量上限在复刻用心度不在容器。
+- Windows 构建机 = home 本身（Tauri 不支持从 macOS 交叉编译 Windows）；验收工具（推包/静默装/拉起/截屏回传/崩溃日志）放 tools/acceptance/。
 - 私有项目，**绝不公开分发含 4399 原版素材的产物**；素材不进 git（走本地提取管线）。
 - kagami 仓库无 LICENSE：其代码只做参考不复制；已决定暂不联系作者（2026-07-07 用户拍板）。
 
 ## 技术栈（已拍板，2026-07-07）
 
-- 游戏本体：Phaser 3 + TypeScript + Vite（`game/`）
+- 游戏本体：Phaser 4（2026-04 正式版，全新 node-based WebGL2 渲染器，API 与 v3 大体兼容）+ TypeScript + Vite（`game/`）
+  - 注意：LLM 训练数据里 Phaser 例子多为 v3，给子 agent 派 Phaser 活时提示其先查 v4 迁移差异（渲染管线/tint/FX/Shader 有破坏性变更），纯逻辑模块不受影响
 - 桌面打包：Tauri 2（后期里程碑）
 - agent NPC 服务端：独立 Node 进程（`agent-server/`），WebSocket 连游戏；桌面包内作 Tauri sidecar
 - 架构原则（学 kagami）：游戏规则写成 Phaser 无关的纯逻辑模块，可单测；Phaser 只做渲染/输入壳
@@ -34,7 +37,7 @@
 2. 玩法切片：一张图、位移/跳跃/连击、一只怪、掉落进背包。判据：打死怪掉装备捡起进背包。
 3. Agent NPC 对话层。判据：NPC 对话引用刚发生的游戏事件，give_item 真实进背包。
 4. 炼器 NPC。判据：自然语言 → 独一无二可装备、沙箱安全的装备。
-5. 桌面打包：Tauri dmg/exe，agent-server sidecar。
+5. 桌面打包（最终验收口径）：home 上原地 build Windows exe + wanctl 远程验收链路跑通。判据：exe 在 home 双击可玩、悟空动画/战斗/agent NPC 全链路正常，截屏回传确认。dmg 为附带产物。
 
 ## 工程约定
 
