@@ -28,7 +28,9 @@
 ## 上游资源（调研结论见 docs/research/upstream-survey.md）
 
 - `vendor/zmxy_res`（github zmcj21/zmxy_res，sparse clone，不进 git）：再续天庭 0.72 完整客户端 + **out_res/ 已解密全套 SWF** + ffdec 15
-- kagami-kasumi/zaomengxiyou3-zaixutiantingpian-phaser-version：3.2 万行机制逻辑 + 6500 行逆向文档（AS3 证据索引 mechanics-index.md）+ 素材符号名清单（AssetManifest.ts）——**当标准答案查，不抄代码**
+- kagami-kasumi/zaomengxiyou3-zaixutiantingpian-phaser-version：3.2 万行机制逻辑（src/systems/ ~2.4 万行 Phaser 无关纯 TS）+ 6500 行逆向文档 + 素材符号名清单
+  - **策略（2026-07-07 用户拍板纠偏）：移植 > 重写。** 之前"当参考不抄代码"被执行成"对着文档从零重造"，是进度慢的根因。改为以 kagami systems/ 为移植源做代码转换+接口适配。法律：kagami 无 LICENSE，直接移植=项目带其代码血统，与原版素材同属"private 自用无碍、开源前需清洗"风险级。炼丹炉合成 kagami 侧也没有，需原创（正是 agent 炼器嵌入点）。
+  - 别再退回"对着逆向文档从零设计"的惯性——有 kagami 现成逻辑就移植它。
 - XinTianyu-Sky/ZMXY：数值 JSON（57 怪物/10 关波次/技能曲线/装备表）和 84 个原版音频可作数据源；代码质量差不参考
 - jbji/ZaoMeng_JourneyToTheWest_3_4399_Flash_Utility（MIT）：SWF 解密原理（byte-swap，造3 参数 PIVOT=200 END=275）+ 存档转换器
 

@@ -11,5 +11,8 @@ new Phaser.Game({
   width: 960,
   height: 540,
   backgroundColor: '#0b0e1a',
+  // Enables `scene.add.dom(...)` so the dialogue input can live inside the
+  // canvas (kept aligned to game coords by Phaser across scaling/letterboxing).
+  dom: { createContainer: true },
   scene: [BattleScene],
 })
