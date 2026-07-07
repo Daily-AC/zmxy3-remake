@@ -173,6 +173,32 @@
   - 用户拍板记录："解包成可魔改基底（弃 Phaser）"路线已评估否决（AS3 无源码、字节码补丁地狱、agent NPC 挂不进黑盒）；Ruffle 怀旧模式嵌壳（WASM 版）作可选 demo 彩蛋备案未派。
 - 00:38 用户开玩本地最新构建（vite :5174），重点体感承伤档位与升级节奏；顺手清掉占 5173 的无关进程（soda_webapp，用户令）。
 
+- 01:0x **用户全流程打回 + UI 复刻方法论定型（本 session 最重要转折）**：用户给 14 张原版全流程截图（主菜单/存档/选人三态/模式选择/世界地图/战斗/个人资料/技能树），入库 `docs/reference/user-flow-refs/`。**主会话亲自逐屏判读**（不再下放视觉判断），落 `docs/design/screen-fidelity-spec.md`：**最大缺口是结构不是样式——原版有世界地图 hub（保存/商城/炼丹炉/学技能/任务挂地图、从地图进关），我们缺整层**，选人直接摔进战斗。优先级：世界地图→选人+存档→个人资料面板→技能树→主菜单微调。
+  - 承伤真人体感待收（用户开玩 :5174 构建中途转向 UI）：承伤档位/升级节奏的手玩反馈还没拿到，是 spec 之外的独立待办。
+- 01:1x **反编译路线三源交叉验证（用户师傅=造梦团队内部人建议）**：opus/codex/fable 独立评估反编译 AS3 取 UI 源码，**三方结论一致**（报告 tasks/decompile-as3-ui-report{,-codex,-fable}.md）：
+  - **双源提取**：UI 皮（坐标/尺寸/层级）在 timeline、骨（双人镜像/网格数学/帧语义/事件门控）在主 SWF AS3，物理分离必须都读。不是三选一。
+  - **重编译改原版 no-go**（三方一致）：复活死运行时承载现代 agent，零净收益，与 Phaser+TS+Tauri+WS 栈方向相反。
+  - 三方各自独到发现：Codex `-export xfl` 直吐精确矩阵（取代手工像素校准，白捡提速）；Fable 版本分歧纪律（类代码认主 SWF，OtherMat1 是旧副本）+ assets/ 加密坑（FFDec 静默导 0 类不报错）；opus 运行时架构（364 处字符串反射）。
+  - 铁证"照图必错"：血条是 101 帧 gotoAndStop 逐帧美术非 scaleX；背包 25 格是代码 x=col*(w+11) 现算，对象树只有空容器。
+  - **管线固化**：`docs/playbooks/ui-port-dual-source.md`（双源四步 + 三铁律 + 四个"必须读 AS3"信号 + 逐屏源码归属表）+ CLAUDE.md 纪律段。旧"手工像素校准"作废。
+  - Ruffle：桌面版跑通原版可当活参照，但 GUI 自动化撞了用户 UU 远程会话（盲坐标点击无 frontmost 断言，坑记 ruffle-reference.md），**规则：用户用机时禁一切桌面 GUI 自动化**。
+
+### === 会话交接 session3 → session4（2026-07-08 01:20）===
+
+换会话原因：session3 上下文长 + 用户要求，明天新会话推进。remote（Daily-AC/zmxy3-remake，master=f8555a1 已全推）是代码真源，读 CLAUDE.md + 本文件即可接手。**本 session 无未推 commit、无在途 agent**（全部收工）。
+
+**session4 第一件事 = 世界地图那屏（WorldMapScene，最大结构缺口）**：
+- 依据 `docs/design/screen-fidelity-spec.md` §S1 + 参照图 `docs/reference/user-flow-refs/worldmap-original.png`。
+- **走新的双源管线**（`docs/playbooks/ui-port-dual-source.md`，不再手工校准）：export.SelectPLace（大写 L）AS3 取关卡节点命名协议 s{stage}_{level}+三态帧号+进关 gating；对象树 xfl 取节点/按钮坐标；out_res 子 SWF 取地图大图+底部按钮位图。
+- 接线：选人确认→WorldMapScene（新增，不摔进战斗）；四关入口映射 CAMPAIGN；保存=SaveSystem；炼丹炉=复用 FurnacePanel（从战斗内迁到地图老君入口）；学技能=占位（技能树屏落地前置灰）；返回=主菜单。
+- 交付含 xfl 坐标 vs 渲染 overlay，主会话终审。
+
+**后续屏队列**（每屏一棒串行，走双源管线，spec 有逐屏规格）：选人+存档（S2+S3 同棒，全屏五格重做+存档卡片版式）→个人资料/背包面板（S4）→技能树（S5，顺带解决 9 技选 5 上坞，逻辑移植 kagami HERO_SKILL_TREES）→主菜单微调（S6）。
+
+**spec 外独立待办**：承伤真人体感（用户手玩 L2/L3 验档位）、失败横幅（拍板赛内不做除非用户翻案）、怒气系统（空仪表占位，kagami 有 rage 逻辑赛后移植）。
+
+**纪律提醒**：视觉终审主会话亲自做、禁形容词打分（memory feedback-ui-fidelity-pixel-diff）；用户用机时禁桌面 GUI 自动化；push 用 `git -c http.proxy=http://127.0.0.1:7897 push`；vite dev 用 nohup + 独立端口（5173 常被别的项目占）。
+
 ### 赛后路线图（终包后）
 - **NPC Agent 能力架构**（游戏作为 MCP、每 NPC 受限工具集=权限边界、动态权限；炼丹炉照配方合成 / 老君概率交易以贱换尊）：用户 2026-07-07 提出的拓展构想，是"agent 驱动 NPC"愿景的完全体，需深入设计再做，**暂缓**。完整记录见 docs/design/npc-agent-mcp.md。
 - 关卡流水线：16 个同构关卡包可多 agent 并行移植（导包→抠怪物动作表→接波次→对 kagami 文档验数值）；每关 Boss 专属机制（HP_REJECT/弹幕MC）是硬骨头逐个啃。
