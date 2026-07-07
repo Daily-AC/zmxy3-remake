@@ -59,3 +59,9 @@ OTHERMAT="vendor/zmxy_res/造梦西游魔改版/造梦西游3再续天庭最终�
 - **裸跑 `java -jar ffdec.jar`（无子命令）弹 Swing GUI**（事故记录，exit 144）——headless CLI 必带子命令（`-export`/`-swf2xml`/`-dumpSWF`）+ `-Djava.awt.headless=true`。
 - macOS 无 `timeout` 命令。
 - 主 SWF swf2xml 产物 40+MB，按屏取子 SWF 更实际。
+
+## S1 世界地图棒沉淀的三条补充纪律（2026-07-08，适用后续所有屏）
+
+1. **符号 origin 不可默认左上**：PlaceObject Matrix tx/ty 映射的是符号**本地 (0,0)**，不是图形左上角。同一屏内两种锚定并存（S1 实测：按钮/宝箱左上锚，节点/五之六地标内部锚）。每个符号必须算 origin 分数 = (-boundsXmin/width, -boundsYmin/height)：`tools/worldmap-deco-origins.py` 沿 PlaceObject 矩阵链递归到 shape bounds（button 取 up/over/down 并集；注意 over/down 记录可能同时挂 hitTest 标志，不能按 hitTest 排除）。健全性检查：bounds 尺寸必须与导出 PNG 逐一吻合。渲染后与参照"整体右下平移的双影" = origin 漏算的签名。
+2. **整屏复刻的舞台映射定式**：原版舞台 940×590，我方画布 960×540 —— 等比 contain-fit（scale=540/590≈0.9153）水平居中、左右 pillarbox，**禁止 cover+裁切**（裁的是原版真实内容，比黑边更伤保真）。见 `worldMapTransform`。
+3. **overlay 判读前先对几何**：参照截图带窗口黑框且分辨率各异，直接重采样到画布必然全图鬼影、diff 不可判。定式：按行/列暗度剖面切出游戏区（S1 参照实测 rows 26–629，纵横比≈940/590 即等比完整舞台）→ 等比缩放到我方舞台矩形 → blend/diff。判据=地标级无双影；豁免仅限状态差（存档进度/置灰 tint）、烘焙文字、AA/重采样、发光帧，逐项在 report 点名。
