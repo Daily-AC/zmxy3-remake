@@ -133,3 +133,41 @@
 
 ## 第二阶段测试基线
 tsc `--noEmit` exit 0；`vitest run` 401 全绿（每 commit 后跑过）。验收全程用独立 playwright-core 脚本 + 缓存 chromium（`~/Library/Caches/ms-playwright/chromium-1228`）起自有 vite（`--port 5175 --strictPort`）——共享 MCP 浏览器被并行 agent 反复抢占，另起隔离链路。
+
+---
+
+# 第三阶段：HUD 抄 SWF 对象树重建（用户打回手搓，改抄上游，2026-07-07）
+
+用户把第二阶段终版打回（措辞重）：血条几何不对（不等长细矩形、EXP 错位）、数字缩右侧小字、头像墨框稀疏、坞图标偏暗。核心纠偏：**停止"截图迭代手搓"，改抄上游 SWF 对象树坐标，子位图用原件不重绘，验收改机器可查的像素 diff。** commit `7288335`。
+
+## 方法：export.RoleInfo 对象树 → 原件按原坐标组装
+
+FFDec `swf2xml` 导出 `OtherMat1.swf`（vendor 再续天庭），提取 `DefineSprite 341 (export.RoleInfo)` 的 PlaceObject 子件坐标（twips/20 = px）：
+
+| 子件 | chid | x | y | 说明 |
+|---|---|---|---|---|
+| bg | 264 | 1 | 2 | 墨团 + 3 锥形墨 track + 等级墨圈（226×86 shape） |
+| head | 273 | 53.8 | 35.9 | 悟空脸 + 圆墨框（86×80，帧1） |
+| hpline/mpline/expline | 298/301/304 | 85.5/86.7/86.7 | 16.3/35.1/54.8 | 血条；填充件 297/300/303 **实测都 143×11 等宽** |
+| txthp/txtmp/txtexp | 305/306/307 | ~116 | 16.6/36/55 | 数字文本域（动态） |
+| txtlevel | 308 | 7 | 61 | 等级（动态） |
+| Yskill..Lskill | 278 | 130.5..290.4 | 518.1 | 5 坞槽（同 chid278 空框，间距 40） |
+| wsmc 无双 | 286 | 100 | 542.8 | |
+| btn_cw/fb/study/bb/set | 340/334/328/322/316 | — | 472~563 | 宠物/法宝/技能/青包/设置 簇 |
+
+**关键真值**：三条血条填充 297(红)/300(蓝)/303(金) FFDec 导出实测**都是 143×11**——等宽、同 x 起点、y 等距叠放。我第二阶段按眼重画成不等长细矩形就是错在这里。
+
+**组装（RoleInfoHud 重写，全用原件）**：`hud_ri_bg`(264) + `hud_ri_head`(273) + `hud_ri_hp/mp/exp`(297/300/303) 按上表坐标 place，不画任何胶囊/端帽/track。血条动态=`setCrop(0,0, 143×fraction, 11)` 露出 bg264 的空锥形 track（不是 scaleX 压缩、不是暗色盖）。数字居中压条、等级在墨圈。头像偏移 (8,-5) 是**对复合图跑 min 像素-diff 选的**（`for ax,ay: minimize diff`），非眼调。HP/MP/EXP 字母是唯一手写文字（对象树无独立标签位图），已注明。
+
+## 像素 diff 验收（机器可查，非形容词）
+
+**apples-to-apples 用同版本 vendor 复合图**（`hud_roleinfo_top_avatar_bars.png` = RoleInfo 原始渲染）：`tmp/debug-shots/ui-finish-hud-overlay-vendor.png` 四联（truth / ours / overlay50% / diff）。OVERLAY 里三条血条完全重叠、DIFF 里条身近黑（几何零错位）；DIFF 亮的仅 HP/MP/EXP 标签（复合图烘焙 vs 我文字）+ 9999 数字（动态）+ 边缘AA + 复合图底部白条（我不含）。**几何层零错位，证明按原坐标组装正确。**
+
+**跨版本说明（诚实）**：用户参照 `battle-hud-user2.png` 是 Online「大闹天庭篇」，而 `export.RoleInfo` 对象树**只在 vendor「再续天庭」**——已实测 Online 那批包（OtherMatv3570 等）不导出 RoleInfo，战斗 HUD 运行时渲染不落包。故几何真源是 vendor。强行 pixel-overlay vs Online 参照不会近零，但那是**跨版本差**（血值 19335 vs 34、绝对缩放不同、色差），非几何错位——按 team-lead"版本色差允许、几何错位不允许"的口径，同版本 vendor 复合图是唯一 apples-to-apples 的几何验证源。
+
+## 坞图标（对象树结论）
+
+RoleInfo 对象树里 5 个坞槽（Yskill..Lskill）都引用 `chid278`——是**空槽框**，技能图标运行时按装配的技能载入、不烘焙进坞。故不存在"战斗坞专用图标符号"；图标源就是技能图标集。第二阶段已从 `RoleSkillInterfacev3550.swf` 挖出 `skillicon_*`（sb_*，66px 亮火），实测比 `ss_*`（OtherMatv3570 chid1-40，45px 暗）亮一档，是现有最亮的技能图标源，坞已用。
+
+## 第三阶段验证
+tsc `--noEmit` 干净；`vitest run` 401 全绿（HUD 组件无测试，纯渲染）。验收链路仍为独立 playwright-core + 缓存 chromium + 自有 vite 5175。
