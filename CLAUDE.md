@@ -8,7 +8,7 @@
 - 澄清过的技术事实：Tauri exe 壳内是 WebView2（Chromium 内核），打包不改变渲染引擎；质量上限在复刻用心度不在容器。
 - Windows 构建机 = home 本身（Tauri 不支持从 macOS 交叉编译 Windows）；验收工具（推包/静默装/拉起/截屏回传/崩溃日志）放 tools/acceptance/。
 - **法律风险已澄清（2026-07-07 用户拍板）**：用户是造梦西游团队成员，对造3 与 Online 全系列素材的使用无版权障碍，占位/分发红线作废。素材仍不进 git（纯仓库卫生/体积，非法律）。
-- **保留一条保真纪律（非法律，是质量）**：造3 本体素材 vs Online（系列后作）素材要标注来源、区分使用——混用会产生"缝合感"，破坏"复刻造3"的保真度。用 Online 素材的组件标注来源即可，无需占位目录/替换债；终包审一次风格一致性。
+- **素材选用按收益，不按来源教条（2026-07-07 用户纠偏"别轴"）**：Online 与 vendor/kagami repo 素材都可直接用进最终产物，选哪个只看"哪个更完整、更现成、更还原目标界面"——登录/主菜单/存档这类 Online 版式更全就直接用 Online（用户已指定照 Online「大闹天庭篇」界面复刻登录流），战斗/角色/关卡 vendor 更全就用 vendor。标注来源仅供追溯，不构成排斥任何一方的理由，别为"纯本体"返工。同理代码：kagami repo 有现成逻辑就移植，别重写。
 - **造3 官方真源升级路径**：Online 客户端「3 大闹天庭篇」就是官方造3 入口（vendor 的「再续天庭」是其后期资料片版本）。点进去让资源从 4399 CDN 流入缓存即可挖到官方造3 资源，比 vendor 魔改版更权威——注意版本可能与「再续天庭 0.72」有资料片差异，diff 后择优。
 - kagami 仓库无 LICENSE：其代码只做参考不复制；已决定暂不联系作者（2026-07-07 用户拍板）。
 - 造梦 Online 客户端（home）逆向结论：Adobe AIR 薄壳 + ActiveX IE 控件，游戏 SWF 从 4399 CDN 实时流入 IE 磁盘缓存（`AppData/Local/Microsoft/Windows/INetCache/IE/<rand>/*.swf`），本地无打包资源。加密 SWF 用 byte-swap，**Online 参数 PIVOT=300 END=325**（不同于离线造3 的 200/275、96/165），解密器 `tools/decrypt-zmxyol-swf.py`。产物 `docs/reference/zmxy-online-extracted/`——**系列后作，仅 UI 语言/布局参考，非复刻真源**（复刻真源仍是 vendor 造3 提取物）。坑：PowerShell `Copy-Item -Path` 把缓存名里的 `[1]` 当通配符静默失败，必须 `-LiteralPath`。
