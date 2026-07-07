@@ -1,0 +1,28 @@
+{
+  "source": "export.hero.Role3.initBBDC()+setAction()+scriptFrameOverFunc() in 打开我开始玩.swf; sheet BaJie.swf chid11 ROLE3_0",
+  "sheet": { "cols": 6, "rows": 14, "cellW": 300, "cellH": 200, "facing": "left" },
+  "offset": { "x": -15, "y": 0 },
+  "actions": {
+    "wait":         { "col": 0, "row": 0,  "frames": 6, "stopCounts": [2, 2, 2, 3, 2, 4], "frameCount": 36 },
+    "wait2":        { "col": 0, "row": 1,  "frames": 6, "stopCounts": [3, 3, 3, 9, 5, 9], "frameCount": 6 },
+    "walk":         { "col": 0, "row": 2,  "frames": 4, "stopCounts": [4, 4, 4, 4], "frameCount": 4 },
+    "run":          { "col": 0, "row": 3,  "frames": 4, "stopCounts": [2, 2, 2, 2], "frameCount": 4 },
+    "jump1":        { "col": 0, "row": 4,  "frames": 1, "stopCounts": [1], "frameCount": 1 },
+    "jump3":        { "col": 1, "row": 4,  "frames": 1, "stopCounts": [1], "frameCount": 1 },
+    "hurt":         { "col": 2, "row": 4,  "frames": 1, "stopCounts": [15], "frameCount": 1 },
+    "hit6":         { "col": 3, "row": 4,  "frames": 1, "stopCounts": [6], "frameCount": 1 },
+    "hit11":        { "col": 4, "row": 4,  "frames": 1, "stopCounts": [2], "frameCount": 1 },
+    "hit5":         { "col": 5, "row": 4,  "frames": 1, "stopCounts": [160], "frameCount": 1 },
+    "hit11Frame2":  { "col": 5, "row": 4,  "frames": 1, "stopCounts": [160], "frameCount": 1 },
+    "hit12":        { "col": 5, "row": 4,  "frames": 1, "stopCounts": [160], "frameCount": 1 },
+    "jump2":        { "col": 0, "row": 5,  "frames": 5, "stopCounts": [2, 2, 2, 2, 2], "frameCount": 5 },
+    "hit1":         { "col": 0, "row": 6,  "frames": 3, "stopCounts": [2, 2, 6], "frameCount": 3 },
+    "hit2":         { "col": 0, "row": 7,  "frames": 3, "stopCounts": [2, 2, 6], "frameCount": 3 },
+    "hit3":         { "col": 0, "row": 8,  "frames": 4, "stopCounts": [2, 2, 2, 10], "frameCount": 4 },
+    "hit4":         { "col": 0, "row": 9,  "frames": 3, "stopCounts": [24, 2, 8], "frameCount": 3 },
+    "hit7":         { "col": 0, "row": 10, "frames": 3, "stopCounts": [2, 2, 20], "frameCount": 3 },
+    "hit8":         { "col": 0, "row": 11, "frames": 4, "stopCounts": [2, 2, 2, 20], "frameCount": 4 },
+    "hit9":         { "col": 0, "row": 12, "frames": 4, "stopCounts": [2, 2, 2, 20], "frameCount": 4 },
+    "hit10":        { "col": 0, "row": 13, "frames": 3, "stopCounts": [4, 3, 25], "frameCount": 3 }
+  }
+}
