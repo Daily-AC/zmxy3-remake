@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { SCENE } from './shellShared'
+import { activeArtFont } from '../systems/artFont'
 
 // Title / login shell laid out after the 造梦西游 大闹天庭篇 client title screen
 // (docs/reference/zmxy-online-screens/title-menu.png): the character-group + logo
@@ -84,10 +85,27 @@ export class MainMenuScene extends Phaser.Scene {
     g.fillStyle(0x000000, 0.35).fillRect(PANEL_X, 0, 8, H)
     g.lineStyle(2, 0xd9b45a, 0.5).lineBetween(PANEL_X, 14, PANEL_X, H - 14)
 
+    // 2026-07-08 visual-feedback round: dropped the book-title《》brackets
+    // (self-added chrome, not in any reference), switched to white (was gold
+    // #e8d9b0, which reads too close to the panel's own gold hairline
+    // border/dividers and got lost against them), bumped the font size, and
+    // appended a "重制版" sub-line so the shell honestly signals this is a
+    // remake, not a claim to be the original client's title screen.
     this.add
-      .text((PANEL_X + W) / 2, HEADER_Y, '《造梦西游·大闹天庭篇》', {
-        fontSize: '15px',
-        color: '#e8d9b0',
+      .text((PANEL_X + W) / 2, HEADER_Y - 9, '造梦西游·大闹天庭篇', {
+        fontSize: '20px',
+        fontFamily: activeArtFont().family,
+        color: '#ffffff',
+        padding: { top: 10, bottom: 10 },
+      })
+      .setOrigin(0.5)
+      .setDepth(6)
+    this.add
+      .text((PANEL_X + W) / 2, HEADER_Y + 15, '重制版', {
+        fontSize: '13px',
+        fontFamily: activeArtFont().family,
+        color: '#d9d0c0',
+        padding: { top: 6, bottom: 6 },
       })
       .setOrigin(0.5)
       .setDepth(6)
@@ -111,11 +129,17 @@ export class MainMenuScene extends Phaser.Scene {
     // not centered in the panel (measured glyph-left == AS3 x to within
     // 0.15px, see the derivation note above) -- our previous centered
     // layout was self-invented chrome.
+    // padding.top guards against the top-of-glyph clipping the 2026-07-08
+    // feedback screenshot called out: Phaser/Canvas sizes a Text object's
+    // render texture from context.measureText, which under-reports the true
+    // ascent for this bold CJK glyph set, so tall strokes (e.g. 新/戏/戲-style
+    // components) got cropped a few px at the top without it.
     const t = this.add
       .text(TEXT_LEFT_X, y, item.label, {
         fontSize: '28px',
-        fontStyle: 'bold',
+        fontFamily: activeArtFont().family,
         color: '#f4f4f4',
+        padding: { top: 10, bottom: 6 },
       })
       .setOrigin(0, 0.5)
       .setDepth(7)

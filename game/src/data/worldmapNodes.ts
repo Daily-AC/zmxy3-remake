@@ -119,19 +119,13 @@ export const WORLDMAP_DECORATIONS: WorldMapDecoration[] = [
   { id: 'sssl', x: 204.7, y: 446.45, textureNormal: 'wm_deco_sssl' },
 ]
 
-/** Top-left/top-right "补偿礼包" chests -- 营运件, real position + real art,
- * never clickable (S1 brief: "位图挖到就摆（不可点）"). */
-export interface WorldMapChest {
-  id: string
-  x: number
-  y: number
-  textureNormal: string
-}
-
-export const WORLDMAP_CHESTS: WorldMapChest[] = [
-  { id: 'sorrybag', x: 15.0, y: 13.0, textureNormal: 'wm_chest' },
-  { id: 'sl_sorrybag', x: 848.9, y: 13.0, textureNormal: 'wm_chest' },
-]
+// Removed 2026-07-08 (user verdict, visual-feedback round): the two top-left/
+// top-right "补偿礼包" chests were a live-ops/promo element (compensation
+// gift packages tied to server events we don't run), never clickable in this
+// port to begin with. User called it out as ops chrome that doesn't belong
+// in an offline single-player remake -- dropped data + rendering entirely
+// rather than leaving dead decorative art. Real position/art were previously
+// correct (see tasks/worldmap-report.md); this is a scope cut, not a bug fix.
 
 export type WorldMapButtonAction = 'save' | 'shop' | 'furnace' | 'skills' | 'activity' | 'tasks' | 'back'
 
