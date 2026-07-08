@@ -34,10 +34,14 @@ import { restoreGameState } from '../systems/save'
 // avatar/portrait; dropped to match. Empty slots keep the same card chrome
 // with "空存档位" instead of name+timestamp.
 //
-// SOURCE NOTE: whole-series Online art is fair game per CLAUDE.md.
-export const ASSET_SOURCE_ONLINE = true
-
-const TITLE_BG = 'title_bg'
+// 2026-07-08 首屏接线: background swapped from `title-bg.png` (an Online
+// promo screenshot with baked-in 4399 copyright text/wrong logo/menu items --
+// see MainMenuScene.ts's header comment + tasks/asset-audit-report.md) to the
+// same generated key-art anchor MainMenuScene uses, for visual continuity
+// between the two screens. The existing dark dimming overlay below already
+// functions as the "if contrast is low, add a functional dark layer" the
+// brief called for -- kept as-is, not duplicated.
+const KEYART_BG = 'keyart_home'
 const W = 960
 const H = 540
 
@@ -78,13 +82,16 @@ export class SlotSelectScene extends Phaser.Scene {
   }
 
   preload(): void {
-    if (!this.textures.exists(TITLE_BG)) this.load.image(TITLE_BG, 'assets/online/title/title-bg.png')
+    if (!this.textures.exists(KEYART_BG)) this.load.image(KEYART_BG, 'assets/generated/keyart-home.png')
   }
 
   create(): void {
-    // Dimmed title art backdrop (unifies with the main menu).
-    if (this.textures.exists(TITLE_BG)) {
-      const bg = this.add.image(W / 2, H / 2, TITLE_BG)
+    // Dimmed key-art backdrop (unifies with the main menu). The dark overlay
+    // is a functional legibility layer (save cards need contrast against
+    // whatever key art sits behind them), not a style choice -- flagged as
+    // such per the brief.
+    if (this.textures.exists(KEYART_BG)) {
+      const bg = this.add.image(W / 2, H / 2, KEYART_BG)
       bg.setScale(Math.max(W / bg.width, H / bg.height))
       this.add.graphics().fillStyle(0x07060a, 0.62).fillRect(0, 0, W, H)
     } else {
