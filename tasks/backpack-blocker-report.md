@@ -267,3 +267,67 @@ commit），另一位同伴几乎同时在同一个文件里做 hitbox/combo 修
 半成品长时间晾在未提交状态——否则随时可能被别人一次不相关的 commit 意外收编，制造出历史上
 真实存在过的、无法独立编译的中间提交。已用 worktree 验证过当前 HEAD 补齐后是干净的，但这个
 坑值得写进协作纪律供后续棒参考。
+
+---
+
+# 追加 A/B：交叉对抗裁决后的两项新修复（equip() 吞装备 + toast/炉面板同深）
+
+交叉对抗（`review-blue-findings.md`/`review-red-findings.md` 末尾的对抗验证节）裁定：自查项
+注销（BackpackWindow 无需再动，红队也独立确认）；命中漂移家族清剿范围校正为
+"ResultBanner+MenuButton 是活雷（每次通关都撞，已修完），FurnacePanel 两实例+DialogueBox 是
+哑雷（worldmap 相机不滚+BattleScene 实例只挂调试钩子，已顺手修完，优先级本来就低）"；新增两项
+独立 blocker/major 级修复。
+
+## 追加 A：`equipment.equip()` 换装会吞掉旧装备
+
+**根因**（`equipment.ts:37-45`）：`equip()` 无条件先写 `eq[slot] = item`，再调用
+`addItem(inv, prev, 1)` 把旧装备塞回背包但完全不检查返回值。同文件里三行之后的
+`unequip()` 明明是先检查 `addItem(...).ok` 再落地——`equip()` 没有对称地做这件事，看起来是
+遗漏不是设计选择。触发窗口（红队细化）：`removeItem()` 只有在清空一个 qty=1 的堆叠时才会
+真正腾出背包格——所以"背包已满 + 待穿装备来自一个 qty≥2 的堆叠（拿两份同名掉落是很常见的
+情况）+ 旧装备没有可合并的现存堆叠"时，`removeItem` 之后背包还是满的，`addItem(prev)` 静默
+失败，旧装备从此不在背包也不在装备栏，凭空消失。
+
+**修法**：照抄 `unequip()` 的"先检查再落地"模式——`removeItem(item)` 之后、写
+`eq[slot]=item` 之前，先测 `addItem(inv, prev, 1).ok`；测不过就把 `item` 塞回背包（这一步
+保证成功：要么原堆叠还在原地等着合并，要么 `removeItem` 刚好腾出的那一个格子够用）并拒绝
+换装，返回 `false`。`BattleScene.doEquip()` 收到 `false` 时补一条 toast
+"背包已满，穿不下这件装备"，不再是静默无反应。新增两条单测（`equipment.test.ts`）：一条
+复现吞装备场景（容量 2、qty=2 堆叠、无处合并 → 拒绝换装、旧装备仍装备中、背包堆叠逐字节
+不变）；一条确认"腾出空位后换装仍然正常"没被这次改动误伤。
+
+真机复验：直接在 `__scene` 上构造"容量2背包已满 + 装备栏已穿 test_chiyan + 背包里
+test_plainstaff qty2"的精确场景，调用 `doEquip(test_plainstaff)`——返回 `false`，
+`equipment.weapon` 仍是 `test_chiyan`（没丢），换装前后背包 `stacks` 逐字节相同（完整回滚），
+截图 `tasks/backpack-fix-shots/10-equip-full-bag-toast.png` 确认 toast 文案正确显示。
+
+**协作说明**：`doEquip()` 里补 toast 的那几行落在 `BattleScene.ts`——这一次是反过来，我的
+未提交改动被另一位同伴的 `807cdea`（L1 miniboss/掉落图标/传送特效那次提交）顺带收编了，不是
+他们的本意。功能上无害（`807cdea` 单独检出仍能编译，只是那几行 toast 在没有 `equipment.ts`
+配套修复时是死代码，`equip()` 那时还是旧的会吞装备的版本），但我随后立刻把
+`equipment.ts`/`Toast.ts`/`FurnacePanel.ts`/`depths.ts`/`equipment.test.ts` 单独 commit
+（`fd8d387`）补齐，并用 worktree 验证过 `fd8d387` 单独检出可以独立编译+测试通过。同一个"高
+流量文件"坑，这次换我是收编方，进一步印证了前面那条协作纪律确实值得所有棒遵守。
+
+## 追加 B：Toast 与炼丹炉面板同深度冲突
+
+**根因**：`Toast.ts:109` 和 `FurnacePanel.ts` 的容器都硬编码了同一个字面量深度 `210`。红队
+纠正了蓝队原始指控的触发路径——真正会在真实玩法里踩到这个冲突的不是 `BattleScene.ts` 里那几个
+只挂调试钩子的校验分支，而是 `WorldMapScene.submitCraft()`（327-358 行）：心愿栏留空、材料
+没选够、太上老君离线等每一种校验失败都只 `toastUi.show(...)`，不关炉面板，是这局游戏里
+炉面板真正能被玩家打开的入口，玩家点"打造"忘填心愿是再正常不过的操作。
+
+**修法**：新增 `game/src/ui/hud/depths.ts` 导出 `MODAL_PANEL_DEPTH`（=210，FurnacePanel 原值
+不变，只是从字面量变成命名常量）和 `TOAST_DEPTH`（=310，高于项目里当前已知的每一层面板深度——
+BackpackWindow/DialogueBox 的 200、FurnacePanel 的 210、ResultBanner 的 250、BattleScene
+暂停菜单的 300），让 toast 无论叠在哪个面板上面都恒为最上层，不只是解决它和 FurnacePanel 之间
+这一处平局。`Toast.ts`/`FurnacePanel.ts` 都改用这两个常量。
+
+真机复验：`__openCraft()` 打开炉面板后调用 `showToast()`，读取 `toastUi['current'].depth` 为
+`310`、`furnacePanel.container.depth` 为 `210`；截图
+`tasks/backpack-fix-shots/11-toast-over-furnace.png` 确认 toast 文案清晰浮在炉面板之上，
+不被遮挡。
+
+`npx tsc --noEmit` 净、`npx vitest run --root game` 40 文件全绿（487 passed / 1 skipped，
+比上一轮多出的 2 条是本轮新增的 equipment 回归测试）。commit `fd8d387`（未 push），额外用
+`git worktree add` 单独检出这个 commit 验证过独立编译+测试通过。
