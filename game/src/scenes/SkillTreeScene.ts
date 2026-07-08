@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { SCENE, REG, shellStorage } from './shellShared'
 import type { SlotId } from '../systems/saveSlots'
-import { readSlot, writeSlot, buildSlotEnvelope } from '../systems/saveSlots'
+import { readSlot, writeSlot, buildSlotEnvelope, asSlotId } from '../systems/saveSlots'
 import { restoreGameState, createGameSave } from '../systems/save'
 import type { LoadedGameState } from '../systems/save'
 import { createSoulPurse } from '../systems/soulPurse'
@@ -177,10 +177,6 @@ for (const id of SCHOOL_SKILL_IDS) {
   for (const state of ['locked', 'unlocked', 'learned'] as const) {
     SKILLTREE_TEXTURES.push({ key: `st_icon_${id}_${state}`, url: `${SKILLTREE_DIR}icon_${id}_${state}.png` })
   }
-}
-
-function asSlotId(v: unknown): SlotId | null {
-  return v === 0 || v === 1 || v === 2 || v === 3 || v === 4 || v === 5 ? (v as SlotId) : null
 }
 
 function iconKeyFor(skillName: Role1TreeSkillId, learned: boolean, unlocked: boolean): string {

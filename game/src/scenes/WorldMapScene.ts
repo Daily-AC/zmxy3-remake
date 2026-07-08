@@ -9,7 +9,7 @@ import {
 import type { WorldMapButton, WorldMapButtonAction } from '../data/worldmapNodes'
 import { readCampaignIndex, writeCampaignIndex, isCampaignLevelUnlocked, campaignNodeVisualState } from '../systems/campaignProgress'
 import type { SlotId } from '../systems/saveSlots'
-import { readSlot, writeSlot, buildSlotEnvelope } from '../systems/saveSlots'
+import { readSlot, writeSlot, buildSlotEnvelope, asSlotId } from '../systems/saveSlots'
 import { restoreGameState, createGameSave } from '../systems/save'
 import type { LoadedGameState } from '../systems/save'
 import { listStacks, addItem } from '../systems/inventory'
@@ -112,10 +112,6 @@ const DECO_ORIGIN: Record<string, { x: number; y: number }> = {
 }
 function decoOrigin(id: string): { x: number; y: number } {
   return DECO_ORIGIN[id] ?? { x: 0, y: 0 }
-}
-
-function asSlotId(v: unknown): SlotId | null {
-  return v === 0 || v === 1 || v === 2 || v === 3 || v === 4 || v === 5 ? (v as SlotId) : null
 }
 
 export class WorldMapScene extends Phaser.Scene {

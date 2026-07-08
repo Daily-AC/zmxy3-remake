@@ -1,11 +1,20 @@
 import Phaser from 'phaser'
+import { withinRect, type Rect } from '../screenHit'
 
 // Reusable menu button in the game's established visual DNA: warm-wood /
 // orange-yellow rounded plate with a dark-brown edge and a thin gold inner line,
 // mirroring the original 4399 button skin (`button_game_style_*` in the UI
 // MANIFEST) rather than the plain Flash default skins. Drawn with Graphics so it
-// needs no bespoke button atlas; a transparent Rectangle on top is the hit area
-// (works uniformly across Phaser 4's input system).
+// needs no bespoke button atlas; a transparent Rectangle on top is the hit area.
+//
+// By default this uses Phaser's native setInteractive(), which is correct and
+// simplest in the static-camera scenes this button normally lives in (main
+// menu, slot select, world map). Pass `screenSpaceHit: true` when embedding
+// this button inside a scrollFactor(0) container in a scene whose camera
+// scrolls (e.g. ResultBanner, shown over BattleScene) -- native
+// setInteractive() hit-tests in world space via the camera's current scroll
+// and drifts out from under the rendered button the moment the camera moves.
+// See ui/screenHit.ts for the full mechanism.
 
 export type MenuButtonVariant = 'primary' | 'ghost' | 'danger'
 
@@ -18,6 +27,9 @@ export interface MenuButtonOpts {
   fontSize?: number
   variant?: MenuButtonVariant
   enabled?: boolean
+  /** See the file header note: true for scrolling-camera hosts (ResultBanner
+   * in BattleScene), false (default) for static-camera menu/map scenes. */
+  screenSpaceHit?: boolean
   onClick: () => void
 }
 
@@ -48,6 +60,7 @@ export class MenuButton {
       fontSize: 20,
       variant: 'primary',
       enabled: true,
+      screenSpaceHit: false,
       ...opts,
     }
     this.enabled = this.opts.enabled
@@ -61,42 +74,97 @@ export class MenuButton {
         color: PALETTES[this.opts.variant].text,
       })
       .setOrigin(0.5)
-    this.hit = scene.add
-      .rectangle(0, 0, w, h, 0xffffff, 0)
-      .setInteractive({ useHandCursor: true })
-
-    this.hit.on('pointerover', () => {
-      if (!this.enabled) return
-      this.state = 'hover'
-      this.redraw()
-    })
-    this.hit.on('pointerout', () => {
-      if (!this.enabled) return
-      this.state = 'idle'
-      this.redraw()
-    })
-    this.hit.on('pointerdown', () => {
-      if (!this.enabled) return
-      this.state = 'down'
-      this.redraw()
-    })
-    this.hit.on('pointerup', () => {
-      if (!this.enabled) return
-      const wasDown = this.state === 'down'
-      this.state = 'hover'
-      this.redraw()
-      if (wasDown) this.opts.onClick()
-    })
+    this.hit = scene.add.rectangle(0, 0, w, h, 0xffffff, 0)
 
     this.container = scene.add
       .container(this.opts.x, this.opts.y, [this.gfx, this.text, this.hit])
       .setScrollFactor(0)
+
+    if (this.opts.screenSpaceHit) {
+      this.wireScreenSpaceHit(scene)
+    } else {
+      this.hit.setInteractive({ useHandCursor: true })
+      this.hit.on('pointerover', () => {
+        if (!this.enabled) return
+        this.state = 'hover'
+        this.redraw()
+      })
+      this.hit.on('pointerout', () => {
+        if (!this.enabled) return
+        this.state = 'idle'
+        this.redraw()
+      })
+      this.hit.on('pointerdown', () => {
+        if (!this.enabled) return
+        this.state = 'down'
+        this.redraw()
+      })
+      this.hit.on('pointerup', () => {
+        if (!this.enabled) return
+        const wasDown = this.state === 'down'
+        this.state = 'hover'
+        this.redraw()
+        if (wasDown) this.opts.onClick()
+      })
+    }
+
     this.redraw()
+  }
+
+  /** See the file header note + ui/screenHit.ts. Registers scene-level
+   * pointer listeners (instead of setInteractive() on this.hit) that hit-test
+   * against this button's actual on-screen rect, computed fresh each time via
+   * getWorldTransformMatrix() -- robust to however deep this button ends up
+   * nested (ResultBanner puts it inside its own `body` sub-container).
+   * Cleaned up on scene shutdown AND on this button's own container being
+   * destroyed (ResultBanner tears down and rebuilds its buttons on every
+   * show()), so repeated boss-clear banners don't accumulate dead listeners. */
+  private wireScreenSpaceHit(scene: Phaser.Scene): void {
+    const rectNow = (): Rect => {
+      const m = this.container.getWorldTransformMatrix()
+      const { width: w, height: h } = this.opts
+      return { x: m.tx - w / 2, y: m.ty - h / 2, w, h }
+    }
+    const onMove = (pointer: Phaser.Input.Pointer): void => {
+      if (!this.enabled || !this.container.visible) return
+      const over = withinRect(pointer.x, pointer.y, rectNow())
+      if (over && this.state === 'idle') {
+        this.state = 'hover'
+        this.redraw()
+      } else if (!over && this.state === 'hover') {
+        this.state = 'idle'
+        this.redraw()
+      }
+    }
+    const onDown = (pointer: Phaser.Input.Pointer): void => {
+      if (!this.enabled || !this.container.visible) return
+      if (!withinRect(pointer.x, pointer.y, rectNow())) return
+      this.state = 'down'
+      this.redraw()
+    }
+    const onUp = (pointer: Phaser.Input.Pointer): void => {
+      if (!this.enabled || !this.container.visible) return
+      const wasDown = this.state === 'down'
+      const over = withinRect(pointer.x, pointer.y, rectNow())
+      this.state = over ? 'hover' : 'idle'
+      this.redraw()
+      if (wasDown && over) this.opts.onClick()
+    }
+    scene.input.on('pointermove', onMove)
+    scene.input.on('pointerdown', onDown)
+    scene.input.on('pointerup', onUp)
+    const cleanup = (): void => {
+      scene.input.off('pointermove', onMove)
+      scene.input.off('pointerdown', onDown)
+      scene.input.off('pointerup', onUp)
+    }
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup)
+    this.container.once(Phaser.GameObjects.Events.DESTROY, cleanup)
   }
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled
-    this.hit.input && (this.hit.input.enabled = enabled)
+    if (!this.opts.screenSpaceHit) this.hit.input && (this.hit.input.enabled = enabled)
     if (!enabled) this.state = 'idle'
     this.redraw()
   }

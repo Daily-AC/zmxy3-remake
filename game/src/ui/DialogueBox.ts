@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { withinRect, type Rect } from './screenHit'
 
 // NPC dialogue panel in the original ink-brush / warm-wood visual language:
 //  - background = the central brush band of the original 水墨 text panel art
@@ -52,6 +53,10 @@ export class DialogueBox {
   private log: string[] = []
   private typing: { idx: number; full: string; shown: number } | null = null
   private _open = false
+  /** 炼宝 button hotspot, screen space -- see ui/screenHit.ts (this panel
+   * sits in a scrollFactor(0) container inside BattleScene's scrolling
+   * camera). null when no onCraftEnter was configured (button not built). */
+  private craftEnterRect: Rect | null = null
 
   constructor(scene: Phaser.Scene, cfg: DialogueBoxConfig) {
     this.scene = scene
@@ -134,15 +139,22 @@ export class DialogueBox {
     if (this.cfg.onCraftEnter) {
       const bx = x + w / 2 - 62
       const by = y - h / 2 + 22
-      const enterRect = this.scene.add
-        .rectangle(bx, by, 92, 32, 0x3a2c12, 0.9)
-        .setStrokeStyle(2, GOLD, 1)
-        .setInteractive({ useHandCursor: true })
-      enterRect.on('pointerdown', () => this.cfg.onCraftEnter?.())
+      const rectW = 92
+      const rectH = 32
+      const enterRect = this.scene.add.rectangle(bx, by, rectW, rectH, 0x3a2c12, 0.9).setStrokeStyle(2, GOLD, 1)
       const enterLabel = this.scene.add
         .text(bx, by, '炼宝 ✦', { fontSize: '14px', color: '#f0d99a', fontStyle: 'bold' })
         .setOrigin(0.5)
       this.root.add(this.scene.add.container(0, 0, [enterRect, enterLabel]))
+      // No setInteractive() -- see ui/screenHit.ts. root sits at (0,0) so
+      // pointer coords need no translation.
+      this.craftEnterRect = { x: bx - rectW / 2, y: by - rectH / 2, w: rectW, h: rectH }
+      const onDown = (pointer: Phaser.Input.Pointer): void => {
+        if (!this._open || !this.craftEnterRect) return
+        if (withinRect(pointer.x, pointer.y, this.craftEnterRect)) this.cfg.onCraftEnter?.()
+      }
+      this.scene.input.on('pointerdown', onDown)
+      this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scene.input.off('pointerdown', onDown))
     }
   }
 

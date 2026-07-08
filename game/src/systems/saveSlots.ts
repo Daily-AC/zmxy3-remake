@@ -27,6 +27,22 @@ export const SLOT_COUNT = 6
 export type SlotId = 0 | 1 | 2 | 3 | 4 | 5
 export const SLOT_IDS: readonly SlotId[] = [0, 1, 2, 3, 4, 5]
 
+/**
+ * Narrow an arbitrary value (typically a Phaser registry read, which is
+ * untyped `any`) to a real SlotId or null. Single shared definition -- this
+ * used to be copy-pasted independently in WorldMapScene.ts and
+ * SkillTreeScene.ts (both correctly covering all 6 slots), while
+ * BattleScene.ts had its own inline three-way ternary that only accepted
+ * 0/1/2 and silently mapped slots 3-5 to null, which is the save-slot
+ * blocker this hoist fixes: BattleScene.saveToSlot() no-ops whenever
+ * activeSlot is null, so picking slot 4/5/6 (as numbered in the UI) meant
+ * every in-battle write -- loot, level-ups, gear, campaign advance -- was
+ * silently dropped the moment the player left BattleScene.
+ */
+export function asSlotId(v: unknown): SlotId | null {
+  return SLOT_IDS.includes(v as SlotId) ? (v as SlotId) : null
+}
+
 /** Envelope schema version, independent of GameSave's own `version`. */
 export const SlotEnvelopeVersion = 1 as const
 
