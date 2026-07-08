@@ -26,7 +26,7 @@ import {
   advanceSkillOverlay,
   spawnedHitboxToRect,
 } from '../systems/monsterBehaviors'
-import { heroAttackBox, centeredBox, overlaps } from '../systems/hitbox'
+import { heroAttackBox, centeredBox, overlaps, type Rect } from '../systems/hitbox'
 import { DropEntity, PickupConfig, DEFAULT_PICKUP_RADIUS, spawnDrop, stepDrops } from '../systems/pickup'
 import { createInventory, addItem, listStacks, Inventory } from '../systems/inventory'
 import { rollDrops } from '../systems/dropRoll'
@@ -99,14 +99,14 @@ import {
 import type { LoadedGameState } from '../systems/save'
 import { createGameSave, restoreGameState } from '../systems/save'
 import type { SlotId } from '../systems/saveSlots'
-import { buildSlotEnvelope, writeSlot, readSlot, heroName } from '../systems/saveSlots'
+import { buildSlotEnvelope, writeSlot, readSlot, heroName, asSlotId } from '../systems/saveSlots'
 import {
   readCampaignIndex,
   writeCampaignIndex,
   advanceCampaignFrontier,
   ACTIVE_CAMPAIGN_LENGTH,
 } from '../systems/campaignProgress'
-import { SCENE } from './shellShared'
+import { SCENE, REG } from './shellShared'
 import { MpModel, createMp, getRole1MaxMp, setMaxMp, tickMpRegen } from '../systems/mp'
 import {
   Role1SkillRuntime,
@@ -220,11 +220,36 @@ const MONSTER_ATTACK_TIMING: Record<string, { fraction: number; reach: number }>
   monster30: { fraction: 1, reach: 90 },
 }
 
-// Per-boss raw attack power (pre-mitigation), from heroScale.BOSS_REFERENCE /
-// level packs. Grunts derive a modest value from their def (see monsterAttackPower).
-const BOSS_ATTACK_POWER: Record<string, { power: number; kind: AttackKind }> = {
-  monster3: { power: 14, kind: 'physics' }, // 巫鹰 (L1 boss) hit1 physical (level1.ts)
-  monster15: { power: 186, kind: 'physics' }, // 多闻天王 hit1
+// hitstun-triad pen (2026-07-09): real AS3 hit1 attackBackInfoDict.power/
+// attackKind for every L1/L2 species (this port's own ffdec decompile of
+// export.monster.MonsterN, 打开我开始玩.swf). Replaces the old grunt/miniboss
+// heuristic ("derive a modest value from def", BattleScene.ts's own comment
+// admitted this was a placeholder) that made every non-final-boss hit
+// noticeably weaker than intended -- see tasks/hitstun-triad-report.md for
+// the full table + decompile citations. Grunts/minibosses/kings all set
+// `attackBackInfoDict["hit1"]` UNCONDITIONALLY in their constructors (only hp
+// differs across the `gc.curStage==3&&curLevel==3||curStage==8` elite-stage
+// branch some of them have), so one value per species covers L1/L2 correctly
+// regardless of branch. Monster9/10/19 are branch-conditional (`curStage==9`
+// elite form is 600/physics, far above L1/L2 scope) -- the else-branch value
+// below is the one level1.ts/level2.ts's own MonsterStats already use.
+const MONSTER_HIT1_POWER: Record<string, { power: number; kind: AttackKind }> = {
+  // L1
+  monster30: { power: 5, kind: 'physics' }, // 攀爬段蜂群
+  monster8: { power: 8, kind: 'physics' }, // 杂兵
+  monster7: { power: 14, kind: 'physics' }, // 杂兵 (matches monsterBehaviors.ts's Monster7Spec)
+  monster3: { power: 14, kind: 'physics' }, // 巫鹰 (L1 boss)
+  monster2: { power: 28, kind: 'physics' }, // 顺风耳 (miniboss)
+  monster5: { power: 40, kind: 'physics' }, // 巨灵神 (miniboss)
+  monster4: { power: 50, kind: 'physics' }, // 千里眼 (miniboss)
+  // L2
+  monster10: { power: 30, kind: 'physics' }, // 杂兵 (else-branch)
+  monster9: { power: 40, kind: 'physics' }, // 杂兵 (else-branch)
+  monster19: { power: 50, kind: 'physics' }, // 杂兵 (else-branch)
+  monster6: { power: 100, kind: 'physics' }, // 增长天王 (king)
+  monster16: { power: 129, kind: 'physics' }, // 广目天王 (king)
+  monster15: { power: 186, kind: 'physics' }, // 多闻天王 (L2 boss)
+  // L3/L4 (out of active scope, kept for code that might still reach them)
   monster22: { power: 345, kind: 'physics' }, // 二郎神 hit1 (post-buff)
   monster34: { power: 829, kind: 'physics' }, // 邪·悟空 hit1
 }
@@ -384,12 +409,43 @@ const L1_GROUND_BAND_Y = GROUND_Y - 5
 const HERO_LOOP = new Set(['wait', 'wait2', 'walk', 'run'])
 const MON_LOOP = new Set(['wait', 'walk'])
 const NPC_ANIM_PREFIX = 'npc_'
-const COMBO_GRACE_MS = 220
+// hitstun-triad pen: was a placeholder 220ms ("chosen feel value, TODO-verify"
+// per combo.ts's own prior header) -- real AS3 value decompiled from
+// export.hero.Role1.normalHit(): `curtime - lasttime > 25*60` resets the
+// combo (i.e. hitNum -> 1), so a repeat press within 1500ms of the last hit
+// continues the chain. See combo.ts's header for the fuller writeup (also
+// fixes the actual infinite-hitstun root cause: presses mid-swing no longer
+// buffer/auto-chain, matching Role1.as's real input-rejection behavior).
+const COMBO_GRACE_MS = 1500
 // combo.stage (1-5) -> the normal-attack hit key whose real coefficient drives
 // damage (heroScale.NORMAL_ATTACK_COEFFICIENT). Index 0 is unused (stage 0 = idle).
 const COMBO_STAGE_HIT: (NormalAttackHit | null)[] = [null, 'hit1', 'hit2', 'hit3', 'hit4', 'hit5']
 const MON_START_X = 900
-const MON_RENDER_OFFSET_Y = 30
+// Monster hit-test box baseline (see monsterHitbox()) -- 120x140 is the
+// project-chosen AABB size this project has used for a "hero-sized" monster
+// since the milestone-2 slice; HITBOX_REFERENCE_CELL (hero's own 200x200
+// cell) is what that baseline is calibrated against, so a species with a
+// bigger/smaller cell than hero's gets a proportionally bigger/smaller box.
+const MONSTER_HITBOX_BASE_W = 120
+const MONSTER_HITBOX_BASE_H = 140
+const HITBOX_REFERENCE_CELL = 200
+// hitstun-triad pen (2026-07-09): REMOVED a stale +30 uniform fudge that used
+// to live here ("monster cell is shorter; nudge feet to the floor" -- git
+// blame: predates the real per-species `offset.x/y` extraction, back when
+// every monster was still a placeholder box). Once the asset pipeline started
+// carrying real AS3 `bbdc.setOffsetXY()` values per species (monster-behavior/
+// level-pipeline era), this flat +30 became a second, uncoordinated correction
+// stacked on top of the now-correct one -- and it was applied to every
+// monster's render position but NEVER to the hero's own (`applyHeroRender` has
+// no such term), so hero and monster feet were guaranteed to sit ~30px apart
+// regardless of species. See BaseBitmapDataClip.as's `setXYByDirect()`
+// (`x=-bmWidth/2∓offsetX; y=-bmHeight/2+offsetY`, i.e. the bitmap's CENTER is
+// placed at local (∓offsetX, offsetY) relative to the character's own origin)
+// -- Phaser's default center origin + `state + offset*scale` is already the
+// faithful translation of that math; no extra constant belongs here. Verified
+// by hand: hero's own feet (cellH200, offset.y=-15, scale1.5) sit at
+// GROUND_Y + (-15*1.5) + 200/2*1.5 = GROUND_Y+127.5; Monster3 (cellH180,
+// offset.y=-5) computes to the exact same GROUND_Y+127.5 once the +30 is gone.
 const NPC_ID = 'laojun'
 const NPC_NAME = '太上老君'
 const NPC_X = 1380
@@ -764,8 +820,7 @@ export class BattleScene extends Phaser.Scene {
    * level-1 悟空 when launched straight into 'battle' with no shell (debug).
    */
   private seedFromSave(): void {
-    const slot = this.registry.get('shell.activeSlot')
-    this.activeSlot = slot === 0 || slot === 1 || slot === 2 ? (slot as SlotId) : null
+    this.activeSlot = asSlotId(this.registry.get(REG.activeSlot))
     this.saveOrigin = this.registry.get('shell.origin') === 'continue' ? 'continue' : 'new'
 
     const loaded = this.registry.get('shell.loadedState') as LoadedGameState | undefined
@@ -1004,17 +1059,21 @@ export class BattleScene extends Phaser.Scene {
     const dmg = Math.max(1, Math.round(calculateRealSkillDamage(realId, skillLevel, atk)))
     const fire = (): void => {
       const facing = this.heroState.facing
-      const hx = this.heroState.x + facing * hb.offsetX
-      const hy = GROUND_Y + hb.offsetY
+      // hitstun-triad pen: anchor on the hero's real visual center (was
+      // GROUND_Y, ignoring the hero's own render offset -- same class of bug
+      // as the melee box below, just never fixed for skills yet).
+      const heroCenter = this.heroVisualCenter()
+      const hx = heroCenter.x + facing * hb.offsetX
+      const hy = heroCenter.y + hb.offsetY
       const box = centeredBox(hx, hy, hb.width, hb.height)
       // A skill box can strike several monsters; queue the hit into each.
       for (const e of this.aliveMonsters()) {
-        const mBox = centeredBox(e.state.x, GROUND_Y, 120, 140)
+        const mBox = this.monsterHitbox(e)
         if (!overlaps(box, mBox)) continue
         const attackId = ++this.skillAttackId
         if (e.state.resolvedAttackIds.includes(attackId)) continue
         e.hitQueue.push({ attackId, damage: dmg })
-        this.floatText(e.state.x, GROUND_Y - 90, `-${dmg}`, 'damage')
+        this.floatText(e.state.x, e.state.y - 90, `-${dmg}`, 'damage')
       }
     }
     if (hb.activeAfterMs > 0) this.time.delayedCall(hb.activeAfterMs, fire)
@@ -1409,17 +1468,13 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  /** Raw (pre-mitigation) attack power a species deals to the hero. Bosses use
-   * recovered values (heroScale.BOSS_REFERENCE); grunts derive a modest value
-   * from their def so tougher grunts hit a bit harder. */
-  private monsterAttackPower(
-    species: string,
-    stats: MonsterStats,
-    isBoss: boolean,
-  ): { power: number; kind: AttackKind } {
-    if (isBoss && BOSS_ATTACK_POWER[species]) return BOSS_ATTACK_POWER[species]
-    // TODO-verify: grunt attack powers aren't in the level packs; this is a
-    // tuning heuristic, not a recovered value.
+  /** Raw (pre-mitigation) attack power a species deals to the hero -- see
+   * MONSTER_HIT1_POWER's header for the real AS3 source. Falls back to the
+   * old def-derived heuristic only for a species this table doesn't cover
+   * (defensive: no L1/L2 species should ever hit this branch). */
+  private monsterAttackPower(species: string, stats: MonsterStats): { power: number; kind: AttackKind } {
+    const real = MONSTER_HIT1_POWER[species]
+    if (real) return real
     return { power: Math.min(60, 8 + stats.def * 1.5), kind: 'physics' }
   }
 
@@ -1443,7 +1498,7 @@ export class BattleScene extends Phaser.Scene {
     // (monster-scale-report.md).
     const scale = HERO_SCALE
     const sprite = this.add.sprite(x, y, tex).setScale(scale).setDepth(isBoss ? 9 : 8)
-    const atk = this.monsterAttackPower(species, stats, isBoss)
+    const atk = this.monsterAttackPower(species, stats)
     const skillGate = MONSTER_SKILL_GATES[species]
     const entity: MonsterEntity = {
       species,
@@ -1895,26 +1950,56 @@ export class BattleScene extends Phaser.Scene {
     return this.monsters.filter((e) => e.state.mode !== 'dead' && e.state.mode !== 'gone')
   }
 
+  // hitstun-triad pen: shared coordinate helpers so every hit-test box is
+  // centered on the same point renderEntity()/applyHeroRender() actually draw
+  // the sprite at, instead of the bare sim `state.x/y` (which is the
+  // character's own AS3 registration point, NOT its visual center once the
+  // per-species `data.offset` is applied -- see the MON_START_X-adjacent
+  // comment above for the BaseBitmapDataClip math this mirrors). Root cause of
+  // "棒子打到怪物身体中心了，判定是没打到": every monster hitbox used to be a
+  // FIXED 120x140 box centered at bare `state.x/GROUND_Y` regardless of the
+  // species' real cell size (90px imp through 350px boss) or its own render
+  // offset -- so anything bigger or more offset than "hero-sized" had large
+  // chunks of its visible body outside the test box.
+  private heroVisualCenter(): { x: number; y: number } {
+    const off = roleData.offset
+    return { x: this.heroState.x + off.x * HERO_SCALE, y: this.heroState.vertical.y + off.y * HERO_SCALE }
+  }
+
+  private monsterVisualCenter(e: MonsterEntity): { x: number; y: number } {
+    const off = e.data.offset
+    return { x: e.state.x + off.x * e.scale, y: e.state.y + off.y * e.scale }
+  }
+
+  /** Monster hit-test box: same aspect as the original fixed 120x140 (still a
+   * project-chosen AABB, not AS3's real per-pixel `colipse` test -- see
+   * hitbox.ts's header), but scaled by the species' own cell size relative to
+   * the hero's 200x200 reference cell (monster-scale-report.md already
+   * established every sprite shares one uniform px->world factor, so cell
+   * size directly encodes each species' intended footprint) and centered on
+   * its real visual position, not a flat GROUND_Y. */
+  private monsterHitbox(e: MonsterEntity): Rect {
+    const center = this.monsterVisualCenter(e)
+    const w = MONSTER_HITBOX_BASE_W * (e.data.sheet.cellW / HITBOX_REFERENCE_CELL)
+    const h = MONSTER_HITBOX_BASE_H * (e.data.sheet.cellH / HITBOX_REFERENCE_CELL)
+    return centeredBox(center.x, center.y, w, h)
+  }
+
   /** Push one swing's combo damage into every alive monster its box overlaps
    * (monsterSim dedups by attackId, so a monster is hit at most once per swing).
    * onHit procs + sfx fire once per swing, on the first monster struck. */
   private resolveHeroHits(): void {
     const s = this.heroState
     if (s.combo.stage === 0) return
-    // behavior-wiring pen: use the hero's/monster's REAL y (was hardcoded
-    // GROUND_Y) -- latent bug exposed by wiring the L1 climb swarm, which is
-    // the first time either side of this overlap check is ever off GROUND_Y.
-    // Harmless everywhere else: outside the climb, heroState.vertical.y and
-    // every monster's state.y both always equal GROUND_Y already, so this is
-    // byte-identical for every other level/encounter.
-    const box = heroAttackBox(s.x, s.vertical.y, s.facing)
+    const heroCenter = this.heroVisualCenter()
+    const box = heroAttackBox(heroCenter.x, heroCenter.y, s.facing)
     const hitKey = COMBO_STAGE_HIT[s.combo.stage] ?? 'hit1'
     const atk = heroTotalAtk(this.identity, this.equipment)
     const crit = heroStats(this.identity, this.equipment).crit
     const damage = Math.max(1, Math.round(calculateNormalAttackPower(hitKey, atk, { critChance: crit })))
     let firstHit: MonsterEntity | null = null
     for (const e of this.aliveMonsters()) {
-      const mBox = centeredBox(e.state.x, e.state.y, 120, 140)
+      const mBox = this.monsterHitbox(e)
       if (!overlaps(box, mBox)) continue
       if (e.state.resolvedAttackIds.includes(s.attackId)) continue
       if (e.hitQueue.some((h) => h.attackId === s.attackId)) continue
@@ -2059,7 +2144,8 @@ export class BattleScene extends Phaser.Scene {
    * entity's hit1 attackPower/attackKind. */
   private resolveEnemySkillHit(e: MonsterEntity, spawn: SpawnedHitbox): void {
     if (isHeroDead(this.identity)) return
-    const heroBox = centeredBox(this.heroState.x, this.heroState.vertical.y, HERO_HURTBOX_W, HERO_HURTBOX_H)
+    const heroCenter = this.heroVisualCenter()
+    const heroBox = centeredBox(heroCenter.x, heroCenter.y, HERO_HURTBOX_W, HERO_HURTBOX_H)
     if (!overlaps(spawnedHitboxToRect(spawn), heroBox)) return // dodged: out of the AoE at the hit instant
     this.monsterHitsHero(e, spawn.damage, spawn.attackKind)
   }
@@ -2304,9 +2390,14 @@ export class BattleScene extends Phaser.Scene {
     else if (e.burn) e.sprite.setTint(0xff8a5a)
     else e.sprite.clearTint()
     const off = e.data.offset
-    e.sprite.setPosition(e.state.x + off.x * e.scale, e.state.y + MON_RENDER_OFFSET_Y + off.y * e.scale)
+    e.sprite.setPosition(e.state.x + off.x * e.scale, e.state.y + off.y * e.scale)
     // Grunt head HP bar (hidden at full / on death); boss uses the top bar.
-    e.hpBar?.update(e.state.hp, e.config.stats.hp, e.state.x, e.state.y - 110)
+    // hitstun-triad pen: a fixed "-110" read fine for hero-ish-sized grunts
+    // but sat inside/below a big boss's own head (cellH up to 350) and well
+    // above a small imp's -- anchor off the species' own real visual top edge
+    // instead (center - half its own scaled cell height - a small gap).
+    const headroom = (e.data.sheet.cellH / 2) * e.scale + 10
+    e.hpBar?.update(e.state.hp, e.config.stats.hp, e.state.x, this.monsterVisualCenter(e).y - headroom)
   }
 
   private updateParallax(): void {

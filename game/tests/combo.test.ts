@@ -31,14 +31,44 @@ describe('combo state machine (五段连击窗口判定)', () => {
     expect(s.stage).toBe(0)
   })
 
-  it('a press buffered mid-swing chains to the next stage when the swing ends', () => {
+  // hitstun-triad pen (2026-07-09): a press mid-swing is REJECTED, not
+  // buffered -- decompiled export.hero.Role1.myKeyDown() rejects the attack
+  // key outright while isAttacking() is true, with no queue/buffer concept.
+  // The old "buffered mid-swing press auto-chains" behavior this test used
+  // to assert was a project-chosen design (never AS3-sourced, per this
+  // module's own prior "chosen feel value" header note) that let a held/
+  // spammed attack key chain the full 5-hit combo with near-zero gaps,
+  // directly causing the reported "无限眩晕/无脑通关" exploit (every L1/L2
+  // monster's real hurtDurationMs is 500ms, well above a single swing's
+  // 300-370ms real duration -- see combo.ts's header for the full writeup).
+  it('a press mid-swing does nothing; the swing finishes on its own with no chain', () => {
     const s = initCombo()
     press(s) // hit1
-    stepCombo(s, { attackPressed: true, grounded: true, dtMs: 40 }, cfg) // buffer mid-swing
-    expect(s.buffered).toBe(true)
-    const r = wait(s, 60) // reaches end of hit1 (100ms) with no new press
+    const midSwing = stepCombo(s, { attackPressed: true, grounded: true, dtMs: 40 }, cfg) // pressed again mid-swing
+    expect(midSwing.action).toBe('hit1') // still just holding the same swing
+    expect(midSwing.changed).toBe(false)
+    const r = wait(s, 60) // reaches end of hit1 (100ms) with no fresh press since
+    expect(r.action).toBe(null) // NOT hit2 -- the mid-swing press was not remembered
+    expect(r.attacking).toBe(false) // free to move/jump immediately once the swing ends
+    expect(s.stage).toBe(1) // chain memory still alive, waiting on the grace window
+  })
+
+  it('a fresh press after the swing ends (not during it) chains to the next stage', () => {
+    const s = initCombo()
+    press(s) // hit1
+    wait(s, 100) // swing fully ends
+    const r = press(s) // a genuinely new press, inside the grace window
     expect(r.action).toBe('hit2')
     expect(s.stage).toBe(2)
+  })
+
+  it('is free to move/jump the instant a swing ends, even mid-chain-window', () => {
+    const s = initCombo()
+    press(s) // hit1
+    const r = wait(s, 100) // swing just finished, no press yet
+    expect(r.attacking).toBe(false)
+    expect(r.action).toBe(null)
+    expect(s.stage).toBe(1) // still remembered for a possible chain
   })
 
   it('walks the full chain hit1 -> hit5 with well-timed presses', () => {
