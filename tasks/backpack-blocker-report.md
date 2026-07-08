@@ -18,6 +18,34 @@ interactive 对象做命中测试时，会把指针坐标经由**相机当前的
 `setInteractive()` 放进 `scrollFactor(0)` 容器里会随镜头漂移，需要改成场景级屏幕坐标手动
 命中测试。`BackpackWindow.ts` 当时没有跟着改，这次是同一个坑的第二个受害者。
 
+**精确机制**（读 Phaser 4.2.0 源码 `node_modules/phaser/src/input/InputManager.js:924-925` 逐行确认，
+不是猜的）：
+
+```js
+var px = tempPoint.x + (csx * gameObject.scrollFactorX) - csx
+```
+
+`tempPoint` 是指针屏幕坐标经 `camera.getWorldPoint()` 换算后的"世界坐标"（约等于
+`screenX + camera.scrollX`）；`gameObject.scrollFactorX` 读的是**这个子对象自己的**
+scrollFactor 属性，不是从父 Container 继承来的。旧代码只在最外层 `this.container` 上调了
+`.setScrollFactor(0)`，里面每个按钮矩形自己的 `scrollFactorX` 从没设置过，默认值是 `1`——
+渲染时之所以看起来"没歪"，是因为 Phaser 渲染一个 Container 子树只在最外层结算一次相机偏移
+（子对象自己的 scrollFactor 在渲染路径上根本不会被读取），但 `InputManager.hitTest()` 是
+拿到手的一份"独立于容器层级的可交互对象扁平列表"逐个测，直接读每个对象自己的
+`scrollFactorX`——这就是"渲染依赖父级，命中测试依赖对象自己"这条分叉的根源。
+
+代入 `scrollFactorX=1` 化简：`px = tempPoint.x = screenX + csx`，命中比对的是对象未经滚动
+修正的世界矩阵位置，于是解出"实际可点的屏幕坐标 = 视觉位置 - camera.scroll"——跟前面
+`scrollX=400` 实测的漂移方向和量级完全对上。
+
+顺带一提：Phaser 其实自带了针对这个坑的官方解法——`Container.setScrollFactor(x, y,
+updateChildren)` 第三个参数 `updateChildren=true` 会把 scrollFactor 广播给
+`this.list`（`Container.js:1305-1320`）。但它只广播**直接子节点**，`BackpackWindow.ts` 的
+装备格/道具格分别挂在 `equipLayer`/`gridLayer` 两层嵌套子 Container 里，广播不到那一层，还需要
+在每次 `redrawEquip()`/`redrawGrid()` 重建后手动补调用——本质上并不比这次选的"整体换成手动
+场景级命中测试"更省事，反而要在两条腿（Phaser 原生 setInteractive + 手动广播）上各留一份心智
+负担，所以维持了现在这个统一方案。
+
 "布局歪七扭八"：实测排除——在 `scrollX=400` 强制滚动后截图，窗口像素级位置与
 `scrollX=0` 时完全一致（渲染层没有 bug，`scrollFactor(0)` 本身工作正常）。用户感知到的
 "歪"实际是"点在看起来对的位置上没反应"，不是真实的布局错位。
@@ -31,6 +59,36 @@ __shellConfirm → __shellMapEnterLevel(0)` 进入 L1 战斗，然后：
 2. 强制 `cameras.main.scrollX = 400`（模拟战斗中相机已滚动的常态），在**完全相同的几何
    坐标**上点击同样两个按钮 —— 页签没切换、窗口没关闭。坐标本身没错（截图确认按钮画在那个
    位置），只是 Phaser 的命中判定跑偏了。
+
+## 命中区可视化验证（渲染坐标 vs 实际监听坐标对账）
+
+上面的复现已经能证明"点不动"，但为了直接给出"渲染在哪、命中区在哪"两张图叠加对比（而不是
+只靠点击成功/失败的间接推断），另外补了一轮更硬的验证：不用我自己推导的公式，而是直接调用
+Phaser **真实的** `scene.input.manager.hitTest(pointer, gameObjects, camera)` 函数去逐个问
+"这个按钮此刻到底在哪能被点中"，把结果和渲染坐标画框叠加截图。
+
+**方法**：`git worktree add` 出修复前的提交（`a07b511`，不动共享工作区，其他棒的未提交改动
+不受影响）单独起一个 dev server，playwright 独立 tab 进 L1 战斗、强制 `scrollX=400`、打开
+背包（并装备一件武器，让装备格命中区也有样本）。递归遍历 `backpack.container.list`（含
+`equipLayer`/`gridLayer` 嵌套子容器）收集所有 `interactive` 的 GameObject，对每一个：
+
+- 渲染框（绿色实线）= `container.x + object.x/y ± width/height/2`（scrollFactor(0) 祖先链下
+  这个位置不随相机滚动变化，前面已验证）。
+- 命中框（红色虚线）= 用 `scene.input.manager.hitTest()` 真实验证：在"渲染位置"采样点调用，
+  返回未命中；在"渲染位置 − camera.scroll"采样点调用，返回命中——不是猜的，是 Phaser 自己
+  的函数给出的结果。
+
+截图 `tasks/backpack-fix-shots/06-hit-overlay-BEFORE-fix.png`：关闭钮、装备格、四个页签、
+出售/上一页/下一页，全部是"绿框画在按钮上，红框漂到左侧 400px 外的头像/属性栏区域甚至
+画布外"——九个按钮全部 `hitAtVisual: false`（渲染位置点不中）、`hitAtPredicted: true`
+（漂移后的位置才能点中），逐项打印在本报告旁的 playwright 会话记录里。
+
+同一套方法在**修复后的代码**上重跑一遍（`resolveHit()` 是纯本地坐标运算，天然不吃相机滚动，
+所以这次没有独立的 Phaser hitArea 对象可查，改为直接调用 `backpack['resolveHit'](cx, cy)`
+逐个按钮验证返回的 `kind` 与预期一致，7/7 全部匹配，含新增的装备格）：截图
+`tasks/backpack-fix-shots/07-hit-overlay-AFTER-fix.png`，同样 `scrollX=400`，绿框（渲染）
+与青色虚线框（确认命中）现在完全重合——因为两者现在读的是同一份坐标常量，不再是两套独立
+维护、容易失步的数字。
 
 ## 修复
 
@@ -81,6 +139,12 @@ __shellConfirm → __shellMapEnterLevel(0)` 进入 L1 战斗，然后：
 - `04-open-scrollX400-AFTER-fix.png`：修复后，同样 `scrollX=400`，页签/关闭点击均生效。
 - `05-after-unequip-scrollX400.png`：修复后，`scrollX=400` 下点击武器格成功卸下，hover
   tooltip 正确跟手。
+- `06-hit-overlay-BEFORE-fix.png`：**渲染坐标 vs 实际命中坐标叠加图（修复前）**，`scrollX=400`。
+  绿色实线=按钮实际画在哪，红色虚线=Phaser 真实 `hitTest()` 确认的可点击区域——九个按钮全部
+  错位，其中关闭钮/四个页签整体漂到画布左侧、部分红框落在头像和属性栏文字上，肉眼可见"点得到
+  但要点在错位的隐形区域上"。
+- `07-hit-overlay-AFTER-fix.png`：同一张图的修复后版本，同样 `scrollX=400`。绿框（渲染）与
+  青色虚线框（`resolveHit()` 确认命中）现在逐个重合。
 
 ## 踩坑记录（协作纪律，供其他棒参考）
 
