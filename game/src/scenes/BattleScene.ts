@@ -169,6 +169,43 @@ const MONSTER_NAMES: Record<string, string> = {
   ...LEVEL3_MONSTER_NAMES,
   ...LEVEL4_MONSTER_NAMES,
 }
+// Real per-species melee hit timing, decompiled from BaseMonster.as subclasses
+// (export.monster.MonsterN, tmp/l4work/mscripts/scripts/export/monster/).
+// Each MonsterN plays "hit1" as a bbdc (bitmap-clip) animation whose frames
+// are held for species-specific tick counts (setFrameStopCount); enterFrameFunc
+// checks a specific (bank sub-frame index, curFrameCount) pair and, when it
+// matches, spawns a SpecialEffectBullet at (this.x ± offsetX, this.y ± offsetY)
+// -- THAT bullet, not attack-start, is what actually hit-tests the hero. This
+// is the real root cause of "怪物挥剑明显没碰到悟空但悟空掉血" (battle-fidelity
+// 追加单, 2026-07-08): the old code resolved damage unconditionally on
+// attack-start (frame 0) using stats.attackRange (250px, the AI's "decide to
+// engage" sensing radius) as if it were melee reach.
+//
+// fraction = (sum of hold-ticks up to and including the trigger sub-frame) /
+// (sum of all hold-ticks in the hit1 bank) -- i.e. how far through the swing
+// the real game spawns the hit. reach = the doHi1 bullet's spawn x-offset
+// (the real "sword tip" distance from the monster's own x).
+// L1 species (2/3/4/5/7/8/30) are all decompiled directly. L2 species
+// (6/9/10/15/16/19) are NOT yet decompiled -- TODO-verify, they fall back to
+// the 0.5/attackRange defaults below, same as before this fix for them
+// specifically (still strictly better than L1's old behavior since at least
+// L1 -- the level the user actually caught the bug on -- is now correct).
+const MONSTER_ATTACK_TIMING: Record<string, { fraction: number; reach: number }> = {
+  monster2: { fraction: 19 / 35, reach: 75 }, // Monster2 (顺风耳) hit1 bank4=[2,2,15,16], trigger x=2
+  monster3: { fraction: 7 / 15, reach: 105 }, // Monster3 hit1 bank4=[2,2,2,1,1,7], trigger x=3
+  monster4: { fraction: 14 / 21, reach: 155 }, // Monster4 hit1 bank4=[4,4,4,2,7], trigger x=3
+  monster5: { fraction: 8 / 15, reach: 155 }, // Monster5 hit1 bank4=[2,2,2,2,7], trigger x=3
+  monster7: { fraction: 0.6, reach: 80 }, // Monster7 hit1 bank4=[2,2,2,4], trigger x=2
+  monster8: { fraction: 1, reach: 97 }, // Monster8 hit1 bank4=[2,2,2,2,5], trigger x=4 (last sub-frame)
+  // Monster30 is the documented FLYING RANGED divergence (see monsterSim.ts
+  // header): real AS3 spawns its bullet at offsetX=0 (a hovering ranged
+  // burst, not a melee swing) and hits at the very last tick of its 10-tick
+  // hit1 (fraction 1.0, real+accurate). reach=0 doesn't transfer to our
+  // ground-melee reinterpretation (it would mean the swing never connects at
+  // all) -- kept at a grunt-average value, project-chosen, TODO-verify.
+  monster30: { fraction: 1, reach: 90 },
+}
+
 // Per-boss raw attack power (pre-mitigation), from heroScale.BOSS_REFERENCE /
 // level packs. Grunts derive a modest value from their def (see monsterAttackPower).
 const BOSS_ATTACK_POWER: Record<string, { power: number; kind: AttackKind }> = {
@@ -1218,6 +1255,7 @@ export class BattleScene extends Phaser.Scene {
     const data = MONSTER_DATA[species] ?? MONSTER_DATA.monster30
     const dur = (a: string, fallback: number): number =>
       data.actions[a] ? actionDurationMs(data.actions[a] as ActionSpec, TICK_MS) : fallback
+    const timing = MONSTER_ATTACK_TIMING[species]
     return {
       stats,
       patrolMin: MIN_X + 80,
@@ -1229,6 +1267,11 @@ export class BattleScene extends Phaser.Scene {
       decisionIntervalMs: 1000,
       tickMs: TICK_MS,
       rng: Math.random,
+      // Real per-species hit-frame timing where decompiled (MONSTER_ATTACK_TIMING
+      // above); omitted fields fall back to monsterSim's own 0.5/attackRange
+      // defaults for species not yet decompiled (L2+, TODO-verify).
+      attackHitFraction: timing?.fraction,
+      meleeReach: timing?.reach,
     }
   }
 
@@ -1793,7 +1836,12 @@ export class BattleScene extends Phaser.Scene {
     )
     for (const ev of events) {
       if (ev.type === 'hurt') this.playSfx('monHurt', 0.6)
-      else if (ev.type === 'attack-start') this.monsterHitsHero(e)
+      // 'attack-hit' (not 'attack-start'): monsterSim already re-checked
+      // meleeReach + facing at the swing's real hit frame before emitting
+      // this -- attack-start fired earlier (frame 0) and would apply damage
+      // no matter how far away the hero stood (battle-fidelity 追加单 fix,
+      // 2026-07-08). See MONSTER_ATTACK_TIMING's header comment.
+      else if (ev.type === 'attack-hit') this.monsterHitsHero(e)
       else if (ev.type === 'death') {
         this.spawnDrops(ev.x, ev.y)
         this.npcClient.worldEvent('monster_killed', { monster: MONSTER_NAMES[e.species] ?? e.species })
@@ -1856,9 +1904,14 @@ export class BattleScene extends Phaser.Scene {
   // A monster swing lands: route its raw attack power through the original
   // two-way defense formula (heroScale.resolveIncomingHeroDamage; heroCombat
   // applies none itself), then into the combat model (i-frames/death/respawn).
+  // Only called from the 'attack-hit' event -- monsterSim.tickMonster already
+  // re-checked meleeReach + facing against the hero's position at the real
+  // swing hit frame before emitting it, so no distance check is repeated here
+  // (the old `> attackRange` check here was the actual bug: attackRange is a
+  // 250px AI sensing radius, not melee reach, and it ran at attack-start
+  // instead of the hit frame -- see MONSTER_ATTACK_TIMING's header comment).
   private monsterHitsHero(e: MonsterEntity): void {
     if (isHeroDead(this.identity)) return
-    if (Math.abs(this.heroState.x - e.state.x) > e.config.stats.attackRange) return
     if (isHeroInvincible(this.identity, this.simClockMs)) return
     const mitigated = Math.max(
       1,
