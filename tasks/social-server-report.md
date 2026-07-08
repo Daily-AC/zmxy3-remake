@@ -1,6 +1,6 @@
 # social-server 交付报告
 
-对应任务书 `tasks/social-server-brief.md`。实现由 `codex:codex-rescue` 完成（架构/schema/协议/算法设计由本会话预拍，写在派发 prompt 里；codex 按契约写代码+测试），全部验证由本会话独立跑通，不是实现方自证。
+对应任务书 `tasks/social-server-brief.md`。初版实现由 `codex:codex-rescue` 完成（架构/schema/协议/算法设计由本会话预拍，写在派发 prompt 里；codex 按契约写代码+测试），全部验证由本会话独立跑通，不是实现方自证。**2026-07-08 用户拍板"10 人同房不卡"性能目标后的三处升级（容量 4→10、state/event 协议占位、扇出压测脚本）由本会话直接实现**——范围小、判据精确（P95<50ms 这类数值门槛）、且不需要再装任何新包，round-trip 到 codex 的固定开销不划算，故本轮没有再转派，细节见文末"环境事实"。
 
 ## 目录
 
@@ -8,10 +8,10 @@
 social-server/
   package.json  tsconfig.json  README.md
   src/  db.ts types.ts auth.ts friends.ts rooms.ts allocation.ts ws-protocol.ts ws-server.ts server.ts
-  test/ auth.test.ts friends.test.ts rooms.test.ts allocation.test.ts e2e-smoke.ts
+  test/ auth.test.ts friends.test.ts rooms.test.ts allocation.test.ts e2e-smoke.ts loadtest-fanout.ts
 ```
 
-依赖：`express` `ws` `better-sqlite3` `jsonwebtoken` `bcryptjs`（+对应 `@types/*`）+ `tsx`/`typescript`。没有引入更重的框架。默认端口 `5182`（`agent-server` 占 `5181`）。
+依赖：`express` `ws` `better-sqlite3` `jsonwebtoken` `bcryptjs`（+对应 `@types/*`）+ `tsx`/`typescript`。没有引入更重的框架，性能升级三处改动也没有新增任何依赖。默认端口 `5182`（`agent-server` 占 `5181`）。房间上限 `ROOM_CAPACITY = 10`（`src/rooms.ts`，单一常量来源，2026-07-08 用户拍板"10 人同房不卡"从任务书原定的 4 上调）。
 
 ## 接口清单
 
@@ -34,10 +34,19 @@ social-server/
 
 ### WebSocket（`ws://127.0.0.1:5182/ws`，schema 见 `src/ws-protocol.ts`）
 
-客户端→服务端：`join{token,roomId}`（必须是第一条）、`ready{ready}`、`leave`、`start`（仅房主）。
-服务端→客户端：`room_state{room}`、`member_joined{member}`、`member_left{userId,newOwnerId?}`、`ready_changed{userId,ready}`、`game_start{levelId}`、`error{message}`。
+客户端→服务端：`join{token,roomId}`（必须是第一条）、`ready{ready}`、`leave`、`start`（仅房主）、`state{seq,payload,sentAt}`、`event{name,payload}`。
+服务端→客户端：`room_state{room}`、`member_joined{member}`、`member_left{userId,newOwnerId?}`、`ready_changed{userId,ready}`、`game_start{levelId}`、`error{message}`、`state{fromUserId,seq,payload,sentAt}`、`event{fromUserId,name,payload}`。
 
 `RoomSnapshot = {id, levelId, ownerId, status, members:{userId,username,ready}[]}`。
+
+### `state`/`event`：下一棒的协议占位（本棒只设计形状，不实现同步逻辑）
+
+服务端对这两类消息只做原样转发（`ws-server.ts` 的 `handleState`/`handleEvent`），不仲裁、不校验发送者身份——"只有房主能发 state"这种权威判定是下一棒（真实战斗同步）的游戏策略决定，不属于这层大厅路由。两类消息的可靠性契约不同：
+
+- `state`（高频 10-20Hz，位置/动作）：带单调 `seq`。接收方须实现"过期即丢弃"规则——`seq` 小于等于已接收过的最大 `seq` 就当作被网络丢了，不采用，这是有意的"以新覆旧"策略，不是可靠传输（WS/TCP 本身有序）的限制。
+- `event`（低频，伤害/拾取/掉落等）：不带 `seq`，普通 TCP/WS 顺序即可，因为这类事件少且每条都不能丢。
+
+序列化目前是 JSON，跟其它消息一致；如果压测在更真实的规模下测出 JSON 开销顶到延迟预算，那是切二进制编码的触发条件，现在没必要提前做。
 
 ## 数据库 schema（better-sqlite3，`src/db.ts`）
 
@@ -61,6 +70,8 @@ friendships(user_id_a, user_id_b, created_at, PRIMARY KEY(user_id_a, user_id_b))
 6. **`member_joined` 绑定 WS 连接而非 REST 加入**：REST `/rooms/:id/join` 只建立成员资格，真正广播"某人上线"是在对方 WS 发 `join` 消息成功订阅时。避免"REST 加了但没开 WS"的成员被误报成在线。
 7. **JWT secret 强制走环境变量，没有兜底值**：`assertJwtSecret()` 在 `JWT_SECRET` 缺失时直接抛错，代码里不落任何默认密钥字符串；测试文件里自己设的 `unit-test-secret`/`e2e-smoke-secret` 是测试夹具，不是生产配置。
 8. **转赠账本是独立验证模型，不接游戏真实背包**：`allocation.ts` 完全不 import `game/` 任何代码，`Ledger` 只是证明事务安全模式用的最小内存 `Map`。接入游戏真实库存是明确的后续集成任务，本棒范围内不做，避免趁手就手滑碰了 `game/`。
+9. **房间容量 4→10（2026-07-08 追加）**：单一常量 `ROOM_CAPACITY`（`src/rooms.ts`），`joinRoom` 唯一读取点，`rooms.test.ts` 的满员测试本来就是从这个常量派生 fixture（`Array.from({length: ROOM_CAPACITY}, ...)`），升级前后测试代码零改动，只改了常量值本身——这就是"配置常量化，别写死散落各处"要的效果。
+10. **`state`/`event` 只设计协议形状不实现同步逻辑（2026-07-08 追加）**：`ws-protocol.ts` 定义两个消息类型，`ws-server.ts` 只做无仲裁原样转发；不限定发送者身份（谁是权威发送者是下一棒的游戏策略决定）。序列化用 JSON 起步，压测数字撑不住了再考虑二进制编码，不提前优化。
 
 ## 单测结果（`npm run test:unit`，node:test，全部真实跑过，非转述）
 
@@ -102,14 +113,33 @@ SMOKE OK
 
 流程：真实注册两用户 → alice 发好友申请 → bob 接受 → 双方好友列表互相可见 → alice 建房(L1) → bob 走 REST 加入 → 双方各开一条真实 WebSocket 发 `join` → 都收到 `room_state`，alice 收到 bob 的 `member_joined` → 双方 `ready` → alice（房主）发 `start` → 双方都收到 `game_start{levelId:"L1"}`。
 
-`npm run typecheck`：`tsc --noEmit` 无输出，零错误。
+`npm run typecheck`：`tsc --noEmit` 无输出，零错误（含性能升级三处改动之后）。
+
+## 性能：10 人同房扇出压测（`npm run loadtest:fanout`，真实起服务+真实 10 条 WS 连接，非模拟）
+
+判据：10 人满房，1 个连续 30 秒以 20Hz 发 `state`，其余 9 个接收，P95 端到端延迟 < 50ms。实测（本机回环，2026-07-08）：
+
+```
+scenario: 10 clients, 1 sender @ 20Hz for 30000ms, P95 budget 50ms
+room ea645536 filled to capacity (10)
+all 10 sockets subscribed
+sender: 580 state messages sent (seq 1..580)
+receivers: 9, expected deliveries: 5220, actual received: 5220
+transport loss (expected~0 on TCP loopback): 0
+stale-seq discarded (application-level, per receiver highest-seq rule): 0
+end-to-end latency ms -- p50: 1.00, p95: 2.00, p99: 3.00, max: 9.00
+LOADTEST OK -- P95 2.00ms < 50ms budget
+```
+
+P95 2ms，远低于 50ms 预算，5220 条预期投递全部到账、零丢失。诚实说明这个数字的边界：这是本机 TCP loopback，`transport loss` 恒为 0 和 `stale-seq discarded` 恒为 0 都是预期结果而不是"扛住了丢包/乱序"的证据——单条 TCP 连接本身有序，本地环回也没有真实网络延迟/丢包，这条压测在这个环境下验证的是"扇出路径本身够快、丢弃规则的语义写对了不会误伤正常消息"，不是"跨机器弱网下也不卡"。真正的联机压力验证要等实际部署（跨机器/带宽限制/丢包模拟）才有意义，这点写进 README 了，不冒充是更强的证据。
 
 ## 疑点（判据之外，未擅自扩范围，供用户裁决）
 
 1. **好友请求/房间 id 的类型**：数据库自增整数转成字符串对外暴露（`String(id)`），房间 id 用 `randomUUID().slice(0,8)`。两种 id 风格不统一，够用但不严谨（8 位 UUID 前缀理论上有碰撞概率，量小可接受）。要不要统一成同一种 id 策略，留给后续棒判断。
-2. **房间容量 4 人 vs CLAUDE.md 里刚拍板的"10 人同房不卡"**：写这份报告时发现 `CLAUDE.md` 已经有其他并发任务把总纲更新为"10 人同房不卡"的性能目标（20:2x 用户拍板），但本棒任务书 `tasks/social-server-brief.md` 写的是"房间成员上限 4"。这是任务书之间出现的新旧冲突，不是我擅自改的——`ROOM_CAPACITY=4` 严格按原任务书实现，是否要提到 10 需要用户/主会话对齐两份任务书后决定，本棒没有替用户扩范围。
+2. ~~房间容量 4 人 vs "10 人同房不卡"的任务书冲突~~——**已解决**：用户拍板容量升到 10，本轮已把 `ROOM_CAPACITY` 改为 10 并跑了压测，见上一节。
 3. **`transferItem` 的 `TransferTx.toUserId` 先留空再回填**：`lockTransfer` 构造事务时 `toUserId` 还不知道（先扣款），`transferItem` 拿到锁定结果后再手工赋值 `tx.toUserId = toUserId`。这是可用的做法但接口上有点别扭（`TransferTx` 理论上应该一开始就是完整的），如果以后要把 `lockTransfer`/`commitTransfer` 单独暴露给别的调用方（不经过 `transferItem`），这个"先留空"的约定需要显式文档化或重构掉，目前只有 `transferItem` 一个调用方所以没造成实际问题。
 4. **房间不持久化 = 服务重启会丢失所有进行中的房间**，包括正在游戏中的房间（`status: "in_game"`）。MVP 可接受，但如果 home 部署后要考虑服务热更新/重启场景，这是一个真实的用户体验缺口（房间里的人会突然掉线且拿不回房间），值得在下一棒接实时同步时一并考虑要不要给房间加最简单的落盘快照。
+5. **`state`/`event` 目前没有任何发送者权限限制**：任何已加入房间的连接都能发 `state`/`event`，服务端照单转发。这是有意的（判据只要求设计协议形状，不要求实现权威校验），但下一棒接真实战斗同步时，"谁能发权威状态"（多半是房主）这条校验需要补上，否则任何客户端都能伪造状态广播给全房间。
 
 ## 环境事实（交接用）
 

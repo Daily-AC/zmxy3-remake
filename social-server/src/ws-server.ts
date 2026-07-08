@@ -139,6 +139,29 @@ export function attachRoomWebSocketServer(
     broadcast(state.roomId, { type: "game_start", levelId: started.levelId });
   }
 
+  // Generic relay only -- no simulation, no arbitration, no authority check
+  // on who may send. See ws-protocol.ts's StateMessage/EventMessage header
+  // comment for the reliability contract each shape implies; deciding e.g.
+  // "only the room owner may send state" is a gameplay policy call for the
+  // future combat-sync work, not this lobby-routing layer.
+  function handleState(ws: WebSocket, state: SocketState, message: ClientToServerMessage): void {
+    if (message.type !== "state") return;
+    broadcast(
+      state.roomId,
+      { type: "state", fromUserId: state.userId, seq: message.seq, payload: message.payload, sentAt: message.sentAt },
+      ws,
+    );
+  }
+
+  function handleEvent(ws: WebSocket, state: SocketState, message: ClientToServerMessage): void {
+    if (message.type !== "event") return;
+    broadcast(
+      state.roomId,
+      { type: "event", fromUserId: state.userId, name: message.name, payload: message.payload },
+      ws,
+    );
+  }
+
   wss.on("connection", (ws) => {
     ws.on("message", (data) => {
       const message = parseMessage(data);
@@ -166,6 +189,12 @@ export function attachRoomWebSocketServer(
           break;
         case "start":
           handleStart(ws, state);
+          break;
+        case "state":
+          handleState(ws, state, message);
+          break;
+        case "event":
+          handleEvent(ws, state, message);
           break;
       }
     });
