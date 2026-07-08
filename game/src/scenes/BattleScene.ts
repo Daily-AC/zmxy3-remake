@@ -91,7 +91,12 @@ import type { LoadedGameState } from '../systems/save'
 import { createGameSave, restoreGameState } from '../systems/save'
 import type { SlotId } from '../systems/saveSlots'
 import { buildSlotEnvelope, writeSlot, readSlot, heroName } from '../systems/saveSlots'
-import { readCampaignIndex, writeCampaignIndex, advanceCampaignFrontier } from '../systems/campaignProgress'
+import {
+  readCampaignIndex,
+  writeCampaignIndex,
+  advanceCampaignFrontier,
+  ACTIVE_CAMPAIGN_LENGTH,
+} from '../systems/campaignProgress'
 import { SCENE } from './shellShared'
 import { MpModel, createMp, getRole1MaxMp, setMaxMp, tickMpRegen } from '../systems/mp'
 import {
@@ -568,8 +573,19 @@ export class BattleScene extends Phaser.Scene {
     for (const key of ['bg11', 'bg12', 'bg13', 'floorBg1', 'online_floor12', 'online_floor13']) {
       this.load.image(key, `assets/extracted/level1/${key}.png`)
     }
+    // L2/L3/L4 have NO floorBgN load: floorBg2.png/floorBg3.png/floorBg4.png
+    // were confirmed genuinely blank in the source (not an extraction bug) --
+    // re-exported chid 3/10/2 directly from vendor's out_res/{2,3,4}.swf with
+    // FFDec (`-selectid N -format image:png`, bypassing whatever produced the
+    // files already on disk) and got 0 opaque pixels / all-zero RGB every
+    // time, confirming the SWF's own DefineBitsLossless2 tag is empty, not a
+    // decode failure. Unlike L1 (floorBg1 bakes a real small scene -- palace/
+    // platform -- used both directly and as the near ground band's source,
+    // see GROUND_BG_* / L1_GROUND_BAND_* above), vendor L2-L4 simply have no
+    // dedicated ground-layer art; their bgN1/N2/N3 panoramas are the whole
+    // background. (asset-audit-report.md flagged the empty PNGs; L3/L4 are
+    // additionally out of campaign scope per CLAUDE.md's L1+L2 cap.)
     for (const n of [2, 3, 4]) {
-      this.load.image(`floorBg${n}`, `assets/extracted/level${n}/floorBg${n}.png`)
       const bgCount = n === 4 ? 1 : 3 // L4 only has bg41
       for (let i = 1; i <= bgCount; i++) {
         this.load.image(`bg${n}${i}`, `assets/extracted/level${n}/bg${n}${i}.png`)
@@ -1029,6 +1045,7 @@ export class BattleScene extends Phaser.Scene {
    * Reuses the shared floorImg object; only called for L1. */
   private placeL1GroundBand(): void {
     if (!this.floorImg || !this.textures.exists('online_floor12')) return
+    this.floorImg.setVisible(true) // undo a previous L2-L4 visit's hide (see swapBackground's else-branch)
     this.floorImg.setTexture('online_floor12')
     this.floorImg.setPosition(0, L1_GROUND_BAND_Y)
     this.floorImg.setScale(L1_GROUND_BAND_SCALE)
@@ -1085,7 +1102,18 @@ export class BattleScene extends Phaser.Scene {
       for (const { img } of this.bgTiles) img.setVisible(true)
       if (this.bgTiles[0] && this.textures.exists(far)) this.bgTiles[0].img.setTexture(far)
       if (this.bgTiles[1] && this.textures.exists(near)) this.bgTiles[1].img.setTexture(near)
-      if (this.textures.exists(floor)) this.placeFloor(floor)
+      // L2-L4 have no floorBgN texture (confirmed genuinely absent in the
+      // source, not an extraction bug -- see the preload() comment above);
+      // floorImg is only ever repositioned/re-textured by placeFloor(), so
+      // without an explicit hide here it would keep showing whatever level's
+      // floor art (or L1's near ground band) was on screen before switching
+      // to one of these levels.
+      if (this.textures.exists(floor)) {
+        this.floorImg?.setVisible(true)
+        this.placeFloor(floor)
+      } else {
+        this.floorImg?.setVisible(false)
+      }
     }
   }
 
@@ -1371,7 +1399,16 @@ export class BattleScene extends Phaser.Scene {
       this.tweens.add({ targets: swirl, angle: 360, duration: 3000, repeat: -1 })
     }
     this.portal.setPosition(cx, cy).setVisible(true)
-    this.showToast('妖王已除！走进传送门 (↑) 进入下一关', '#9fd8ff')
+    // "进入下一关" is wrong wording once this is the last ACTIVE campaign
+    // level (currently L2, ACTIVE_CAMPAIGN_LENGTH -- L3/L4 code stays in the
+    // repo per CLAUDE.md's scope cut but have no map entry, so there really
+    // is no next level to walk into) -- the portal still just returns to the
+    // world map either way, only the toast's claim about what's next changes.
+    const isFinalActiveLevel = this.campaignIndex + 1 >= ACTIVE_CAMPAIGN_LENGTH
+    this.showToast(
+      isFinalActiveLevel ? '妖王已除！走进传送门 (↑) 返回世界地图' : '妖王已除！走进传送门 (↑) 进入下一关',
+      '#9fd8ff',
+    )
   }
 
   /** If the portal is open and the hero stands in it, clear the arena and go to
@@ -1391,7 +1428,12 @@ export class BattleScene extends Phaser.Scene {
    * player re-enters via clicking the next node there.
    */
   private onAdvanceLevel(): void {
-    const clearedAll = this.campaignIndex + 1 >= CAMPAIGN.length
+    // ACTIVE_CAMPAIGN_LENGTH (2, L1+L2), not CAMPAIGN.length (4) -- L3/L4's
+    // level data stays in the repo per CLAUDE.md's scope cut but has no map
+    // entry (campaignProgress.ts clamps every index at ACTIVE_CAMPAIGN_LENGTH-1),
+    // so clearing L2 IS clearing everything currently reachable and must say
+    // so, not "通关！返回世界地图" as if L3 were still coming up next.
+    const clearedAll = this.campaignIndex + 1 >= ACTIVE_CAMPAIGN_LENGTH
     if (this.activeSlot !== null) {
       const frontier = readCampaignIndex(window.localStorage, this.activeSlot)
       this.campaignIndex = advanceCampaignFrontier(this.campaignIndex, frontier)
