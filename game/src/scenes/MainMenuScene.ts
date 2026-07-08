@@ -84,11 +84,26 @@ export class MainMenuScene extends Phaser.Scene {
 
   create(): void {
     // Key art, cover-fit to the canvas. Source is 1920x1080 (16:9), our
-    // canvas is 960x540 (also 16:9) so cover-fit == contain-fit here, no
-    // cropping either axis -- the five-character group sits centered/
-    // lower-third by design (generation brief left the upper sky clear for
-    // the title/menu panel that overlays it).
-    const bg = this.add.image(W / 2, H / 2, KEYART_BG)
+    // canvas is 960x540 (also 16:9) so cover-fit == contain-fit here (scale
+    // 0.5, no cropping needed to fill either axis at a *centered* position).
+    //
+    // 2026-07-08 terminal review: centered, the 5th character (the "???"
+    // black silhouette, rightmost in the source at x≈1310-1580px of 1920)
+    // landed entirely under the opaque menu panel (PANEL_X=690..960) --
+    // canvas_x = 480 + (source_x-960)*0.5 puts him at canvas x≈655-790,
+    // fully inside the panel, so only 4 of 5 characters read as visible.
+    // Fixed by shifting the art left by BG_SHIFT_X instead of re-cropping/
+    // rescaling: shifting (not zooming) keeps the composition's actual pixel
+    // scale identical, and the panel already opaquely covers whatever the
+    // shift exposes as empty on the right (image right edge lands at canvas
+    // x=820 post-shift, panel starts at 690 -- no gap). Chosen so the
+    // silhouette's body (not counting its thin staff, which can stay under
+    // the panel) sits at canvas x≈375-650, comfortably clear of x=690, and
+    // the leftmost character (悟空, source x≈320-570) keeps a ~40px margin
+    // before the new left-edge crop at source x=280 -- neither character
+    // gets clipped by this shift.
+    const BG_SHIFT_X = -140
+    const bg = this.add.image(W / 2 + BG_SHIFT_X, H / 2, KEYART_BG)
     bg.setScale(Math.max(W / bg.width, H / bg.height))
 
     this.buildMenuPanel()
