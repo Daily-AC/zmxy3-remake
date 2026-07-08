@@ -3,16 +3,36 @@ import { SCENE } from './shellShared'
 import { activeArtFont } from '../systems/artFont'
 
 // Title / login shell laid out after the 造梦西游 大闹天庭篇 client title screen
-// (docs/reference/zmxy-online-screens/title-menu.png): the character-group + logo
-// artwork fills the canvas, and a dark ink menu panel on the right carries a
-// vertical menu. Menu items are trimmed to what a single-player local build has
-// (no forum / homepage / networked entries).
+// (docs/reference/zmxy-online-screens/title-menu.png): the character-group +
+// logo artwork fills the canvas, and a dark ink menu panel on the right
+// carries a vertical menu. Menu items are trimmed to what a single-player
+// local build has (no forum / homepage / networked entries).
 //
-// SOURCE NOTE: title-bg is 造梦 Online-sourced art (whole-series usable — see
-// CLAUDE.md). Marked for the packaging style-consistency review.
-export const ASSET_SOURCE_ONLINE = true
-
-const TITLE_BG = 'title_bg'
+// 2026-07-08 首屏接线: the background was `title-bg.png`, an actual Online
+// promo SCREENSHOT (not clean key art) that baked in 4399's copyright notice
+// text, the Online logo (wrong product name), Online's own menu items, and a
+// letterbox edge -- flagged as the single worst "live" dirty asset in
+// tasks/asset-audit-report.md (players saw another product's legal notice +
+// wrong name on the very first screen). Replaced with `keyart-home.png`, a
+// generated key-art anchor (CLAUDE.md 总纲 item 0/1 -- ink-wash brush style,
+// game-canon character group as reference so the five silhouettes stay
+// on-model) commissioned specifically for this screen, no baked text at all.
+// Title text also swapped from a live Ma Shan Zheng render to a pre-rendered
+// calligraphy bitmap (`title-zaixuxiyou.png`) for a more finished stroke
+// weight than a live webfont draw gives at this size; menu items stay on the
+// live Ma Shan Zheng font (artFont.ts), unchanged.
+//
+// The delivered bitmap is near-black ink (RGB ~22,18,15) on transparent --
+// correct for compositing over a light page, but this panel is near-black
+// ink itself (0x0a0a0f), so the original file is essentially invisible here
+// (verified: cropped/zoomed the first real render, the strokes were only
+// visible as a faint darker patch). Recolored the ink to solid white with a
+// one-off script (RGB channels set to 255, alpha channel untouched --
+// identical glyph shapes/kerning, just an ink-color swap for contrast, the
+// same reason the live-text title before it was white) rather than ship an
+// unreadable title; see `title-zaixuxiyou-white.png` alongside the original.
+const KEYART_BG = 'keyart_home'
+const TITLE_IMG = 'title_zaixuxiyou_white'
 const W = 960
 const H = 540
 const PANEL_X = 690
@@ -54,14 +74,21 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   preload(): void {
-    if (!this.textures.exists(TITLE_BG)) {
-      this.load.image(TITLE_BG, 'assets/online/title/title-bg.png')
+    if (!this.textures.exists(KEYART_BG)) {
+      this.load.image(KEYART_BG, 'assets/generated/keyart-home.png')
+    }
+    if (!this.textures.exists(TITLE_IMG)) {
+      this.load.image(TITLE_IMG, 'assets/generated/title-zaixuxiyou-white.png')
     }
   }
 
   create(): void {
-    // Character-group + logo art, cover-fit to the canvas.
-    const bg = this.add.image(W / 2, H / 2, TITLE_BG)
+    // Key art, cover-fit to the canvas. Source is 1920x1080 (16:9), our
+    // canvas is 960x540 (also 16:9) so cover-fit == contain-fit here, no
+    // cropping either axis -- the five-character group sits centered/
+    // lower-third by design (generation brief left the upper sky clear for
+    // the title/menu panel that overlays it).
+    const bg = this.add.image(W / 2, H / 2, KEYART_BG)
     bg.setScale(Math.max(W / bg.width, H / bg.height))
 
     this.buildMenuPanel()
@@ -72,39 +99,28 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private buildMenuPanel(): void {
-    // Dark ink panel on the right -- fully opaque (was 0.68 alpha). The
-    // Online title-bg art bakes its own "造梦西游online·大闹天庭篇" caption
-    // into its top-right corner, which cover-fit scaling lands underneath
-    // this panel; at 0.68 alpha that baked caption showed through and
-    // doubled up with the header text drawn below, producing the "标题栏文字
-    // 重影" (two overlapping title lines) called out in the brief. The
-    // vendor reference panel reads as solid black too, so opaque is also the
-    // fidelity-correct fix, not just a workaround.
+    // Dark ink panel on the right -- fully opaque, keeps the menu legible
+    // over whatever sits behind it in the key art (this used to also matter
+    // for hiding a baked-in caption from the old Online screenshot
+    // background; that background is gone now, but solid ink is still the
+    // right call for menu-text contrast/legibility on its own merits).
     const g = this.add.graphics().setDepth(5)
     g.fillStyle(0x0a0a0f, 1).fillRect(PANEL_X, 0, W - PANEL_X, H)
     g.fillStyle(0x000000, 0.35).fillRect(PANEL_X, 0, 8, H)
     g.lineStyle(2, 0xd9b45a, 0.5).lineBetween(PANEL_X, 14, PANEL_X, H - 14)
 
-    // Product rename 2026-07-08 evening (CLAUDE.md 总纲 item 0, 19:0x 拍板):
-    // the game is now "再续西游" (repo name unchanged). Dropped the old
-    // "《造梦西游·大闹天庭篇》"/"重制版" two-line title entirely -- not a
-    // restyle of it, a replacement, since the product identity changed, not
-    // just the label's chrome. White (was gold #e8d9b0, which read too close
-    // to the panel's own gold hairline border/dividers and got lost against
-    // them) and sized up further now that it's 4 chars instead of 9 (room to
-    // go bigger without overflowing the panel -- the earlier 9-char title
-    // was the thing constraining font size, see artFont.ts candidate table).
-    // A small subtitle (e.g. "致敬《造梦西游3》") was discussed but
-    // deliberately deferred -- brief says four-character main title only for
-    // now.
+    // Title bitmap ("再续西游", pre-rendered brush calligraphy -- see
+    // TITLE_IMG doc comment above). Source is 1400x443 with the ink content
+    // bbox at roughly x:156-1241, y:105-337 (measured via alpha-channel scan)
+    // -- i.e. already centered within its own canvas, so a uniform scale +
+    // setOrigin(0.5) needs no manual offset correction. Scaled so the
+    // content width (~1085px source) lands at ~206px on screen, comfortably
+    // inside the ~270px-wide panel with margin either side, and sized
+    // similarly to (slightly larger than) the live-text title it replaces
+    // (was 36px Ma Shan Zheng, 4 characters).
     this.add
-      .text((PANEL_X + W) / 2, HEADER_Y, '再续西游', {
-        fontSize: '36px',
-        fontFamily: activeArtFont().family,
-        color: '#ffffff',
-        padding: { top: 12, bottom: 12 },
-      })
-      .setOrigin(0.5)
+      .image((PANEL_X + W) / 2, HEADER_Y, TITLE_IMG)
+      .setScale(0.19)
       .setDepth(6)
 
     // Vendor set = newGame/continueGame/gameHelp/aboutUs/btnquit (btn_forum
