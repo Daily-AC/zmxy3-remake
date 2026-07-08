@@ -76,6 +76,23 @@ export interface MonsterConfig {
   /** Opt-in y-axis pursuit; omit or set enabled:false for x-only monsters
    * (the default -- see VerticalFollowConfig doc comment). */
   verticalFollow?: VerticalFollowConfig
+  /** Fraction (0-1) of attackDurationMs at which the swing actually connects.
+   * Decompiled from BaseMonster.as subclasses (MonsterN.enterFrameFunc's
+   * per-species bbdc frame-stop tables -- the tick at which each monster's
+   * hit1 spawns its damage bullet), see BattleScene.ts's MONSTER_ATTACK_TIMING
+   * for the per-species table + sourcing notes. Omit for a 0.5 ("mid-swing")
+   * placeholder -- this is what every existing MonsterConfig literal in the
+   * test suite gets, unchanged. Before this field existed, damage resolved
+   * unconditionally on attack-start (frame 0), which is the root cause of
+   * "怪物挥剑明显没碰到悟空但悟空掉血" (battle-fidelity 追加单, 2026-07-08). */
+  attackHitFraction?: number
+  /** Real melee reach in px, checked at the hit frame -- decoupled from
+   * stats.attackRange (attackRange is the AI's "decide to engage" sensing
+   * radius, e.g. 250px for grunts; a monster that starts winding up from
+   * 250px away swings a weapon that only reaches ~80-155px in the real game,
+   * per the doHi1 bullet-spawn x-offsets in the same AS3 classes). Omit to
+   * fall back to stats.attackRange (the old, overly generous behavior). */
+  meleeReach?: number
 }
 
 export interface MonsterState {
@@ -94,6 +111,10 @@ export interface MonsterState {
   /** Attack ids already resolved against this monster (hit dedup). */
   resolvedAttackIds: number[]
   accMs: number
+  /** Whether the current attack's hit-frame check has already fired (so a
+   * multi-tick attack only ever gets one shot at connecting, never one per
+   * tick past the threshold). Reset false whenever a new attack starts. */
+  attackHitResolved: boolean
 }
 
 export interface MonsterHit {
@@ -112,7 +133,15 @@ export interface MonsterInput {
 }
 
 export interface MonsterEvent {
-  type: 'hurt' | 'attack-start' | 'death'
+  /** 'attack-start': the swing animation begins (frame 0) -- purely a cue
+   * (anim/SFX), never resolves damage. 'attack-hit': the swing's real hit
+   * frame (attackHitFraction into attackDurationMs) AND the hero was still
+   * in meleeReach on the correct (facing) side at that instant -- this is
+   * the only event BattleScene should apply damage on. A swing whose hit
+   * frame finds the hero out of reach/behind simply never emits 'attack-hit'
+   * (a clean miss, not a separate event type -- nothing currently consumes
+   * misses). */
+  type: 'hurt' | 'attack-start' | 'attack-hit' | 'death'
   x: number
   y: number
 }
@@ -132,6 +161,7 @@ export function initMonster(cfg: MonsterConfig, x: number, y: number): MonsterSt
     waiting: false,
     resolvedAttackIds: [],
     accMs: 0,
+    attackHitResolved: false,
   }
 }
 
@@ -202,15 +232,30 @@ function tickMonster(
       }
       return events
 
-    case 'attack':
-      faceHero(state, heroX)
+    case 'attack': {
+      // Facing is NOT re-tracked here (unlike chase) -- the swing commits to
+      // whatever side the monster was facing at attack-start (set right
+      // before this mode was entered, below), so a hero who dashes behind
+      // the monster mid-wind-up is on the wrong side at the hit frame and
+      // the swing misses, matching "起手后悟空跳走了就该 miss".
       state.modeElapsedMs += cfg.tickMs
+      const hitFrameMs = cfg.attackDurationMs * (cfg.attackHitFraction ?? 0.5)
+      if (!state.attackHitResolved && state.modeElapsedMs >= hitFrameMs) {
+        state.attackHitResolved = true
+        const reach = cfg.meleeReach ?? cfg.stats.attackRange
+        const dist = Math.abs(heroX - state.x)
+        const heroSide = heroX < state.x ? -1 : 1
+        if (heroAlive && dist <= reach && heroSide === state.facing) {
+          events.push({ type: 'attack-hit', x: state.x, y: state.y })
+        }
+      }
       if (state.modeElapsedMs >= cfg.attackDurationMs) {
         state.mode = 'chase'
         state.cooldownMs = cfg.attackCooldownMs
         state.action = 'wait'
       }
       return events
+    }
   }
 
   // patrol / chase: target acquisition first.
@@ -231,6 +276,7 @@ function tickMonster(
         state.mode = 'attack'
         state.action = 'hit1'
         state.modeElapsedMs = 0
+        state.attackHitResolved = false
         events.push({ type: 'attack-start', x: state.x, y: state.y })
       } else {
         state.action = 'wait'
