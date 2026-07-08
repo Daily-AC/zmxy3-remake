@@ -5,6 +5,7 @@ import { restoreGameState } from '../systems/save'
 import { createProgression, type HeroId } from '../systems/progression'
 import { createEquipment } from '../systems/equipment'
 import { createInventory } from '../systems/inventory'
+import { activeArtFont } from '../systems/artFont'
 
 // SelectRole, redone against the original AS3 (`打开我开始玩.swf` ->
 // `export.SelectRole`, tasks/decompile-as3-ui-report-codex.md) + real per-panel
@@ -33,7 +34,25 @@ import { createInventory } from '../systems/inventory'
 // again or Enter to confirm) because the confirm hooks
 // (`__shellSelectHero`/`__shellConfirm`) are a fixed external contract from
 // the prior milestone and the brief keeps behavior unchanged -- only the
-// visuals were in scope this pass.
+// visuals were in scope this pass. 2026-07-08 visual-feedback round added a
+// visible "开始游戏" button (docs/reference/user-flow-refs/
+// selectrole-original-buttons.png, real original-client screenshot) that
+// short-circuits both steps (auto-selects 悟空 then confirms), plus a
+// "返回主菜单" button -- see buildActionButtons().
+//
+// "请输入名字" removed (2026-07-08 verdict): it was baked into the FFDec
+// render of AS3's `username` TextField (SelectRole.as:21, real field, not
+// invented), but this project never wired a name-entry UI to it -- no scene
+// ever read/set `username.text`, and systems/progression.ts + save.ts have no
+// player-name field at all. Since the box was purely decorative dead weight
+// here (not "an input we're choosing to hide", there was never an input),
+// removing it has zero functional impact; hero identity/display name still
+// comes solely from the fixed per-role data (roleData.ts). The bake-in was
+// patched out of both select_role_idle.png/select_role_selected_wukong.png
+// with a texture-clone inpaint (donor: same y-band under the "???" panel,
+// which is pixel-identical background gradient with no text) rather than a
+// flat color patch, so the ink-crack texture stays continuous -- see
+// tasks/verdict-fixes-report.md for the exact region + method.
 
 // The full 5-panel row, both states, are pre-composited PNGs (942x619,
 // FFDec sprite export cropped to content bbox) rather than assembled at
@@ -66,17 +85,35 @@ const BADGE_X = 69
 const BADGE_Y = 59
 
 // Panels 1-3 (唐僧/猪八戒/沙僧) are real AS3 button slots (btn2/btn3/btn4,
-// tasks/selectrole-saveslots-report.md §1) -- locked this milestone, so the
-// "敬请期待" affordance is honest (a real character exists, just not playable
-// yet). Panel 4 ("???") is NOT in this list: AS3's SelectRole has no btn5 at
-// all for it -- it's pure decoration (DefineSprite_1011, static, no button
-// states, tasks/selectrole-saveslots-report.md §2), so any lock/label text on
-// top of it was self-added and never existed in the original. Verdict
-// 2026-07-08: removed -- the panel now renders exactly as baked into the
-// idle/selected art with zero affordance, matching AS3's own zero
-// interactivity there ("老玩家无感").
-const LOCKED_PANELS = [1, 2, 3]
-const LOCKED_LABEL = ['唐僧', '猪八戒', '沙僧']
+// tasks/selectrole-saveslots-report.md §1) -- locked this milestone. Panel 4
+// ("???") has no btn5 in AS3 at all (DefineSprite_1011, static decoration,
+// tasks/selectrole-saveslots-report.md §2). The 2026-07-08 verdict-fixes棒
+// removed panel 4's label on that AS3-fidelity argument; team-lead brief the
+// same day REVERSED that call after visual review -- user wants the label
+// kept on all four locked panels for UI consistency (a deliberate departure
+// from AS3 fidelity, not an oversight), just redesigned so it doesn't sit on
+// top of a face. Restored panel 4 to this list.
+const LOCKED_PANELS = [1, 2, 3, 4]
+const LOCKED_LABEL = ['唐僧', '猪八戒', '沙僧', '？？？']
+
+// Label vertical position: native-art y-band that's genuinely empty gradient
+// background on every panel -- below the character's feet/shadow (~y430-460)
+// and above the baked name row (~y505+). The original layout (ART_H*0.42,
+// removed here) sat mid-chest/face height, which is exactly what the
+// 2026-07-08 feedback screenshot's blue boxes called out as covering faces.
+const LOCKED_LABEL_Y = ART_H * 0.772
+
+// "开始游戏"/"返回主菜单" buttons (2026-07-08 addition). Position derived from
+// docs/reference/user-flow-refs/selectrole-original-buttons.png (real
+// original-client screenshot, 1522x960): button-pair band sits at
+// y-fraction≈0.936 of the stage height, 开始游戏 centered at x-fraction≈0.510,
+// 返回主菜单 at x-fraction≈0.726 -- applied to our 960x540 canvas directly
+// (these are new UI chrome, not part of the extracted bitmap, so they're laid
+// out in canvas space rather than inside the scaled `row` container, which
+// keeps their text/stroke crisp instead of blurred by the 0.87x row scale).
+const ACTION_BTN_Y = 505
+const START_BTN_X = 489
+const BACK_BTN_X = 666
 
 export class CharacterSelectScene extends Phaser.Scene {
   private slot: SlotId = 0
@@ -135,24 +172,25 @@ export class CharacterSelectScene extends Phaser.Scene {
         .on('pointerdown', () => this.onPanel1Click()),
     )
 
-    // Locked panels 2-4 (唐僧/猪八戒/沙僧): same "敬请期待" affordance as
-    // before, restyled to sit flush in the full-bleed row (no boxed card
-    // look). Panel 5 ("???") deliberately excluded -- see LOCKED_PANELS doc
-    // comment above.
+    // Locked panels 2-5 (唐僧/猪八戒/沙僧/???): single-line "敬请期待" sitting
+    // in the empty gradient gap between the character's feet and the baked
+    // name row (LOCKED_LABEL_Y doc comment above) -- redesigned 2026-07-08 so
+    // it no longer overlaps any face (the old two-line ART_H*0.42 placement
+    // did, per the feedback screenshot's blue boxes).
     for (const i of LOCKED_PANELS) {
       const cx = i * PANEL_W
       const label = this.add
-        .text(cx + PANEL_W / 2, ART_H * 0.42, '敬请\n期待', {
-          fontSize: '26px',
-          fontStyle: 'bold',
+        .text(cx + PANEL_W / 2, LOCKED_LABEL_Y, '敬请期待', {
+          fontSize: '24px',
+          fontFamily: activeArtFont().family,
           color: '#e8d9b0',
           align: 'center',
           stroke: '#2c1d0e',
           strokeThickness: 4,
-          lineSpacing: 6,
+          padding: { top: 8, bottom: 8 },
         })
         .setOrigin(0.5)
-        .setAlpha(0.88)
+        .setAlpha(0.9)
       this.row.add(label)
       this.row.add(
         this.add
@@ -163,16 +201,70 @@ export class CharacterSelectScene extends Phaser.Scene {
       )
     }
 
+    this.buildActionButtons()
+
     // Keyboard: Enter confirms once selected. Esc returns to slot select --
-    // deliberately NOT a visible button (spec removes the bottom button bar
-    // entirely; this is a keyboard-only escape hatch so the screen isn't a
-    // dead end, invisible so it doesn't violate "无按钮条").
+    // both are shortcuts alongside the visible buttons below, not a
+    // replacement for them.
     this.input.keyboard?.on('keydown-ENTER', () => {
       if (this.isSelected) this.confirm()
     })
     this.input.keyboard?.on('keydown-ESC', () => this.scene.start(SCENE.slotSelect))
 
     this.exposeHooks()
+  }
+
+  /**
+   * "开始游戏" / "返回主菜单" -- added 2026-07-08 per
+   * docs/reference/user-flow-refs/selectrole-original-buttons.png (a real
+   * original-client screenshot showing both buttons at the bottom of this
+   * exact screen). No original pixel art for these two specific buttons was
+   * found: grepped the full decompiled string tables of both `OtherMat1.swf`
+   * and the main SWF `打开我开始玩.swf` for "开始游戏"/"返回主菜单" -- the
+   * only hit is an unrelated multiplayer-lobby debug trace string
+   * ("301---开始游戏" in BaseMutiLevelListenering.as), and `GMain.as`'s
+   * `showSelectRolw()` adds only the bare `SelectRole` sprite with no sibling
+   * buttons. The docs/reference/zmxy-online-extracted/ Online dump (checked
+   * as a secondary source per CLAUDE.md) also has no select-role category.
+   * Falling back per brief: styled as a code-drawn rounded/gradient button
+   * rhyming with this project's established red/gold chrome (worldmap
+   * buttons, dialogue highlights) rather than the Flash-default
+   * `button_generic_*` skins the MANIFEST calls out as visually unused by the
+   * real game -- documented here as Adapted, not extracted, art.
+   */
+  private buildActionButtons(): void {
+    this.buildActionButton(START_BTN_X, 150, '开始游戏', 0xd94f4f, 0x7a1414, () => this.startGame())
+    this.buildActionButton(BACK_BTN_X, 130, '返回主菜单', 0xb23a3a, 0x5a1414, () => this.scene.start(SCENE.mainMenu))
+  }
+
+  private buildActionButton(cx: number, w: number, label: string, topColor: number, bottomColor: number, onClick: () => void): void {
+    const h = 34
+    const x = cx - w / 2
+    const y = ACTION_BTN_Y - h / 2
+    const g = this.add.graphics().setDepth(50)
+    g.fillGradientStyle(topColor, topColor, bottomColor, bottomColor, 1)
+    g.fillRoundedRect(x, y, w, h, 10)
+    g.lineStyle(2, 0xf2c65a, 0.95)
+    g.strokeRoundedRect(x, y, w, h, 10)
+
+    this.add
+      .text(cx, ACTION_BTN_Y, label, {
+        fontSize: '19px',
+        fontFamily: activeArtFont().family,
+        color: '#fff6df',
+        stroke: '#4a0f0f',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(51)
+
+    const zone = this.add
+      .zone(cx, ACTION_BTN_Y, w, h)
+      .setDepth(52)
+      .setInteractive({ useHandCursor: true })
+    zone.on('pointerover', () => g.setAlpha(0.85))
+    zone.on('pointerout', () => g.setAlpha(1))
+    zone.on('pointerdown', () => onClick())
   }
 
   private onPanel1Click(): void {
@@ -194,10 +286,19 @@ export class CharacterSelectScene extends Phaser.Scene {
 
   private flashLocked(name: string): void {
     const t = this.add
-      .text(480, 500, `${name} 敬请期待`, { fontSize: '20px', fontStyle: 'bold', color: '#ffb26b' })
+      .text(480, 500, `${name} 敬请期待`, { fontSize: '20px', fontFamily: activeArtFont().family, color: '#ffb26b' })
       .setOrigin(0.5)
       .setDepth(20)
     this.tweens.add({ targets: t, y: 480, alpha: 0, duration: 1100, onComplete: () => t.destroy() })
+  }
+
+  /** "开始游戏" button: always confirms with 悟空 (the only playable hero this
+   * milestone), auto-selecting first if the player hasn't clicked his panel
+   * yet -- see buildActionButtons() doc comment for why this exists
+   * alongside the older click-portrait-twice/Enter flow. */
+  private startGame(): void {
+    this.selectHero(1)
+    this.confirm()
   }
 
   private confirm(): void {
@@ -223,5 +324,7 @@ export class CharacterSelectScene extends Phaser.Scene {
     w.__shellScene = () => SCENE.characterSelect
     w.__shellSelectHero = (id: number) => this.selectHero(id)
     w.__shellConfirm = () => this.confirm()
+    w.__shellStartGame = () => this.startGame()
+    w.__shellBackToMenu = () => this.scene.start(SCENE.mainMenu)
   }
 }

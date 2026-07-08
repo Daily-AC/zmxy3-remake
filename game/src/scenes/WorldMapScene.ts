@@ -3,7 +3,6 @@ import { SCENE, REG, shellStorage } from './shellShared'
 import {
   WORLDMAP_NODES,
   WORLDMAP_DECORATIONS,
-  WORLDMAP_CHESTS,
   WORLDMAP_BUTTONS,
   worldMapTransform,
 } from '../data/worldmapNodes'
@@ -30,8 +29,8 @@ import type { CraftMaterialOption } from '../ui/hud/FurnacePanel'
 import { HUD_TEXTURES, HUD_ICONS, ICON_FALLBACK_KEY } from '../ui/hud/hudTheme'
 import { Toast } from '../ui/hud/Toast'
 
-// S1 世界地图 hub. Everything below the map art (nodes/decorations/chests/
-// buttons + coordinates) is data-driven from data/worldmapNodes.ts, which is
+// S1 世界地图 hub. Everything below the map art (nodes/decorations/buttons +
+// coordinates) is data-driven from data/worldmapNodes.ts, which is
 // itself a literal transcript of the export.SelectPLace object tree + AS3
 // (dual-source pipeline, tasks/worldmap-report.md). This scene only:
 //   - places that art at its xfl Matrix tx/ty inside one scaled+offset
@@ -63,7 +62,7 @@ const GREY_TINT = 0x8a8a8a
 const NPC_ID = 'laojun'
 
 // A symbol's PlaceObject Matrix tx/ty maps its LOCAL (0,0), which is NOT
-// necessarily its artwork's top-left corner: buttons/chests are authored
+// necessarily its artwork's top-left corner: buttons are authored
 // top-left-anchored (origin (0,0) lines their Matrix tx/ty up directly with
 // the exported bitmap's top-left pixel), but the NODE marker symbols (Symbol
 // 857/871/864/878/886/897/904/911/918 in OtherMat1.swf's library) AND five
@@ -149,7 +148,6 @@ export class WorldMapScene extends Phaser.Scene {
       if (n.textureHover) keys.add(n.textureHover)
     }
     for (const d of WORLDMAP_DECORATIONS) keys.add(d.textureNormal)
-    for (const c of WORLDMAP_CHESTS) keys.add(c.textureNormal)
     for (const b of WORLDMAP_BUTTONS) keys.add(b.texture)
     for (const key of keys) {
       // Every worldmap texture key is "wm_" + the extracted filename stem.
@@ -230,11 +228,6 @@ export class WorldMapScene extends Phaser.Scene {
         img.on('pointerdown', () => this.tryEnterLevel(campaignIndex))
       }
       map.add(img)
-    }
-
-    for (const chest of WORLDMAP_CHESTS) {
-      if (!this.textures.exists(chest.textureNormal)) continue
-      map.add(this.add.image(chest.x, chest.y, chest.textureNormal).setOrigin(0, 0))
     }
 
     for (const btn of WORLDMAP_BUTTONS) {
