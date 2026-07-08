@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { HUD_COLORS } from './hudTheme'
 import { MenuButton } from '../menu/MenuButton'
+import { withinRect, type Rect } from '../screenHit'
 
 // Stage clear / fail result screen: dim overlay + a big 挑战成功/失败 banner +
 // a results strip with stats + retry / continue buttons. Meant for the level
@@ -26,17 +27,63 @@ export interface ResultShowOptions {
 const W = 960
 const H = 540
 
+/** One clickable/hoverable region on the banner, in screen space -- see
+ * ui/screenHit.ts. Only used for the raw-image retry button branch (the
+ * `result_retry`-texture path below); the MenuButton branch handles its own
+ * hit-testing via MenuButtonOpts.screenSpaceHit. */
+interface Hotspot {
+  rect: Rect
+  hovered: boolean
+  onEnter?: () => void
+  onLeave?: () => void
+  onClick: () => void
+}
+
 export class ResultBanner {
   readonly container: Phaser.GameObjects.Container
   private readonly scene: Phaser.Scene
   private readonly opts: ResultBannerOptions
   private body?: Phaser.GameObjects.Container
+  private hotspots: Hotspot[] = []
 
   constructor(scene: Phaser.Scene, opts: ResultBannerOptions = {}) {
     this.scene = scene
     this.opts = opts
-    const dim = scene.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.62).setInteractive()
+    // Dim backdrop, visual only -- see ui/screenHit.ts for why click-blocking
+    // doesn't ride on setInteractive() here.
+    const dim = scene.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.62)
     this.container = scene.add.container(0, 0, [dim]).setScrollFactor(0).setDepth(250).setVisible(false)
+
+    scene.input.on('pointerdown', this.onPointerDown)
+    scene.input.on('pointermove', this.onPointerMove)
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      scene.input.off('pointerdown', this.onPointerDown)
+      scene.input.off('pointermove', this.onPointerMove)
+    })
+  }
+
+  private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
+    if (!this.container.visible) return
+    for (const h of this.hotspots) {
+      if (withinRect(pointer.x, pointer.y, h.rect)) {
+        h.onClick()
+        return
+      }
+    }
+  }
+
+  private readonly onPointerMove = (pointer: Phaser.Input.Pointer): void => {
+    if (!this.container.visible) return
+    for (const h of this.hotspots) {
+      const over = withinRect(pointer.x, pointer.y, h.rect)
+      if (over && !h.hovered) {
+        h.hovered = true
+        h.onEnter?.()
+      } else if (!over && h.hovered) {
+        h.hovered = false
+        h.onLeave?.()
+      }
+    }
   }
 
   showSuccess(o: ResultShowOptions = {}): void {
@@ -50,6 +97,7 @@ export class ResultBanner {
   hide(): void {
     this.body?.destroy(true)
     this.body = undefined
+    this.hotspots = []
     this.container.setVisible(false)
   }
 
@@ -59,6 +107,7 @@ export class ResultBanner {
 
   private show(kind: 'success' | 'fail', o: ResultShowOptions): void {
     this.body?.destroy(true)
+    this.hotspots = []
     const children: Phaser.GameObjects.GameObject[] = []
     const bannerTex = kind === 'success' ? 'result_success' : 'result_fail'
 
@@ -94,13 +143,19 @@ export class ResultBanner {
     }
 
     // Buttons: retry (placeholder image if present) + continue (drawn, success only).
+    // Both branches use screen-space hit-testing (see ui/screenHit.ts) -- this
+    // banner sits in a scrollFactor(0) container inside BattleScene, whose
+    // camera scrolls continuously, so Phaser's own setInteractive() would
+    // drift the same way BackpackWindow's did.
     if (this.scene.textures.exists('result_retry')) {
-      const retry = this.scene.add
-        .image(kind === 'success' ? 400 : W / 2, 428, 'result_retry')
-        .setScale(0.9)
-        .setInteractive({ useHandCursor: true })
-      retry.on('pointerover', () => retry.setTint(0xffe0a0)).on('pointerout', () => retry.clearTint())
-      retry.on('pointerdown', () => this.opts.onRetry?.())
+      const retry = this.scene.add.image(kind === 'success' ? 400 : W / 2, 428, 'result_retry').setScale(0.9)
+      this.hotspots.push({
+        rect: { x: retry.x - retry.displayWidth / 2, y: retry.y - retry.displayHeight / 2, w: retry.displayWidth, h: retry.displayHeight },
+        hovered: false,
+        onEnter: () => retry.setTint(0xffe0a0),
+        onLeave: () => retry.clearTint(),
+        onClick: () => this.opts.onRetry?.(),
+      })
       children.push(retry)
     } else {
       const retry = new MenuButton(this.scene, {
@@ -110,6 +165,7 @@ export class ResultBanner {
         height: 48,
         label: '重新挑战',
         variant: 'danger',
+        screenSpaceHit: true,
         onClick: () => this.opts.onRetry?.(),
       })
       children.push(retry.container)
@@ -121,6 +177,7 @@ export class ResultBanner {
         width: 150,
         height: 48,
         label: '继续',
+        screenSpaceHit: true,
         onClick: () => this.opts.onContinue?.(),
       })
       children.push(cont.container)

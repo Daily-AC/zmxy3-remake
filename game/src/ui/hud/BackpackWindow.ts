@@ -3,6 +3,7 @@ import type { Item } from '../../systems/items'
 import type { EquipSlot, Equipment } from '../../systems/equipment'
 import { HUD_COLORS, ICON_FALLBACK_KEY } from './hudTheme'
 import { rarityCss, rarityName } from './rarity'
+import { withinRect, type Rect } from '../screenHit'
 
 // 个人资料/背包 window — S4 rebuild on the ORIGINAL layout, dual-source per
 // docs/playbooks/ui-port-dual-source.md:
@@ -140,10 +141,9 @@ interface SlotSpec {
 // forced camera scroll (scrollX=400): identical clicks that worked at
 // scrollX=0 hit nothing once scrolled. Same root cause SkillBarHud hit first
 // (4662cd6) and fixed the same way; this window just never got the same fix.
-type Rect = { x: number; y: number; w: number; h: number }
-function within(x: number, y: number, r: Rect): boolean {
-  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h
-}
+// See ui/screenHit.ts for the shared helper + why this generalizes to every
+// other battle-time panel (FurnacePanel, ResultBanner, DialogueBox).
+const within = withinRect
 type HitResult =
   | { kind: 'close' }
   | { kind: 'tab'; tab: BackpackTab }

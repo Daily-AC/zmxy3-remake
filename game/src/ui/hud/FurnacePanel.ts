@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import type { Item } from '../../systems/items'
 import { HUD_COLORS, ICON_FALLBACK_KEY } from './hudTheme'
 import { rarityCss } from './rarity'
+import { withinRect, type Rect } from '../screenHit'
 
 // 炼丹炉 (forge) window on the ORIGINAL art: the official StrengthEquipment 打造
 // tab. Two pieces of real 4399 art compose it:
@@ -70,6 +71,14 @@ interface Chip {
   selected: number
   rect: Phaser.GameObjects.Rectangle
   label: Phaser.GameObjects.Text
+  /** Click/hover hotspot in screen space -- see onPointerDown/onPointerMove,
+   * not Phaser's setInteractive() (this whole panel sits in a
+   * scrollFactor(0) container inside BattleScene's scrolling camera). */
+  hitRect: Rect
+}
+
+function centerRect(cx: number, cy: number, w: number, h: number): Rect {
+  return { x: cx - w / 2, y: cy - h / 2, w, h }
 }
 
 export class FurnacePanel {
@@ -87,6 +96,8 @@ export class FurnacePanel {
   private chips: Chip[] = []
   private locked = false
   private currentResult: Item | null = null
+  private readonly craftRect: Rect
+  private readonly closeRect: Rect
 
   constructor(scene: Phaser.Scene, opts: FurnacePanelOptions = {}) {
     this.scene = scene
@@ -99,8 +110,9 @@ export class FurnacePanel {
     }
     const children: Phaser.GameObjects.GameObject[] = []
 
-    // Dim backdrop (blocks the battlefield behind).
-    const dim = scene.add.rectangle(480, 270, 960, 540, 0x000000, 0.6).setInteractive()
+    // Dim backdrop (visual only -- see ui/screenHit.ts for why click-blocking
+    // doesn't ride on setInteractive() here).
+    const dim = scene.add.rectangle(480, 270, 960, 540, 0x000000, 0.6)
     children.push(dim)
 
     // 炼丹炉 window frame (falls back to a drawn ink panel if art is missing).
@@ -121,13 +133,10 @@ export class FurnacePanel {
     this.slotLayer = scene.add.container(0, 0)
     children.push(this.slotLayer)
 
-    // Interactive 打造 button over the baked art.
-    this.craftBtn = scene.add
-      .rectangle(MAKING.x + CRAFT_BTN.x, MAKING.y + CRAFT_BTN.y, CRAFT_BTN.w, CRAFT_BTN.h, 0xffffff, 0.001)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerover', () => !this.locked && this.craftBtn.setFillStyle(0xffffff, 0.12))
-      .on('pointerout', () => this.craftBtn.setFillStyle(0xffffff, 0.001))
-      .on('pointerdown', () => this.submit())
+    // 打造 button over the baked art -- hover/click handled by resolveHit(),
+    // not setInteractive() (see ui/screenHit.ts).
+    this.craftRect = centerRect(MAKING.x + CRAFT_BTN.x, MAKING.y + CRAFT_BTN.y, CRAFT_BTN.w, CRAFT_BTN.h)
+    this.craftBtn = scene.add.rectangle(MAKING.x + CRAFT_BTN.x, MAKING.y + CRAFT_BTN.y, CRAFT_BTN.w, CRAFT_BTN.h, 0xffffff, 0.001)
     children.push(this.craftBtn)
 
     // ---- Right column: title, picker, wish input, budget ----
@@ -162,15 +171,52 @@ export class FurnacePanel {
     children.push(this.dom)
 
     // 返回 (close) button, top-right of the window.
-    const closeBtn = scene.add
-      .rectangle(792, 92, 66, 30, INK, 0.85)
-      .setStrokeStyle(2, 0x8a7f66, 1)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.close())
+    this.closeRect = centerRect(792, 92, 66, 30)
+    const closeBtn = scene.add.rectangle(792, 92, 66, 30, INK, 0.85).setStrokeStyle(2, 0x8a7f66, 1)
     const closeLabel = scene.add.text(792, 92, '返回', { fontSize: '14px', color: '#f2eddf' }).setOrigin(0.5)
     children.push(closeBtn, closeLabel)
 
     this.container = scene.add.container(0, 0, children).setScrollFactor(0).setDepth(210).setVisible(false)
+
+    scene.input.on('pointerdown', this.onPointerDown)
+    scene.input.on('pointermove', this.onPointerMove)
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      scene.input.off('pointerdown', this.onPointerDown)
+      scene.input.off('pointermove', this.onPointerMove)
+    })
+  }
+
+  /** See ui/screenHit.ts -- one scene-level listener for the whole panel
+   * instead of setInteractive() per button, so chips rebuilt on every
+   * open()/rebuildChips() never need their own listener wiring/cleanup. */
+  private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
+    if (!this.container.visible) return
+    const lx = pointer.x - this.container.x
+    const ly = pointer.y - this.container.y
+    if (withinRect(lx, ly, this.closeRect)) {
+      this.close()
+      return
+    }
+    if (!this.locked && withinRect(lx, ly, this.craftRect)) {
+      this.submit()
+      return
+    }
+    for (const chip of this.chips) {
+      if (withinRect(lx, ly, chip.hitRect)) {
+        this.cycleChip(chip)
+        return
+      }
+    }
+  }
+
+  private readonly onPointerMove = (pointer: Phaser.Input.Pointer): void => {
+    if (!this.container.visible) return
+    const lx = pointer.x - this.container.x
+    const ly = pointer.y - this.container.y
+    const overCraft = !this.locked && withinRect(lx, ly, this.craftRect)
+    this.craftBtn.setFillStyle(0xffffff, overCraft ? 0.12 : 0.001)
+    const overAny = overCraft || withinRect(lx, ly, this.closeRect) || this.chips.some((c) => withinRect(lx, ly, c.hitRect))
+    this.scene.input.manager.canvas.style.cursor = overAny ? 'pointer' : ''
   }
 
   get isOpen(): boolean {
@@ -195,6 +241,7 @@ export class FurnacePanel {
     if (!this.container.visible) return
     this.container.setVisible(false)
     this.input.blur()
+    this.scene.input.manager.canvas.style.cursor = ''
     this.opts.onClose?.()
   }
 
@@ -234,13 +281,9 @@ export class FurnacePanel {
       const row = Math.floor(i / perRow)
       const bx = startX + col * (chipW + gapX) + chipW / 2
       const by = startY + row * (chipH + gapY) + chipH / 2
-      const rect = this.scene.add
-        .rectangle(bx, by, chipW, chipH, INK, 0.7)
-        .setStrokeStyle(2, 0x6b5f47, 1)
-        .setInteractive({ useHandCursor: true })
+      const rect = this.scene.add.rectangle(bx, by, chipW, chipH, INK, 0.7).setStrokeStyle(2, 0x6b5f47, 1)
       const label = this.scene.add.text(bx, by, '', { fontSize: '12px', color: '#e8ddc4' }).setOrigin(0.5)
-      const chip: Chip = { opt, selected: 0, rect, label }
-      rect.on('pointerdown', () => this.cycleChip(chip))
+      const chip: Chip = { opt, selected: 0, rect, label, hitRect: centerRect(bx, by, chipW, chipH) }
       this.chips.push(chip)
       this.pickerLayer.add([rect, label])
       this.paintChip(chip)
