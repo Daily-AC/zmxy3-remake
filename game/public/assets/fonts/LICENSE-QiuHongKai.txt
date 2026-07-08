@@ -1,0 +1,46 @@
+演示秋鸿楷 (Yanshi QiuHongKai) — font license record
+=====================================================
+
+Author/字稿作者: 叶运鹏 (辽宁人, 高中教师, 农民书画家协会会员)
+Production/字库制作: Keynote 研究所"人生哥" (半自动流程字稿制作)
+Source page (primary, verified 2026-07-08): https://www.maoken.com/freefonts/6094.html
+Download used: https://oss.maoken.com/猫啃字体/中国大陆/演示秋鸿楷2.0_猫啃网.zip (via Referer: https://www.maoken.com/)
+Version: 2.0
+
+License model: author's public declaration ("作者声明"), not a
+standardized OSS license (not OFL/MIT) -- verified by direct fetch of the
+primary source page's license table, not a secondhand blog summary (an
+earlier web-search snippet for this same font incorrectly claimed embedded
+use was restricted; the primary source page directly contradicts that).
+
+Author's declaration (translated summary, primary source quoted below):
+"此款字体无论是个人还是企业都可以免费商用" (free for commercial use by both
+individuals and enterprises, no fee).
+
+License table on the primary source page explicitly marks the following as
+PERMITTED (✓ 可以), including the exact category this project needs:
+
+  "各类嵌入式应用(包括:应用程序iOS、Android、HarmonyOS、Windows、macOS、
+  电子屏显、电子辞典、打印机、机顶盒、导航仪、SoC芯片、网页、H5应用、
+  小程序、音像制品、电子图书、电子报刊、电子文档、电子课件等嵌入)"
+  ("various embedded applications, including iOS/Android/HarmonyOS/Windows/
+  macOS apps, e-displays, e-dictionaries, printers, set-top boxes,
+  navigation devices, SoC chips, web pages, H5 apps, mini-programs, etc.")
+
+Also explicitly permitted per the same table: poster design, packaging
+design, film/TV works, and GAMES (游戏).
+
+Prohibited: reselling the font file itself standalone, modifying the font
+or creating derivative works from it, using the author's name/org to
+promote a product, unlawful uses. Trademark/VI (品牌视觉识别) use is
+generally excluded per the site's standard template for this font family --
+not relevant to this project (we use it as in-game UI text, not as a
+trademark/logo).
+
+Bundled in the original download zip: 字体授权.txt (Chinese, generic
+"free for both personal and commercial use" statement, referring back to
+maoken.com for the authoritative terms -- kept consistent with the above).
+
+Conclusion: safe to embed as a webfont in this desktop game (Tauri/Electron
+shell), which falls squarely under the explicitly-permitted "嵌入式应用"/
+"游戏" categories.

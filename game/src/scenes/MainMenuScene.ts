@@ -85,27 +85,24 @@ export class MainMenuScene extends Phaser.Scene {
     g.fillStyle(0x000000, 0.35).fillRect(PANEL_X, 0, 8, H)
     g.lineStyle(2, 0xd9b45a, 0.5).lineBetween(PANEL_X, 14, PANEL_X, H - 14)
 
-    // 2026-07-08 visual-feedback round: dropped the book-title《》brackets
-    // (self-added chrome, not in any reference), switched to white (was gold
-    // #e8d9b0, which reads too close to the panel's own gold hairline
-    // border/dividers and got lost against them), bumped the font size, and
-    // appended a "重制版" sub-line so the shell honestly signals this is a
-    // remake, not a claim to be the original client's title screen.
+    // Product rename 2026-07-08 evening (CLAUDE.md 总纲 item 0, 19:0x 拍板):
+    // the game is now "再续西游" (repo name unchanged). Dropped the old
+    // "《造梦西游·大闹天庭篇》"/"重制版" two-line title entirely -- not a
+    // restyle of it, a replacement, since the product identity changed, not
+    // just the label's chrome. White (was gold #e8d9b0, which read too close
+    // to the panel's own gold hairline border/dividers and got lost against
+    // them) and sized up further now that it's 4 chars instead of 9 (room to
+    // go bigger without overflowing the panel -- the earlier 9-char title
+    // was the thing constraining font size, see artFont.ts candidate table).
+    // A small subtitle (e.g. "致敬《造梦西游3》") was discussed but
+    // deliberately deferred -- brief says four-character main title only for
+    // now.
     this.add
-      .text((PANEL_X + W) / 2, HEADER_Y - 9, '造梦西游·大闹天庭篇', {
-        fontSize: '20px',
+      .text((PANEL_X + W) / 2, HEADER_Y, '再续西游', {
+        fontSize: '36px',
         fontFamily: activeArtFont().family,
         color: '#ffffff',
-        padding: { top: 10, bottom: 10 },
-      })
-      .setOrigin(0.5)
-      .setDepth(6)
-    this.add
-      .text((PANEL_X + W) / 2, HEADER_Y + 15, '重制版', {
-        fontSize: '13px',
-        fontFamily: activeArtFont().family,
-        color: '#d9d0c0',
-        padding: { top: 6, bottom: 6 },
+        padding: { top: 12, bottom: 12 },
       })
       .setOrigin(0.5)
       .setDepth(6)

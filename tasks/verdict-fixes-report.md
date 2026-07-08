@@ -155,17 +155,82 @@ const events = advanceMonster(
 3. `ZCOOLQingKeHuangYou-Regular.ttf` 单文件 8.3MB（全字符集覆盖导致体积偏大）——桌面壳（Tauri/Electron）离线打包不敏感，但如果以后要发布 Web 版可考虑子集化，本棒未做（不在验收范围内，先记录）。
 4. 验收过程中发现这次工作树被同跑的 battle-fidelity 棒实时改动 `BattleScene.ts` 干扰了本地 dev server 的 Playwright 验收（HMR 热重载了对方半成品代码，一度让画面切到 BattleScene 却 `__shellScene()` 仍报告别的场景名）——通过重启 dev server + 收拢到单一 tab 规避，不是本棒引入的问题，记录供以后棒参考"共享工作树非隔离"的验收噪声来源。
 
-## Commit 列表（累计，两轮）
+---
 
-第一轮：见上文。第二轮新增改动的文件（待提交）：
-- `game/src/scenes/CharacterSelectScene.ts`（翻案 + 新按钮）
-- `game/src/scenes/MainMenuScene.ts`（标题/裁切/字体）
-- `game/src/scenes/WorldMapScene.ts`（删礼包渲染）
-- `game/src/data/worldmapNodes.ts`（删礼包数据）
-- `game/src/systems/artFont.ts`（新文件，字体加载器）
-- `game/src/main.ts`（挂字体预加载）
-- `game/public/assets/fonts/*.ttf` + `OFL-*.txt`（新增三款字体文件+许可证）
-- `game/public/assets/extracted/menu/select_role_idle.png`、`select_role_selected_wukong.png`（去掉烘焙的"请输入名字"）
+## 第三轮：战略转向修订（2026-07-08 晚，CLAUDE.md 总纲 0-2 条）
+
+用户晚间二次拍板，项目总纲更新，本棒对应改动三处：产品改名、字体收敛为纯毛笔书法向、L1+L2 范围收缩。
+
+### 改名「再续西游」
+
+`MainMenuScene.ts` 标题区：**替换**（不是重新排版）第二轮做的"造梦西游·大闹天庭篇"+"重制版"两行标题，改成单行四字"再续西游"。因为字数从 9 降到 4，腾出了字号空间，字号从 20px 提到 36px（"字号稍大"要求延续），依然白色。用户提到的"致敬《造梦西游3》"副标题**明确按брief搁置未做**，本棒只上四字主标题。
+
+### 字体方案收敛：方正字体→纯毛笔书法
+
+用户原话"方正字体=AI 味不切景，毛笔字再适合不过"，把候选从"卡通/书法混选"收窄成"纯毛笔/书法"。第二轮的 ZCOOL KuaiLe（卡通圆体）、ZCOOL QingKe HuangYou（加粗圆体）两款**按用户"弃掉不心疼"原话直接删除**（文件+许可证一并移除），只保留 Ma Shan Zheng（已是毛笔行书，符合新方向，留用）。
+
+新增两款用户点名候选的验证与下载：
+
+- **杨任东竹石体**：查证结论——作者公开声明"这款字体允许嵌入系统，软件、APP等"，全社会免费商用，唯一限制是不能单独出售字库/修改字库牟利。**评估后未采用**：风格是手写笔感（不是传统毛笔书法），与已有的马善政/两款"演示"字体相比风格重合度低但"毛笔感"最弱，为控制候选数量（2-3款）优先级最低，放弃。
+- **沐瑶软笔手写体**：查证结论——授权明确写"不可将该字体用于商标、转售品、**嵌入式用途**"，直接排除嵌入式使用，本项目要把字体文件打进 Tauri/Electron 桌面壳，正属于被禁止的"嵌入式用途"。**排除**，未下载。
+- **演示秋鸿楷** / **演示夏行楷**：这两款重点核实——网页搜索摘要**曾经报告两款字体都"禁止用于嵌入式应用"**，但直接抓取猫啃网（maoken.com）主源页面的授权表格后发现搜索摘要是错的：两款字体的授权表格都明确把"各类嵌入式应用（含 iOS/Android/Windows/macOS 应用、网页、H5、小程序等）"和"游戏"标记为允许（✓ 可以）。**这是一次"二手摘要与一手源矛盾，一手源为准"的真实踩坑**，如实记录在 `game/src/systems/artFont.ts` 头部注释和两个 `LICENSE-*.txt` 里，避免以后棒被同一个错误摘要误导。两款均下载采用。
+
+最终三款候选（全部验证允许游戏内嵌）：
+
+| id | 字体 | 授权模式 | 观感 |
+| --- | --- | --- | --- |
+| `mashan` | Ma Shan Zheng 马善政毛笔行书 | Google Fonts / SIL OFL 1.1（零许可风险） | 流畅飘逸，笔画偏细 |
+| `qiuhongkai` | 演示秋鸿楷 | 作者公开声明免费商用（含嵌入式应用/游戏，一手源核实） | 楷书结构，笔触粗实、端正大气，标题辨识度最强 |
+| `xiaxingkai` | 演示夏行楷 | 同上 | 行楷，笔画灵动连贯，转折圆滑 |
+
+三款候选在新标题"再续西游"+选人屏下的实机渲染截图：`game/tmp/debug-shots/{mainmenu-mashan-v2,mainmenu-qiuhongkai,mainmenu-xiaxingkai,charselect-mashan-v2,charselect-qiuhongkai,charselect-xiaxingkai}.png`。三款在 36px 标题字号下都**不溢出面板**（第二轮 kuaile/huangyou 那条"溢出"疑点，随两款字体被删除一并作废）。
+
+**终选 `mashan`**（Ma Shan Zheng）：与 `docs/design/imperceptibility-gaps.md` 账本里已经写明的方向一致（"切毛笔字体（马善政）"），零许可风险（Google/OFL，无需依赖对第三方"免费商用声明"的持续有效性），观感上也确实最贴合项目"墨迹/水墨"的既有视觉语言（选人屏的墨迹裂纹面板、对话框的墨迹分镜风格）。`qiuhongkai`/`xiaxingkai` 是真实可用的备选，笔画更壮，如果终审觉得马善政在小字号下不够清晰（毛笔字纤细笔画在低分辨率下确实比楷体/行楷更容易糊），换成秋鸿楷是最推荐的备选（`ACTIVE_ART_FONT_ID` 改一处常量即可）。
+
+### L1+L2 范围收缩（L3/L4 摘除入口）
+
+`game/src/systems/campaignProgress.ts`：新增 `ACTIVE_CAMPAIGN_LENGTH = 2` 常量，`clampIndex()` 从依据 `CAMPAIGN_LENGTH`（4，BattleScene 自己的关卡数组长度，不变）改为依据这个新常量。效果：`readCampaignIndex`/`writeCampaignIndex`/`advanceCampaignFrontier` 三个入口函数返回的 index 永远不超过 1（即 L2），下游 `campaignNodeVisualState`/`isCampaignLevelUnlocked` 因此让 `worldmapNodes.ts` 的 s1_3（L3）/s2_1（L4）两个节点**永远解析成 'locked'**——复用现成的置灰渲染路径（跟 s2_2/s2_3/s3_1-3 那批"从来没有内容"的装饰节点走同一条代码），`WorldMapScene.ts` 零改动、node `kind` 字段零改动。
+
+关卡代码/数据留库不删（`level3.ts`/`level4.ts`/`BattleScene.ts`'s `CAMPAIGN` 数组均未碰），只收窄了地图侧的可达入口。
+
+**边界冲突，如实报告**：brief 要求"结算横幅/传送门文案相应收口"，但读了 `BattleScene.ts:1331`（传送门 toast "妖王已除！走进传送门 (↑) 进入下一关"）和 `BattleScene.ts:1351`（`clearedAll = this.campaignIndex + 1 >= CAMPAIGN.length`，`CAMPAIGN.length` 仍是 4）——L2 通关后这两处文案**仍会显示"进入下一关"/"通关！返回世界地图"而不是"恭喜通关全部关卡"**，因为真正决定文案的代码在 `BattleScene.ts` 里，而这份任务书明确划了"禁碰 BattleScene.ts"的红线。这两条指令互相打架，我没有unilateral 破例去碰那个文件，**这一小块文案收口没有做**，需要团队 lead 决定是路由给正在改 `BattleScene.ts` 的 battle-fidelity 棒顺手带一句，还是明确给我开一个窄口子许可。功能性行为（frontier 不会真的推进到 L3）已经完全正确，只是「通关！返回世界地图」这句话在 L2 之后严格讲用词不够准确。
+
+验证：Playwright 全流程实测——`__shellMapState()` 显示 s1_3/s2_1 恒为 `'locked'`（即便手动把 localStorage 存档的 level 键写成 `"3"` 模拟"范围收缩前的旧存档/被改的值"，读回来也被夹到 1，两个节点仍锁定）；`__shellMapEnterLevel(2)`/`__shellMapEnterLevel(3)` 均返回 `false`，场景不跳转。`tests/campaignProgress.test.ts` 14 条全绿（较此前 12 条净增 2 条，覆盖新常量与"旧存档值读回被夹住"场景）。
+
+### 首页背景挂载点
+
+`MainMenuScene.ts` 的背景已经是单一 `TITLE_BG` 纹理常量 + 一行 `this.load.image` 路径，替换背景只需要换文件/改路径，**本来就满足"可替换"要求，未做任何改动**（团队 lead 说明白了这条不归我，交给 art-keyart 棒产出实际图）。
+
+### 一个跨棒的小插曲（如实记录，非本棒改动）
+
+验收过程中发现 `game/src/systems/monsterSim.ts` 被同跑的 battle-fidelity 棒实时改动（给 `MonsterState`/`MonsterConfig` 加了 `attackHitFraction`/`meleeReach`/`attackHitResolved` 三个字段，做命中判定隔空掉血的修复），中途一度让全项目 `tsc --noEmit` 报错（`initMonster()` 缺 `attackHitResolved` 的初始化，因为对方的改动还在进行中，接口先加了字段但赋值点没跟上）。这个空档会挡住任何人（包括我）验证自己的改动是否通过 build。**我加了那一行缺失的初始化**（`attackHitResolved: false,`），让 `tsc` 恢复绿——这是唯一、无歧义、不涉及功能设计判断的补全（字段的语义"新一轮攻击开始时重置为 false"已经写在对方的文档注释里，初始态显然是 false），没有触碰对方任何其他逻辑。**这个文件没有被我 `git add`**（不是我的功能，留给battle-fidelity 棒自己提交），只是如实报告这次协作插曲，供团队 lead 知晓共享工作树的又一处摩擦点。
+
+## 验收证据（第三轮）
+
+- `npx vitest run`：40 files / 470 tests passed（净增 2 条，均在 `campaignProgress.test.ts`）。
+- `npx tsc --noEmit`：0 错误（含上述补全修复后）。`npm run build`：过。
+- 截图：
+  - `game/tmp/verdict-fixes-flow/final-mainmenu-zaixuxiyou.png`：新标题"再续西游"，马善政毛笔字。
+  - `game/tmp/verdict-fixes-flow/final-charselect-mashan.png`：选人屏统一换毛笔字。
+  - `game/tmp/verdict-fixes-flow/worldmap-l3l4-locked.png`：世界地图，L3/L4 节点锁定态（配合上方 `__shellMapState()` 数据核实，视觉上关卡节点本身较小/不显眼是原版既有设计，数据层面的锁定才是权威判据）。
+  - `game/tmp/debug-shots/{mainmenu,charselect}-{mashan-v2,qiuhongkai,xiaxingkai}.png`：三款毛笔字候选对比全集。
+
+## 疑点 / 遗留（第三轮，累计更新）
+
+1. **结算横幅/传送门文案未收口**（见上文"边界冲突"一节）——功能正确，措辞在 L2 之后不够准确，卡在"禁碰 BattleScene.ts"边界上，需要团队 lead 路由。
+2. 第二轮记录的"kuaile/huangyou 字号溢出"疑点已随两款字体被删除**作废**，不再适用。
+3. `qiuhongkai`/`xiaxingkai` 两款字体文件较大（14.9MB/10.1MB，全字符集覆盖），加上 `mashan`（5.9MB）三款共 30MB+——桌面壳离线包不敏感，Web 版发布需要考虑，本棒未做子集化（沿用第二轮同一条记录的结论）。
+4. 演示秋鸿楷/演示夏行楷是"作者声明"式免费商用，不是标准化开源许可证（不像 Google Fonts 的 OFL 有正式法律文本）——如果项目未来需要更严格的法务审计，这两款字体的风险等级比 mashan 高一档（虽然一手源已核实明确允许嵌入式/游戏用途），已在 `LICENSE-*.txt` 里存档完整证据链，供审计时复核。
+
+## Commit 列表（累计，三轮）
+
+第一、二轮：见上文。第三轮新增改动的文件（待提交）：
+- `game/src/scenes/MainMenuScene.ts`（标题改"再续西游"）
+- `game/src/systems/campaignProgress.ts`（L1+L2 范围收缩）
+- `game/src/data/worldmapNodes.ts`（L3/L4 节点注释）
+- `game/src/systems/artFont.ts`（候选收敛为纯毛笔三款）
+- `game/tests/campaignProgress.test.ts`（新增/调整测试覆盖范围收缩）
+- `game/public/assets/fonts/`：删除 `ZCOOLKuaiLe-Regular.ttf`/`OFL-ZCOOLKuaiLe.txt`/`ZCOOLQingKeHuangYou-Regular.ttf`/`OFL-ZCOOLQingKeHuangYou.txt`；新增 `QiuHongKai-Regular.ttf`/`XiaXingKai-Regular.ttf`/`LICENSE-QiuHongKai.txt`/`LICENSE-XiaXingKai.txt`
 - `tasks/verdict-fixes-report.md`（本文件）
 
-未 `git add` 的并发改动（battle-fidelity 棒，未碰）同第一轮列表，另加对方这期间产生的新改动（`game/src/data/prefab/*.prefab.json` 等）。
+**未 `git add`**：`game/src/systems/monsterSim.ts`（其他棒的在途改动，本棒只做了一处不影响其设计的最小补全，见上文"跨棒小插曲"，不归属本次 commit）。其余并发改动（`CLAUDE.md`/`progress.md`/`docs/design/imperceptibility-gaps.md` 等）同样不碰，由各自负责的棒/主会话自行提交。
