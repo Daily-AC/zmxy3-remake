@@ -1,0 +1,49 @@
+{
+  "symbol": "119",
+  "characterId": 119,
+  "sourceSwf": "level1.xml",
+  "root": {
+    "type": "container",
+    "characterId": 119,
+    "symbolKind": "sprite",
+    "children": [
+      {
+        "type": "image",
+        "characterId": 118,
+        "symbolKind": "shape",
+        "boundsPx": {
+          "xmin": -70.0,
+          "ymin": 0.0,
+          "xmax": 4833.15,
+          "ymax": 677.85,
+          "w": 4903.15,
+          "h": 677.85
+        },
+        "textureKey": "118",
+        "matrix": {
+          "tx": 0.0,
+          "ty": 0.0,
+          "scaleX": 1.0,
+          "scaleY": 1.0,
+          "rotSkew0": 0.0,
+          "rotSkew1": 0.0
+        },
+        "depth": 55,
+        "instanceName": null
+      }
+    ],
+    "originFrac": {
+      "x": 0.014276536512242132,
+      "y": -0.0
+    },
+    "boundsPx": {
+      "xmin": -70.0,
+      "ymin": 0.0,
+      "xmax": 4833.15,
+      "ymax": 677.85,
+      "w": 4903.15,
+      "h": 677.85
+    }
+  },
+  "warnings": []
+}

@@ -108,10 +108,19 @@ export class SkillBarHud {
       scene.input.on('pointerdown', onDown)
       scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.input.off('pointerdown', onDown))
     }
-    // Dark ledge under the slot row (the icon-frames sit flush on it).
+    // Dark ledge under the slot row (the icon-frames sit flush on it). Its
+    // left edge reaches back to native x=98 (measured: the baked 无双 disc's
+    // own connecting shadow in hud_roleinfo_bottom_skilldock.png extends to
+    // ~x=108-119 near its vertical centre) so the drawn ledge visually laps
+    // under the disc's edge instead of leaving a seam between the cluster
+    // bitmap and the hand-drawn slot row (battle-fidelity brief B4, "无双按
+    // 钮...与充能条视觉相连" -- the connective element the reference actually
+    // shows is this disc-to-dock ledge, not chid262's rage gauge: that lives
+    // far up in RoleInfo's own coordinate space next to the EXP bar, ~460px
+    // away in the object tree, with no baked link to the bottom dock).
     const ledge = scene.add.graphics()
-    const lx = (SLOT_CX[0] - 22) * this.scale
-    const lw = (SLOT_CX[SLOT_CX.length - 1] + 22 - (SLOT_CX[0] - 22)) * this.scale
+    const lx = 98 * this.scale
+    const lw = (SLOT_CX[SLOT_CX.length - 1] + 22) * this.scale - lx
     ledge.fillStyle(0x080808, 0.85).fillRoundedRect(lx, (SLOT_CY - 24) * this.scale, lw, 48 * this.scale, 5)
     children.push(ledge)
 

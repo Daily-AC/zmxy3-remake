@@ -126,6 +126,9 @@ import {
 } from '../ui/hud/hudTheme'
 import { RoleInfoHud } from '../ui/hud/RoleInfoHud'
 import { SkillBarHud, SkillSlotData } from '../ui/hud/SkillBarHud'
+import { PrefabLoader, type PrefabDocument } from '../prefab/PrefabLoader'
+import bg12PrefabDoc from '../data/prefab/bg12.prefab.json'
+import bg13PrefabDoc from '../data/prefab/bg13.prefab.json'
 import { BossHpBar, MonsterHpBar } from '../ui/hud/MonsterHpBar'
 import { BackpackWindow } from '../ui/hud/BackpackWindow'
 import { FurnacePanel } from '../ui/hud/FurnacePanel'
@@ -231,6 +234,55 @@ const CLIMB_BOUNDS_TOP = CLIMB_TOP_Y - 40
 const CLIMB_BOUNDS_HEIGHT = GROUND_Y + 140 - CLIMB_BOUNDS_TOP
 const CLIMB_MIN_X = HERO_START_X - 140
 const CLIMB_MAX_X = HERO_START_X + 140
+
+// --- Level 1 ground segment (session5 battle-fidelity, tasks/battle-fidelity-brief.md) ---
+// The team-lead's diagnosis against docs/reference/user-flow-refs/battle-original.png
+// (#1 "背景构图不对") was that the distant palace read too big/close. bg11
+// (the climb backdrop) can't simply be scaled down for ground mode: it's
+// only 1132px wide, which barely covers the 960-viewport + 72px scroll
+// range (WORLD_W - viewport) at scale 1 already -- shrinking it would leave
+// bare edges. floorBg1 instead already bakes a SMALL, COMPLETE
+// palace+rainbow+staircase+platform composition of its own (the palace
+// occupies only its own top ~23% at native res, vs. needing ~700px of
+// bg11's 3051px-tall art to show the same content) -- it was clearly
+// composed by the original artists as the ground-level establishing shot,
+// while bg11 is the taller art built for the vertical climb. So ground mode
+// swaps bgBase's texture from bg11 to floorBg1 instead of rescaling bg11;
+// bg11 itself is untouched during the climb (same texture/scale/scrollFactor
+// as before this task -- "bg11 攀爬段实装不动").
+const GROUND_BG_SCALE = 1.2
+// bg12 (莲池华表 -- lotus pond + a large dragon-head swirl-carved railing,
+// tools/prefab-compiler output formalized to game/src/data/prefab/bg12.prefab.json)
+// was previously tiled at native pixel scale (1:1): its own dragon-rail
+// silhouette measures ~436px tall in the 596px-tall source, i.e. it filled
+// almost the whole 540px canvas height unscaled -- exactly the "过大过近"
+// bridge/railing team-lead flagged. GROUND_BG12_SCALE shrinks it to read as
+// a mid-ground structure instead of a close-up wall.
+const GROUND_BG12_SCALE = 0.68
+const GROUND_BG12_Y = 125
+// bg13 (南天门牌坊长廊, the boss-前场 sub-stage per StageListener13.as/
+// prefab-compiler-report.md §5.1) narratively comes AFTER bg12's fbEnter
+// gate puzzle. It used to tile at (0,0) so its gate row filled the whole
+// opening frame from the very first tick -- moving it further along the
+// world (GROUND_BG13_X) means it only enters view once the player has
+// walked toward the arena's far side, instead of dominating the level's
+// opening screenshot (which is what battle-original.png actually captures).
+const GROUND_BG13_SCALE = 0.6
+const GROUND_BG13_X = 900
+const GROUND_BG13_Y = 90
+// Near ground band: floorBg1 bakes its carved-stone platform edge as a
+// horizontal band around native y210-310 of its 690px height (the same
+// motif that, small, reads as the distant floating island's own base in
+// GROUND_BG_SCALE above). No dedicated "flat floor-top" bitmap exists among
+// the extracted L1 assets -- bg11/bg12/bg13/floorBg1 all render "ground" as
+// cloud silhouettes only, verified by visual inspection of each PNG -- so a
+// SECOND, larger/closer instance of this one real platform-edge motif,
+// pinned at the hero's GROUND_Y, is the closest faithful substitute for "悟
+// 空站在玉石长廊石台上" (brief #2). Adapted, not invented; recorded in the report.
+const L1_GROUND_BAND_CROP_TOP = 210
+const L1_GROUND_BAND_CROP_H = 400
+const L1_GROUND_BAND_SCALE = 1.3
+const L1_GROUND_BAND_Y = 290
 
 const HERO_LOOP = new Set(['wait', 'wait2', 'walk', 'run'])
 const MON_LOOP = new Set(['wait', 'walk'])
@@ -347,6 +399,12 @@ export class BattleScene extends Phaser.Scene {
   // Parallax: tilesprites that scroll via tilePositionX. The far base backdrop
   // (bg11) and ground are covering Images (auto-parallax via scrollFactor).
   private bgTiles: { img: Phaser.GameObjects.TileSprite; factor: number }[] = []
+  // L1-only prefab-built ground layers (bg12 莲池华表 / bg13 南天门长廊, see the
+  // GROUND_BG1{2,3}_* constants above). Built once in buildBackground(),
+  // shown/hidden per level + climb state in swapBackground()/startClimb()/
+  // finishClimb(). bgTiles above stays the renderer for L2-L4's bgN2/bgN3.
+  private bg12Layer?: Phaser.GameObjects.Container
+  private bg13Layer?: Phaser.GameObjects.Container
   private drops: DropEntity[] = []
   private dropSprites = new Map<DropEntity, Phaser.GameObjects.Container>()
   private pickupCfg!: PickupConfig
@@ -882,6 +940,47 @@ export class BattleScene extends Phaser.Scene {
     // platform + clouds band at the hero's feet.
     this.floorImg = this.add.image(0, FLOOR_TOP_Y, 'floorBg1').setOrigin(0, 0).setScrollFactor(0.9, 0).setDepth(-10)
     this.placeFloor('floorBg1')
+    this.buildL1GroundLayers()
+  }
+
+  /** L1's bg12 (莲池华表)/bg13 (南天门长廊) ground-segment art, materialized via
+   * the prefab pipeline (tools/prefab-compiler; compiled JSON formalized to
+   * game/src/data/prefab/bg1{2,3}.prefab.json -- tasks/battle-fidelity-report.md).
+   * Both compile to a single-image container (bg12/bg13 are monolithic
+   * painted symbols with no internal sub-structure -- confirmed by
+   * inspecting the compiled JSON: one child image, identity matrix), so
+   * PrefabLoader mainly buys origin-fraction-correct anchoring here rather
+   * than a decomposed scene graph; the textures are already loaded under
+   * 'bg12'/'bg13' (preload()), hence the textureKeyFor override below
+   * instead of the compiler's own per-symbol texture directory. Built once;
+   * scale/position/visibility are applied per-level in swapBackground().
+   */
+  private buildL1GroundLayers(): void {
+    const loader = new PrefabLoader(this)
+    this.bg12Layer = loader.build(bg12PrefabDoc as unknown as PrefabDocument, {
+      textureKeyFor: () => 'bg12',
+    }).root
+    this.bg12Layer.setDepth(-8)
+    this.bg13Layer = loader.build(bg13PrefabDoc as unknown as PrefabDocument, {
+      textureKeyFor: () => 'bg13',
+    }).root
+    this.bg13Layer.setDepth(-30)
+  }
+
+  /** L1 ground segment's NEAR platform-edge band: a second, larger/closer
+   * rendering of floorBg1's own carved-stone platform-edge motif (see the
+   * L1_GROUND_BAND_* constants), reusing the shared floorImg object. Only
+   * called for L1 -- L2-L4 keep using placeFloor() below unmodified. */
+  private placeL1GroundBand(): void {
+    if (!this.floorImg || !this.textures.exists('floorBg1')) return
+    const frameName = 'floorBg1__l1band'
+    const tex = this.textures.get('floorBg1')
+    if (!tex.has(frameName)) {
+      tex.add(frameName, 0, 0, L1_GROUND_BAND_CROP_TOP, 1440, L1_GROUND_BAND_CROP_H)
+    }
+    this.floorImg.setTexture('floorBg1', frameName)
+    this.floorImg.setPosition(0, L1_GROUND_BAND_Y)
+    this.floorImg.setScale(L1_GROUND_BAND_SCALE)
   }
 
   /** Point the floor image at a level's floor art, cropped to its ground band. */
@@ -901,17 +1000,35 @@ export class BattleScene extends Phaser.Scene {
   }
 
   /** Swap the parallax + floor textures to a level's own art (L1 uses bg1x, L2
-   * bg2x, ...; L4 only has bg41 so its two detail layers reuse it). */
+   * bg2x, ...; L4 only has bg41 so its two detail layers reuse it). L1's
+   * ground-mode base/mid-ground layers are the new prefab-built bg12Layer/
+   * bg13Layer (see buildL1GroundLayers) instead of bgTiles -- bgTiles is
+   * hidden for L1 and stays the L2-L4 renderer, unchanged. */
   private swapBackground(levelIndex: number): void {
     const n = levelIndex + 1
-    const base = n === 1 ? 'bg11' : `bg${n}1`
-    const far = n === 1 ? 'bg13' : this.textures.exists(`bg${n}3`) ? `bg${n}3` : base
-    const near = n === 1 ? 'bg12' : this.textures.exists(`bg${n}2`) ? `bg${n}2` : base
+    const base = n === 1 ? 'floorBg1' : `bg${n}1`
+    const baseScale = n === 1 ? GROUND_BG_SCALE : 1
+    const far = this.textures.exists(`bg${n}3`) ? `bg${n}3` : `bg${n}1`
+    const near = this.textures.exists(`bg${n}2`) ? `bg${n}2` : `bg${n}1`
     const floor = n === 1 ? 'floorBg1' : `floorBg${n}`
-    if (this.textures.exists(base)) this.bgBase?.setTexture(base)
-    if (this.bgTiles[0] && this.textures.exists(far)) this.bgTiles[0].img.setTexture(far)
-    if (this.bgTiles[1] && this.textures.exists(near)) this.bgTiles[1].img.setTexture(near)
-    if (this.textures.exists(floor)) this.placeFloor(floor)
+    if (this.textures.exists(base)) {
+      this.bgBase?.setTexture(base)
+      this.bgBase?.setScale(baseScale)
+    }
+    const isL1 = n === 1
+    this.bg12Layer?.setVisible(isL1)
+    this.bg13Layer?.setVisible(isL1)
+    if (isL1) {
+      this.bg12Layer?.setScale(GROUND_BG12_SCALE).setPosition(0, GROUND_BG12_Y).setScrollFactor(0.55, 0)
+      this.bg13Layer?.setScale(GROUND_BG13_SCALE).setPosition(GROUND_BG13_X, GROUND_BG13_Y).setScrollFactor(0.4, 0)
+      for (const { img } of this.bgTiles) img.setVisible(false)
+      this.placeL1GroundBand()
+    } else {
+      for (const { img } of this.bgTiles) img.setVisible(true)
+      if (this.bgTiles[0] && this.textures.exists(far)) this.bgTiles[0].img.setTexture(far)
+      if (this.bgTiles[1] && this.textures.exists(near)) this.bgTiles[1].img.setTexture(near)
+      if (this.textures.exists(floor)) this.placeFloor(floor)
+    }
   }
 
   private registerAnimations(data: RoleData, tex: string, loop: Set<string>, prefix: string): void {
@@ -998,6 +1115,14 @@ export class BattleScene extends Phaser.Scene {
     // camera vertically (scrollFactor y=1) instead reveals the climb through
     // clouds as the hero rises, using the same real bitmap, no new asset.
     this.bgBase?.setScrollFactor(0.12, 1)
+    // Ground mode swapped bgBase to floorBg1@GROUND_BG_SCALE (session5
+    // battle-fidelity); the climb itself is untouched from before that task
+    // and still needs bg11 at its original scale 1 for the vertical pan
+    // math (CLIMB_TOP_Y etc. were tuned against that). bg12/bg13's ground
+    // layers have no role mid-climb, so they're hidden for the duration.
+    this.bgBase?.setTexture('bg11').setScale(1)
+    this.bg12Layer?.setVisible(false)
+    this.bg13Layer?.setVisible(false)
     this.showLevelBanner('双跳向上攀爬，登顶引出巫鹰')
   }
 
@@ -1024,6 +1149,15 @@ export class BattleScene extends Phaser.Scene {
     this.heroState.vertical.jumpCount = 0
     this.heroState.vertical.airAction = null
     this.cameras.main.scrollY = 0
+    // Restore the ground-mode backdrop (floorBg1@GROUND_BG_SCALE) and bring
+    // bg12/bg13's ground layers back now that the climb is over.
+    this.bgBase?.setTexture('floorBg1').setScale(GROUND_BG_SCALE)
+    this.bg12Layer?.setVisible(true).setScale(GROUND_BG12_SCALE).setPosition(0, GROUND_BG12_Y).setScrollFactor(0.55, 0)
+    this.bg13Layer
+      ?.setVisible(true)
+      .setScale(GROUND_BG13_SCALE)
+      .setPosition(GROUND_BG13_X, GROUND_BG13_Y)
+      .setScrollFactor(0.4, 0)
     this.showLevelBanner('登顶！巫鹰关')
   }
 
@@ -1840,17 +1974,21 @@ export class BattleScene extends Phaser.Scene {
     const px = this.heroState.x + off.x * HERO_SCALE
     const py = this.heroState.vertical.y + off.y * HERO_SCALE
     this.hero.setPosition(px, py)
-    // Weapon overlay: frame-perfect mirror of the hero (zero offset), only armed.
-    if (this.equipment.weapon) {
-      this.weaponSprite.setVisible(true)
-      this.weaponSprite.setFrame(this.hero.frame.name)
-      this.weaponSprite.setFlipX(this.heroState.facing === 1)
-      this.weaponSprite.setAngle(this.hero.angle)
-      this.weaponSprite.setAlpha(this.hero.alpha)
-      this.weaponSprite.setPosition(px, py)
-    } else {
-      this.weaponSprite.setVisible(false)
-    }
+    // Weapon overlay: frame-perfect mirror of the hero (zero offset). Always
+    // shown now (battle-fidelity brief #5/B3): role1_equip0 IS 悟空's default
+    // 金箍棒 (confirmed by tasks/integration-batch-report.md/furnace-report.md,
+    // which call the same overlay texture "金箍棒上手" when a weapon gets
+    // equipped) -- it was previously gated behind `equipment.weapon` so a
+    // fresh/unarmed hero showed bare fists, when the original always has him
+    // holding the staff. Since only one overlay skin exists (Stage A note
+    // above), a crafted weapon still renders as this same jingubang art; this
+    // just stops hiding it in the (equally approximate) unequipped state.
+    this.weaponSprite.setVisible(true)
+    this.weaponSprite.setFrame(this.hero.frame.name)
+    this.weaponSprite.setFlipX(this.heroState.facing === 1)
+    this.weaponSprite.setAngle(this.hero.angle)
+    this.weaponSprite.setAlpha(this.hero.alpha)
+    this.weaponSprite.setPosition(px, py)
   }
 
   private renderMonsters(): void {
