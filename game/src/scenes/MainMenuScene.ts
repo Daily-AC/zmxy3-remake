@@ -16,6 +16,33 @@ const W = 960
 const H = 540
 const PANEL_X = 690
 
+// S6 menu-bar geometry, derived from vendor `export.GameMenu` (main SWF AS3,
+// game/tmp/s5-as3/othermat-xfl/export/GameMenu.as showMenu()) cross-checked
+// against the FFDec composite render of the same symbol
+// (game/tmp/s2s3-extract/sprites/sprites/DefineSprite_258_export.GameMenu/1.png,
+// which renders every button at its authored/shown position in one frame).
+// AS3 showMenu() sets all six item buttons to x=751.15 (vendor stage 940x590)
+// -- the "multi-coordinate" trap flagged in ui-port-dual-source.md (x=751
+// shown vs x=1110 parked off-stage) -- and the render confirms that same
+// x=751.15 as the *left* edge of each item's glyphs (measured 751 vs 751.15,
+// 0.15px off). Converted to panel-relative fractions so the geometry survives
+// PANEL_X differing slightly from the vendor stage's panel edge:
+//   textLeft fraction  = (751 - 690) / (940 - 690) = 0.244
+//   divider pad fraction (each side, beyond glyph bounds) = 42 / 250 = 0.168
+// Vertical rhythm read off the same render's six divider rows
+// (y = 185/232/286/336/377/426, panel-local) and item glyph centers
+// (162/209/257/310/356.5), then normalized to header/panel fractions of the
+// 590px vendor stage height (header 115/590=0.195, items start
+// 162/590=0.275, step ~44.5/590=0.0754 avg of 47.35/47.7/52.9/46.95) and
+// re-applied to our 540px canvas -- see tasks/menu-polish-report.md for the
+// full derivation table.
+const PANEL_W = W - PANEL_X
+const TEXT_LEFT_X = PANEL_X + 0.244 * PANEL_W
+const DIVIDER_PAD = 0.168 * PANEL_W
+const HEADER_Y = 105
+const ITEM_Y0 = 148
+const ITEM_STEP = 44
+
 type MenuItem = { label: string; action: () => void }
 
 export class MainMenuScene extends Phaser.Scene {
@@ -44,54 +71,74 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private buildMenuPanel(): void {
-    // Dark ink panel on the right.
+    // Dark ink panel on the right -- fully opaque (was 0.68 alpha). The
+    // Online title-bg art bakes its own "造梦西游online·大闹天庭篇" caption
+    // into its top-right corner, which cover-fit scaling lands underneath
+    // this panel; at 0.68 alpha that baked caption showed through and
+    // doubled up with the header text drawn below, producing the "标题栏文字
+    // 重影" (two overlapping title lines) called out in the brief. The
+    // vendor reference panel reads as solid black too, so opaque is also the
+    // fidelity-correct fix, not just a workaround.
     const g = this.add.graphics().setDepth(5)
-    g.fillStyle(0x0a0a0f, 0.68).fillRect(PANEL_X, 0, W - PANEL_X, H)
+    g.fillStyle(0x0a0a0f, 1).fillRect(PANEL_X, 0, W - PANEL_X, H)
     g.fillStyle(0x000000, 0.35).fillRect(PANEL_X, 0, 8, H)
     g.lineStyle(2, 0xd9b45a, 0.5).lineBetween(PANEL_X, 14, PANEL_X, H - 14)
 
     this.add
-      .text((PANEL_X + W) / 2, 54, '造梦西游 · 大闹天庭篇', {
+      .text((PANEL_X + W) / 2, HEADER_Y, '《造梦西游·大闹天庭篇》', {
         fontSize: '15px',
         color: '#e8d9b0',
-        stroke: '#0a0a0f',
-        strokeThickness: 3,
       })
       .setOrigin(0.5)
       .setDepth(6)
 
+    // Vendor set = newGame/continueGame/gameHelp/aboutUs/btnquit (btn_forum
+    // omitted per brief -- it points at a 4399 forum URL with no local
+    // equivalent). Order matches both the AS3 declaration order and the
+    // showMenu() y-ladder (207.65 < 255 < 302.7 < 355.6 < 402.55).
     const items: MenuItem[] = [
       { label: '新的开始', action: () => this.enter() },
-      { label: '读取存档', action: () => this.enter() },
+      { label: '继续游戏', action: () => this.enter() },
       { label: '游戏帮助', action: () => this.showHelp() },
       { label: '关于我们', action: () => this.showAbout() },
       { label: '退出游戏', action: () => this.quit() },
     ]
-    const cx = (PANEL_X + W) / 2
-    items.forEach((it, i) => this.buildMenuItem(cx, 118 + i * 66, it))
+    items.forEach((it, i) => this.buildMenuItem(ITEM_Y0 + i * ITEM_STEP, it))
   }
 
-  private buildMenuItem(cx: number, y: number, item: MenuItem): void {
+  private buildMenuItem(y: number, item: MenuItem): void {
+    // Vendor render is left-aligned starting at the button's own x anchor,
+    // not centered in the panel (measured glyph-left == AS3 x to within
+    // 0.15px, see the derivation note above) -- our previous centered
+    // layout was self-invented chrome.
     const t = this.add
-      .text(cx, y, item.label, {
-        fontSize: '30px',
+      .text(TEXT_LEFT_X, y, item.label, {
+        fontSize: '28px',
         fontStyle: 'bold',
         color: '#f4f4f4',
-        stroke: '#0a0a0f',
-        strokeThickness: 4,
       })
-      .setOrigin(0.5)
+      .setOrigin(0, 0.5)
       .setDepth(7)
       .setInteractive({ useHandCursor: true })
-    const underline = this.add.graphics().setDepth(6)
-    t.on('pointerover', () => {
-      t.setColor('#ffd24a').setScale(1.06)
-      underline.clear().lineStyle(2, 0xd9b45a, 0.9).lineBetween(cx - t.width / 2, y + 20, cx + t.width / 2, y + 20)
-    })
-    t.on('pointerout', () => {
-      t.setColor('#f4f4f4').setScale(1)
-      underline.clear()
-    })
+
+    // Persistent divider under every item (vendor has one under all six
+    // rows, including the last) -- previously this was only drawn on
+    // hover, which is not what the reference shows. Vendor's divider is a
+    // soft brush-stroke gradient (brighter center, fading at both ends,
+    // measured peak alpha ~0.35); approximated here as a flat-alpha line,
+    // an intentional simplification (documented in the report) rather than
+    // an attempt at literal gradient reproduction.
+    const dividerY = y + 21
+    const dividerLeft = Math.max(PANEL_X + 8, TEXT_LEFT_X - DIVIDER_PAD)
+    const dividerRight = Math.min(W - 6, TEXT_LEFT_X + t.width + DIVIDER_PAD)
+    this.add
+      .graphics()
+      .setDepth(6)
+      .lineStyle(1, 0xffffff, 0.26)
+      .lineBetween(dividerLeft, dividerY, dividerRight, dividerY)
+
+    t.on('pointerover', () => t.setColor('#ffd24a'))
+    t.on('pointerout', () => t.setColor('#f4f4f4'))
     t.on('pointerdown', () => item.action())
   }
 
@@ -174,7 +221,7 @@ export class MainMenuScene extends Phaser.Scene {
     w.__shellMenu = (label: string) => {
       const map: Record<string, () => void> = {
         新的开始: () => this.enter(),
-        读取存档: () => this.enter(),
+        继续游戏: () => this.enter(),
         游戏帮助: () => this.showHelp(),
         关于我们: () => this.showAbout(),
         退出游戏: () => this.quit(),
