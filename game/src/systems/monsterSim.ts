@@ -38,6 +38,28 @@ export const MONSTER30_STATS: MonsterStats = {
   def: 3,
 }
 
+/**
+ * Optional Y-axis pursuit for flying/vertical-chase monsters. Undefined (the
+ * default for every existing caller) leaves `state.y` untouched exactly like
+ * before this feature existed -- x-only monsters see byte-for-bit identical
+ * behavior. This closes the gap recorded in tasks/prefab-compiler-report.md
+ * §5.4/§104 (stage-1 climb section: Monster30 is a real flyer that chases the
+ * hero vertically in the original StageListener11, but monsterSim had no
+ * y-axis at all, so the climb was threat-free).
+ */
+export interface VerticalFollowConfig {
+  enabled: boolean
+  /** Max px closed per tick toward heroY. TODO-verify: no AS3 vertical-speed
+   * constant has been decompiled for Monster30's flight AI yet (it hovers via
+   * its own bespoke logic, see this file's top-of-file DIVERGENCE note); this
+   * is a project-chosen placeholder, not a sourced number. Reusing the
+   * horizontal `speed` order of magnitude is a reasonable starting point. */
+  speed: number
+  /** Stop closing once within this many px of heroY (avoids jitter/overshoot
+   * oscillation once "close enough"). */
+  arriveThreshold: number
+}
+
 export interface MonsterConfig {
   stats: MonsterStats
   patrolMin: number
@@ -51,6 +73,9 @@ export interface MonsterConfig {
   tickMs: number
   /** Injectable RNG so tests and playback are reproducible. */
   rng: () => number
+  /** Opt-in y-axis pursuit; omit or set enabled:false for x-only monsters
+   * (the default -- see VerticalFollowConfig doc comment). */
+  verticalFollow?: VerticalFollowConfig
 }
 
 export interface MonsterState {
@@ -78,6 +103,10 @@ export interface MonsterHit {
 
 export interface MonsterInput {
   heroX: number
+  /** Hero's current y. Optional -- only consulted when `verticalFollow` is
+   * enabled on the config; x-only monsters (and any caller that hasn't been
+   * updated to pass it) are unaffected. */
+  heroY?: number
   heroAlive: boolean
   incomingHit: MonsterHit | null
 }
@@ -110,6 +139,16 @@ function faceHero(state: MonsterState, heroX: number): void {
   state.facing = heroX < state.x ? -1 : 1
 }
 
+/** Close `state.y` toward `heroY` by up to `follow.speed` px, stopping once
+ * within `follow.arriveThreshold`. No-op if heroY is unknown. */
+function stepVertical(state: MonsterState, heroY: number | undefined, follow: VerticalFollowConfig): void {
+  if (!follow.enabled || heroY === undefined) return
+  const dy = heroY - state.y
+  if (Math.abs(dy) <= follow.arriveThreshold) return
+  const dir = dy > 0 ? 1 : -1
+  state.y += dir * Math.min(follow.speed, Math.abs(dy))
+}
+
 /** Resolve an incoming hero hit, if it is new. Returns emitted events. */
 function applyHit(state: MonsterState, hit: MonsterHit, cfg: MonsterConfig): MonsterEvent[] {
   if (state.mode === 'dead' || state.mode === 'gone') return []
@@ -134,6 +173,7 @@ function tickMonster(
   state: MonsterState,
   hit: MonsterHit | null,
   heroX: number,
+  heroY: number | undefined,
   heroAlive: boolean,
   cfg: MonsterConfig,
 ): MonsterEvent[] {
@@ -183,6 +223,7 @@ function tickMonster(
 
   if (hasTarget) {
     state.mode = 'chase'
+    if (cfg.verticalFollow) stepVertical(state, heroY, cfg.verticalFollow)
     if (dist <= cfg.stats.attackRange) {
       faceHero(state, heroX)
       // In range: per-second roll to attack; otherwise hold position.
@@ -234,14 +275,14 @@ export function advanceMonster(
   let budget = 8
   while (state.accMs >= cfg.tickMs && budget-- > 0) {
     const hit = first ? input.incomingHit : null
-    events.push(...tickMonster(state, hit, input.heroX, input.heroAlive, cfg))
+    events.push(...tickMonster(state, hit, input.heroX, input.heroY, input.heroAlive, cfg))
     state.accMs -= cfg.tickMs
     first = false
   }
   if (budget <= 0) state.accMs = 0
   // Apply a hit even on a sub-tick frame so a fast frame never drops it.
   if (first && input.incomingHit) {
-    events.push(...tickMonster(state, input.incomingHit, input.heroX, input.heroAlive, cfg))
+    events.push(...tickMonster(state, input.incomingHit, input.heroX, input.heroY, input.heroAlive, cfg))
   }
   return events
 }

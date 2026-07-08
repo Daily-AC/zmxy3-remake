@@ -161,6 +161,10 @@ export const WORLDMAP_BUTTONS: WorldMapButton[] = [
     enabled: true, // S5: SkillTreeScene lands (tasks/skilltree-report.md).
   },
   {
+    // 原版语义=难度切换（AS3 huodongClick() 在 gc.difficulity 0/1 间切换出怪难度，
+    // 不是"活动"内容面板 -- tasks/worldmap-report.md 逐条核对表）。用户拍板赛内
+    // 置灰，标签沿用参照图的"活动"文案，2026-07-08。将来想做真活动系统或接回
+    // 难度切换，直接改 action/enabled，坐标/贴图不用动。
     id: 'huodongbtn',
     x: 263.95,
     y: 506.0,
