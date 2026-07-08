@@ -254,6 +254,18 @@ const MONSTER_HIT1_POWER: Record<string, { power: number; kind: AttackKind }> = 
   monster34: { power: 829, kind: 'physics' }, // 邪·悟空 hit1
 }
 
+// l1-truth pen (2026-07-09): AS3 marks these `isBoss=true` in their own
+// constructors (tasks/l1-truth-report.md, decompile-confirmed) -- 千里眼/
+// 顺风耳/巨灵神 in L1, 增长天王/广目天王 in L2, each its own solo
+// stop-point wave in level1.ts/level2.ts, one tier below the level's arena
+// boss (巫鹰/多闻天王). This project's own spawnActiveWave() has always
+// spawned them with isBoss=false (see activeMiniBoss's doc comment for why
+// that can't just be flipped), so they got a plain grunt's head HP bar and
+// no entrance fanfare -- likely why a level with 4 real AS3 bosses reads as
+// "just one boss" to a player. MONSTER_NAMES already has display labels for
+// all five (LEVEL1/2_MONSTER_NAMES).
+const MINIBOSS_SPECIES = new Set(['monster2', 'monster4', 'monster5', 'monster6', 'monster16'])
+
 // behavior-wiring pen (2026-07-09): real recovered AS3 "skill" gates from
 // systems/monsterBehaviors.ts, layered on top of the boss's own monsterSim
 // state machine as an overlay (see monsterBehaviors.ts's "Skill overlay"
@@ -311,6 +323,9 @@ const NPC_CELL = 300
 const NPC_WAIT_FRAMES = 6 // row 0 = idle
 const NPC_IDLE_FRAME_MS = 130
 const NPC_OFFSET = { x: -10, y: -30 }
+// export.mapObject.TransferWind (DefineSprite_1039), 10 loose PNG frames,
+// native 109x106 each -- see registerTransferWind()'s header.
+const TRANSFERWIND_FRAME_COUNT = 10
 const GROUND_Y = 400
 // Floor art (floorBgN) is a whole scene; crop off the top rainbow/palace band
 // (already drawn by bg11) and anchor the platform + foreground clouds here.
@@ -555,6 +570,16 @@ export class BattleScene extends Phaser.Scene {
   // gap this closes, see prefab-compiler-report.md §5.4.
   private climbSwarmAccMs = 0
   private bossEntity: MonsterEntity | null = null
+  // l1-truth pen: the currently-active miniboss (千里眼/顺风耳/巨灵神/增长
+  // 天王/广目天王, see MINIBOSS_SPECIES) borrows the top BossHpBar while
+  // it's alive -- these spawn via spawnActiveWave() with isBoss=false (that
+  // flag is overloaded with "exempt from aliveGruntCount()'s wave-clear
+  // count", which they must NOT be: level1/2.ts already gives each its own
+  // solo stop-point wave, and flipping isBoss=true would make
+  // aliveGruntCount() see 0 grunts the instant it spawns, skipping the wave
+  // instead of waiting for it to die). Tracked separately so updateBossHud()
+  // can feature it without touching that counting semantics.
+  private activeMiniBoss: MonsterEntity | null = null
   private portal?: Phaser.GameObjects.Container
   private floorImg?: Phaser.GameObjects.Image
   private bgBase?: Phaser.GameObjects.Image
@@ -706,6 +731,9 @@ export class BattleScene extends Phaser.Scene {
       }
     }
     this.load.image('ink_panel', 'assets/extracted/ui/dialogue_textpanel_crop.png')
+    for (let i = 1; i <= TRANSFERWIND_FRAME_COUNT; i++) {
+      this.load.image(`transferwind_${i}`, `assets/extracted/effects/transferwind_${i}.png`)
+    }
     // Real battle-HUD art: RoleInfo avatar, boss bar, backpack window/cell,
     // item icons, and Online-sourced skill icons.
     for (const { key, url } of [...HUD_TEXTURES, ...HUD_ICONS, ...ONLINE_TEXTURES]) {
@@ -736,6 +764,7 @@ export class BattleScene extends Phaser.Scene {
       }
     }
     this.registerNpcIdle()
+    this.registerTransferWind()
 
     this.hero = this.add.sprite(480, GROUND_Y, HERO_TEX).setScale(HERO_SCALE).setDepth(10)
     // Weapon overlay: frame-perfect mirror of the hero, shown only when armed.
@@ -1096,6 +1125,7 @@ export class BattleScene extends Phaser.Scene {
     this.playedHitIds.clear()
     this.monsters = []
     this.bossEntity = null
+    this.activeMiniBoss = null
     this.bgBase = this.add
       .image(0, 0, 'bg11')
       .setOrigin(0, 0)
@@ -1261,6 +1291,26 @@ export class BattleScene extends Phaser.Scene {
     this.anims.create({ key: NPC_ANIM_PREFIX + 'wait', frames, repeat: -1 })
   }
 
+  // l1-truth pen: the real AS3 `export.mapObject.TransferWind` (a 10-frame
+  // swirling-wind sprite, DefineSprite_1039, already extracted to
+  // vendor/extracted/OtherMat1/.../1.png..10.png -- copied verbatim into this
+  // project's own public/assets/extracted/effects/) is the closest native
+  // asset to this scene's own "walk into a glowing portal to leave the
+  // arena" construct (see showPortal()'s own comment: that transition itself
+  // is this remake's own invention, not a literal AS3 flow -- TransferWind is
+  // just the most fitting original swirl asset to render it with, not a
+  // reconstruction of a specific original screen). Each frame is its own
+  // PNG (not a packed spritesheet), so this is a manual multi-texture
+  // animation rather than registerAnimations()'s spritesheet-index path.
+  private registerTransferWind(): void {
+    if (this.anims.exists('transferwind')) return
+    const frames = []
+    for (let i = 1; i <= TRANSFERWIND_FRAME_COUNT; i++) {
+      frames.push({ key: `transferwind_${i}` })
+    }
+    this.anims.create({ key: 'transferwind', frames, frameRate: 12, repeat: -1 })
+  }
+
   private comboStageDurations(): number[] {
     const dur = (a: string): number => actionDurationMs(roleData.actions[a] as ActionSpec, TICK_MS)
     return [0, dur('hit1'), dur('hit2'), dur('hit3'), dur('hit4'), dur('hit5')]
@@ -1280,6 +1330,7 @@ export class BattleScene extends Phaser.Scene {
     }
     this.monsters = []
     this.bossEntity = null
+    this.activeMiniBoss = null
     this.portal?.setVisible(false)
     this.bossBar?.setVisible(false)
     // Close any open scene UI so the previous level's overlays (老君 dialogue,
@@ -1497,7 +1548,8 @@ export class BattleScene extends Phaser.Scene {
     // grunt ~85-95% of hero height) and the SWF's own idle-frame silhouettes
     // (monster-scale-report.md).
     const scale = HERO_SCALE
-    const sprite = this.add.sprite(x, y, tex).setScale(scale).setDepth(isBoss ? 9 : 8)
+    const isMiniBoss = MINIBOSS_SPECIES.has(species)
+    const sprite = this.add.sprite(x, y, tex).setScale(scale).setDepth(isBoss || isMiniBoss ? 9 : 8)
     const atk = this.monsterAttackPower(species, stats)
     const skillGate = MONSTER_SKILL_GATES[species]
     const entity: MonsterEntity = {
@@ -1514,8 +1566,9 @@ export class BattleScene extends Phaser.Scene {
       burn: null,
       frozenUntilMs: 0,
       hitQueue: [],
-      // Grunts get a head HP bar; the boss uses the top BossHpBar.
-      hpBar: isBoss ? undefined : new MonsterHpBar(this),
+      // Grunts get a head HP bar; the arena boss and minibosses (l1-truth
+      // pen: they borrow the top BossHpBar too, see activeMiniBoss) don't.
+      hpBar: isBoss || isMiniBoss ? undefined : new MonsterHpBar(this),
       skillGate,
       skillOverlay: skillGate ? createSkillOverlayState(skillGate) : undefined,
     }
@@ -1527,7 +1580,15 @@ export class BattleScene extends Phaser.Scene {
     const roster = getActiveWaveRoster(this.levelState)
     roster.forEach((spec: MonsterSpawnSpec, i) => {
       const x = Math.min(MAX_X - 120, Math.max(MIN_X + 120, 720 + i * 190))
-      this.spawnEntity(spec.species, spec.stats, x, false)
+      const entity = this.spawnEntity(spec.species, spec.stats, x, false)
+      // l1-truth pen: level1/2.ts always give a miniboss its own solo wave
+      // (never mixed with grunts or another miniboss), so at most one of
+      // these fires per spawnActiveWave() call -- feature it on the top bar
+      // and announce it the same way spawnBoss() announces the arena boss.
+      if (MINIBOSS_SPECIES.has(spec.species)) {
+        this.activeMiniBoss = entity
+        this.showToast(`BOSS · ${MONSTER_NAMES[spec.species] ?? spec.species}`, '#ff9a5a')
+      }
     })
   }
 
@@ -1541,16 +1602,29 @@ export class BattleScene extends Phaser.Scene {
 
   private updateBossHud(): void {
     const b = this.bossEntity
-    if (!b || b.state.mode === 'gone') {
-      this.bossBar.setVisible(false)
+    if (b && b.state.mode !== 'gone') {
+      this.bossBar.setVisible(true)
+      this.bossBar.update({
+        name: CAMPAIGN[this.campaignIndex].boss.label,
+        hp: b.state.hp,
+        maxHp: b.config.stats.hp,
+      })
       return
     }
-    this.bossBar.setVisible(true)
-    this.bossBar.update({
-      name: CAMPAIGN[this.campaignIndex].boss.label,
-      hp: b.state.hp,
-      maxHp: b.config.stats.hp,
-    })
+    // l1-truth pen: the arena boss hasn't spawned yet (or this level has
+    // none currently active) -- feature the active miniboss instead, if any.
+    const mb = this.activeMiniBoss
+    if (mb && mb.state.mode !== 'gone') {
+      this.bossBar.setVisible(true)
+      this.bossBar.update({
+        name: MONSTER_NAMES[mb.species] ?? mb.species,
+        hp: mb.state.hp,
+        maxHp: mb.config.stats.hp,
+      })
+      return
+    }
+    if (mb) this.activeMiniBoss = null // died/reaped -- stop tracking it
+    this.bossBar.setVisible(false)
   }
 
   // ---------- portal / level advance ----------
@@ -1560,11 +1634,14 @@ export class BattleScene extends Phaser.Scene {
     const cx = door.x + door.width / 2
     const cy = GROUND_Y - 40
     if (!this.portal) {
-      const glow = this.add.rectangle(0, 0, 70, 150, 0x7ac7ff, 0.35).setStrokeStyle(3, 0x9fd8ff, 0.9)
-      const swirl = this.add.star(0, -10, 6, 12, 26, 0xbfe4ff, 0.7)
+      // l1-truth pen: real AS3 TransferWind swirl (10-frame loop) replaces
+      // the old rectangle+star placeholder -- see registerTransferWind()'s
+      // header. Scaled to roughly the same on-screen footprint the old
+      // placeholder occupied (~150px tall).
+      const swirl = this.add.sprite(0, -10, 'transferwind_1').setScale(1.4)
+      swirl.play('transferwind')
       const label = this.add.text(0, -95, '↑ 传送', { fontSize: '16px', color: '#dff0ff', fontStyle: 'bold' }).setOrigin(0.5)
-      this.portal = this.add.container(cx, cy, [glow, swirl, label]).setDepth(7)
-      this.tweens.add({ targets: swirl, angle: 360, duration: 3000, repeat: -1 })
+      this.portal = this.add.container(cx, cy, [swirl, label]).setDepth(7)
     }
     this.portal.setPosition(cx, cy).setVisible(true)
     // "进入下一关" is wrong wording once this is the last ACTIVE campaign
@@ -2147,7 +2224,7 @@ export class BattleScene extends Phaser.Scene {
       // 2026-07-08). See MONSTER_ATTACK_TIMING's header comment.
       else if (ev.type === 'attack-hit') this.monsterHitsHero(e)
       else if (ev.type === 'death') {
-        this.spawnDrops(ev.x, ev.y)
+        this.spawnDrops(ev.x, ev.y, e.species)
         this.npcClient.worldEvent('monster_killed', { monster: MONSTER_NAMES[e.species] ?? e.species })
         this.awardKillExp(ev.x, ev.y, e.species)
       }
@@ -2284,24 +2361,39 @@ export class BattleScene extends Phaser.Scene {
     spawnFloatingText(this, x, y, text, kind)
   }
 
-  private spawnDrops(x: number, y: number): void {
-    for (const { item, qty } of rollDrops('monster30', Math.random)) {
+  // l1-truth pen (2026-07-09): was hardcoded 'monster30' regardless of which
+  // species actually died -- every kill in the game (巫鹰/千里眼/巨灵神/...)
+  // rolled the swarm-imp drop table (妖怪残魂/白银矿石/大还丹) and each
+  // species' own configured table in drops.json (e.g. monster5's 玄铁碎片/
+  // 踏云靴) could never drop. Now takes the real killer's species.
+  private spawnDrops(x: number, y: number, species: string): void {
+    for (const { item, qty } of rollDrops(species, Math.random)) {
       const drop = spawnDrop(item, qty, x, y)
       this.drops.push(drop)
       this.dropSprites.set(drop, this.makeDropSprite(drop))
     }
   }
 
+  // l1-truth pen: was a rarity-colored Phaser star primitive -- every one of
+  // the 19 dropped itemIds already has a real extracted icon (loaded into
+  // this scene's texture cache via hudTheme.ts's HUD_ICONS, the same set
+  // BackpackWindow/FurnacePanel already consume via `icon_<id>`), the ground
+  // renderer just never used them. Keeps a small rarity-colored ring behind
+  // the icon (the same rarity palette the old star used) as an at-a-glance
+  // cue, same as the backpack grid's own icon+rarity-border convention.
   private makeDropSprite(drop: DropEntity): Phaser.GameObjects.Container {
     const rarityColor = [0x9fb0c8, 0x5fd6a0, 0x6ba8ff, 0xd9a441][drop.item.rarity] ?? 0x9fb0c8
-    const gem = this.add.star(0, 0, 4, 6, 13, rarityColor).setStrokeStyle(2, 0xffffff, 0.7)
+    const ring = this.add.circle(0, 0, 15, rarityColor, 0.25).setStrokeStyle(2, rarityColor, 0.9)
+    const iconKey = this.textures.exists('icon_' + drop.item.id) ? 'icon_' + drop.item.id : ICON_FALLBACK_KEY
+    const icon = this.add.image(0, 0, iconKey)
+    icon.setScale(Math.min(1, 26 / Math.max(icon.width, icon.height)))
     const label = this.add
       .text(0, 20, `${drop.item.name}${drop.qty > 1 ? ' ×' + drop.qty : ''}`, {
         fontSize: '12px',
         color: '#e8ecff',
       })
       .setOrigin(0.5, 0)
-    return this.add.container(drop.x, drop.y, [gem, label]).setDepth(8)
+    return this.add.container(drop.x, drop.y, [ring, icon, label]).setDepth(8)
   }
 
   private stepDropsAndPickup(): void {
@@ -2524,7 +2616,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private doEquip(item: Item): boolean {
-    if (!equip(this.equipment, this.inventory, item)) return false
+    if (!equip(this.equipment, this.inventory, item)) {
+      // equip() now also rejects the swap (rather than deleting the worn
+      // item) when the bag can't take it back -- surface that to the player
+      // instead of a silent no-op (equipment.ts capacity-guard fix).
+      this.showToast('背包已满，穿不下这件装备', '#ff8a6b')
+      return false
+    }
     syncHeroEquipment(this.identity, this.equipment) // fold new gear hp/mp into pools
     this.showToast(`装备【${item.name}】`, '#ffd873')
     this.saveToSlot() // autosave: equipment/bag changed
