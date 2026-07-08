@@ -64,3 +64,68 @@ cd game && nohup npx vite --port 5203 &   # dev server
 npx tsc --noEmit && npx vitest run && npm run build
 ```
 截图/overlay 复现脚本内联在本次会话的 Playwright `browser_run_code_unsafe` 调用里（Python 端用 PIL 做裁剪/缩放/blend），未落成独立脚本文件——如需固化为可重跑工具，建议主会话拍板后再补 `tools/` 下的脚本，本棒未新增工具文件以保持"只动 SkillTreeScene.ts"边界最小化。
+
+## 第二轮：从0到1全量重写（2026-07-08，用户增量指令 + 终审打回）
+
+用户看了第一轮结果后追加三条指令，主会话终审同时对第一轮给出裁决。三条增量：①被动技能/BOSS技能页签直接隐藏删除，不留占位；②"很多黑块和重合块"必须清零；③"与其后面改倒不如从0到1"，授权推倒重写视觉层。终审同时裁定：技能升级列抗辩我判赢（保留），名牌/孟婆图标缺口如实记档可接受，但表格宏观几何不许再用"已知残差"豁免，且要求解释一张显示内容下沉的截图。
+
+### 终审开场问题：final-active.png 为什么内容挤在底部
+
+排查结论：**是我自己截图脚本的事故，不是场景 bug**。当时用 `page.locator('canvas').screenshot()` 但没有显式 `setViewportSize`，Playwright 新建的页面用了一个较小的默认视口，Phaser 的 Scale Manager 在这个视口下把 canvas 的 CSS 尺寸算成了和内部 960×540 分辨率不同的比例，`locator.screenshot()` 按 CSS 盒子截图导致内容被挤压。补上 `page.setViewportSize({width:1280,height:800})` 后，`canvas.boundingBox()` 精确等于 `{width:960,height:540}`，重新截的图（`game/tmp/skilltree-ui/final2-active.png`）内容占满整个画布，无下沉。以后所有终态证据图都固定用这个视口设置。
+
+### 架构层面的改动：为什么黑块会自动清零
+
+第一轮的黑块/重合块，根因是把整个屏建在两张写死内容的合成位图上（`bg.png` 940×590、`table_school1.png` 889×425），这两张图里烘焙了跟真实存档不匹配的内容（"9999999999"占位灵魂数、"当前等级：999"占位、只有心法一有真实预览态而心法二没有），每一处动态数值都得画一个不透明矩形盖掉错误像素再在上面重画正确值——这些矩形就是用户说的"黑块"。这次重写整个不再用这两张位图（连同 `rebind_modal.png`、`PassiveSkillControl` prefab 一起移除），只保留：
+
+- 10 个技能的三态真彩图标（`st_icon_<id>_{locked,unlocked,learned}`，本来就是真实的，未动）。
+- 新增两个小体积真位图 `card_icon_school1.png`/`card_icon_school2.png`——直接从已提取的 `table_school1.png` 里裁出斻/火两个心法图腾小方块（不是重新跑 FFDec，是从一张已有真实素材里再截一张更小的真实素材，规避了那张大图其余部分的内容错误问题）。
+- AS3 真坐标（`mainskillmc.skillN/skillsetN/upgradeN`、行 y）继续作为图标/设置/升级按钮的唯一真源，本轮重新用裁图验证过（`game/tmp/skilltree-ui/vendor-row0.png`/`vendor-row4.png`：在这些坐标裁 table_school1.png 能精确裁到对应行的真实图标）。
+- 从参照截图直接取色的纯色圆角面板（黑底/深蓝面板，色值来自像素采样，见文件头注释），取代原来的位图+遮罩架构。
+- `SKILL_DISPLAY` 里已有的全部 10 个技能真实中文名+说明（此前只给心法二用，心法一靠位图自带文字）——现在两个心法走同一份渲染代码，不再分叉。
+
+因为没有任何一处是"先画错的再盖对的"，这次重写里没有一个黑色矩形是遮挡用途（唯一的黑色是导航栏本身的纯黑背景和技能未解锁时的半透明变暗，两者都是参照截图本来就有的真实设计，不是遮挡）。
+
+### 页签：被动技能/BOSS技能已删除，不是隐藏
+
+不再有 tab 切换逻辑、不再有 `activeTab` 状态、不再加载 `PassiveSkillControl` prefab 相关纹理。底部只剩一个纯文字标签"主动技能"（非按钮，无高亮框，因为没有别的页可切）。证据：`game/tmp/skilltree-ui/final-bottombar-zoom.png`。
+
+### 表格宏观几何：举证 + 修正（不是留豁免）
+
+对参照截图做了独立于任何假设的精确测量：在图标列（x:600-730）逐行扫描非背景色像素带，测得 5 行图标中心分别在参照图 y = 255.5/381.5/505/628/758（1532×954 图），行距 ≈125.6px，占参照图高度的 13.17%。
+
+再独立测量 vendor 烘焙位图（`table_school1.png`）自己的行距：用 AS3 y 坐标反推 table-local 坐标裁图，确认图标真的落在预测位置（`vendor-row0.png`/`vendor-row4.png`），vendor 行距 = 77.66 stage 单位，占 590 高度的 13.16%。
+
+**两者行距占比几乎完全相同（13.16% vs 13.17%）**——vendor/AS3 与参照截图在"相对行距"上根本没有分歧，此前终审看到的"越往下错位越大"，用回归拟合验证后发现残差在 5 个点上全部 <2px、不随行号增长，说明那不是缩放误差，而是一个**恒定**的垂直平移量（≈32 stage 单位/≈52 参照像素）——旧代码的 bug 恰恰在这里：图标坐标用 `ROW_Y`，但表头/心法卡的文字坐标用另一套基于 `table_school1.png` 位图放置位置的 `TABLE_OFFSET_Y` 换算，两套坐标系本身就没对齐，才读出"越往下越花"的错觉。本次重写让一行内的图标/名称/说明/按键/升级坐标全部共用同一个 `y`，这个"组内错位"已经不可能再发生。
+
+剩下那个恒定的 32 单位平移，这次**没有留作豁免记录，而是直接修正**：新增 `VERT_SHIFT=30` 常量整体下移卡片+表格区块（连带 `CARD_H` 从 195 加到 205 防止下移后底部溢出面板）。因为这次是从0到1重写、面板绝对位置本来就不是 AS3 强制的（只有行与行之间的相对间距是强制真值），把这个已经量化、低成本的差距修掉不产生保真代价。
+
+**对照证据**：`game/tmp/skilltree-ui/final-overlay-blend.png`（新）vs 本 report 前面 §3 的 `overlay-blend.png`（旧）。新图里表头行"技能名称/技能图标/技能说明/按键设置/技能升级"、五行图标、五行说明文字、底部"主动技能"、右下灵魂徽章，全部单线重合，不再有第一轮那种整段文字的双影。残留的双影只剩心法卡内部一小块（"心法二"标题/"当前等级"行与参照的对应文字），量级在个位数像素，判断为卡片内部间距的个人化选择差异（本来就不是 AS3 强制值），非几何 bug。
+
+### 回归验证（真实功能路径，非 mock）
+
+用 `__skillTreeAddSoul`/`__skillTreeUpgradeSchool`/`__skillTreeLearn`/`__skillTreeUpgradeSkill`/`__skillTreeRebind` 走生产代码路径验证：
+- 心法升级：加 5000 灵魂→升级心法一→等级 1→2，灵魂正确扣减（5000→4800，消耗 200 匹配 `SCHOOL_UPGRADE_COST[1]`）。
+- 技能升级：`upgradeSkillLevel('slz',...)` 在英雄等级 1（AS3 `getCurLevel()/5>=slev` 要求等级≥5）下正确被拒绝，未强行放行——验证真实门槛未被本次重写破坏。
+- 学习新技能：默认存档已占满 5 个学习位（AS3 `SKILL_LEARN_LIMIT=5`），尝试学第 6 个正确被拒绝——同样验证真实上限完好。
+- 改绑：`rebindSkill('lys','Y')` 正确把 lys/slz 的键位互换（Y↔U），持久化后 `__skillTreeState()` 读回一致。
+
+### 测试/构建
+
+`npx tsc --noEmit` 0 错误、`npx vitest run` 468/468 全绿、`npm run build` 过。逻辑层 `skillTree.ts`/`heroSkill.ts`/`save.ts` 全程未改一行。
+
+### 新增/移除的素材文件
+
+新增（真实位图裁剪产物，非新 FFDec 提取）：`game/public/assets/extracted/skilltree/card_icon_school1.png`、`card_icon_school2.png`。
+
+本轮不再加载（文件仍在磁盘，未删除，只是场景不再引用）：`bg.png`、`table_school1.png`、`rebind_modal.png`、`btn_upgrade_{up,over}.png`、`slot_{Y,U,I,O,L}_1.png`、`passive_panel.png`、`tools/prefab-compiler` 编译产物 `assets/extracted/prefab/PassiveSkillControl/*`。未删除这些文件，因为不确定是否有其他代码/文档引用；如需清理仓库卫生，建议主会话确认后再统一删。
+
+### commit
+
+单独一个新 commit，只 add `game/src/scenes/SkillTreeScene.ts`（本次重写覆盖第一轮的版本）+ 新增的两个 `card_icon_school*.png` + 本 report 更新，不 push，不碰其他文件。
+
+### 疑点清单（更新）
+
+1. 技能升级列——终审已裁定保留，不再是疑点。
+2. 表格宏观几何——本轮已举证+修正，不再是疑点。
+3. 悟空名牌位图/孟婆药剂图标/表头烘焙字体——三项缺口性质不变，仍需要一轮新的 Online 客户端实机抓包才能真正闭环，本轮同样如实记档未做。
+4. 心法卡内部次级间距（"心法二"标题/"当前等级"行与参照的几像素残留双影）——量级很小，本轮未继续抠，如果主会话认为需要，可用同样的像素回归方法定位卡片内部的确切目标位置再修一版。
