@@ -87,13 +87,26 @@ export class SkillBarHud {
       children.push(scene.add.image(0, 0, DOCK_TEX, 'dock_cluster').setOrigin(0, 0).setScale(this.scale))
     }
     if (opts.onIconClick) {
-      for (const icon of DOCK_ICONS) {
-        const zone = scene.add
-          .circle(icon.cx * this.scale, icon.cy * this.scale, 19 * this.scale, 0xffffff, 0)
-          .setInteractive({ useHandCursor: true })
-        zone.on('pointerdown', () => opts.onIconClick?.(icon.id))
-        children.push(zone)
+      // Scene-level pointer listener with manual screen-space hit-testing,
+      // NOT setInteractive on objects inside this scrollFactor(0) container:
+      // Phaser hit-tests interactives in world coordinates, so once the
+      // battle camera scrolls, fixed-to-screen zones' effective hit areas
+      // drift by scrollX/Y and clicks land on empty world instead (verified
+      // live 2026-07-08: geometrically-correct clicks did nothing mid-level).
+      // pointer.x/y are true screen coordinates, immune to camera scroll.
+      const onDown = (pointer: Phaser.Input.Pointer) => {
+        const r2 = (19 * this.scale) ** 2
+        for (const icon of DOCK_ICONS) {
+          const dx = pointer.x - (x + icon.cx * this.scale)
+          const dy = pointer.y - (y + icon.cy * this.scale)
+          if (dx * dx + dy * dy <= r2) {
+            opts.onIconClick?.(icon.id)
+            return
+          }
+        }
       }
+      scene.input.on('pointerdown', onDown)
+      scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.input.off('pointerdown', onDown))
     }
     // Dark ledge under the slot row (the icon-frames sit flush on it).
     const ledge = scene.add.graphics()
