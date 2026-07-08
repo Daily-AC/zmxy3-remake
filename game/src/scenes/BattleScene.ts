@@ -250,7 +250,20 @@ const CLIMB_MAX_X = HERO_START_X + 140
 // swaps bgBase's texture from bg11 to floorBg1 instead of rescaling bg11;
 // bg11 itself is untouched during the climb (same texture/scale/scrollFactor
 // as before this task -- "bg11 攀爬段实装不动").
-const GROUND_BG_SCALE = 1.2
+const GROUND_BG_SCALE = 1.3
+// team-lead's first-pass review (2026-07-08) found the palace read as "几乎
+// 不可见". Root cause (see the setTexture(base, '__BASE') calls below): bgBase
+// was silently rendering floorBg1's bottom 504px crop (a stale named frame
+// `floorBg1__ground` left on the shared Texture by placeFloor()/floorImg,
+// which starts at native y=186 -- already past the palace roofline), not the
+// full 690px image -- so the roof genuinely never entered the visible frame,
+// no amount of repositioning within that crop could have shown it. With the
+// full image restored, the palace (native y0-120, centred at x~700 of 1440)
+// still needs repositioning to land on-screen: GROUND_BG_Y gives it headroom
+// from the canvas top, GROUND_BG_X recentres it (x=700 at GROUND_BG_SCALE
+// would otherwise land past the 960-wide canvas's right edge).
+const GROUND_BG_Y = 20
+const GROUND_BG_X = -260
 // bg12 (莲池华表 -- lotus pond + a large dragon-head swirl-carved railing,
 // tools/prefab-compiler output formalized to game/src/data/prefab/bg12.prefab.json)
 // was previously tiled at native pixel scale (1:1): its own dragon-rail
@@ -270,19 +283,13 @@ const GROUND_BG12_Y = 125
 const GROUND_BG13_SCALE = 0.6
 const GROUND_BG13_X = 900
 const GROUND_BG13_Y = 90
-// Near ground band: floorBg1 bakes its carved-stone platform edge as a
-// horizontal band around native y210-310 of its 690px height (the same
-// motif that, small, reads as the distant floating island's own base in
-// GROUND_BG_SCALE above). No dedicated "flat floor-top" bitmap exists among
-// the extracted L1 assets -- bg11/bg12/bg13/floorBg1 all render "ground" as
-// cloud silhouettes only, verified by visual inspection of each PNG -- so a
-// SECOND, larger/closer instance of this one real platform-edge motif,
-// pinned at the hero's GROUND_Y, is the closest faithful substitute for "悟
-// 空站在玉石长廊石台上" (brief #2). Adapted, not invented; recorded in the report.
-const L1_GROUND_BAND_CROP_TOP = 210
-const L1_GROUND_BAND_CROP_H = 400
+// Near ground band: the REAL carved-stone corridor floor (online_floor12.png,
+// 4700x95, recovered from the Online client's stageInfo package -- see
+// placeL1GroundBand's header comment for the full extraction story). Native
+// height 95px; L1_GROUND_BAND_SCALE blows it up to a legible walkway width,
+// positioned so its top edge sits right at the hero's GROUND_Y (400).
 const L1_GROUND_BAND_SCALE = 1.3
-const L1_GROUND_BAND_Y = 290
+const L1_GROUND_BAND_Y = GROUND_Y - 5
 
 const HERO_LOOP = new Set(['wait', 'wait2', 'walk', 'run'])
 const MON_LOOP = new Set(['wait', 'walk'])
@@ -521,7 +528,7 @@ export class BattleScene extends Phaser.Scene {
       })
     }
     // Backgrounds for every level (L1 bg11/12/13 + L2-L4 bgN1/N2/N3, floors).
-    for (const key of ['bg11', 'bg12', 'bg13', 'floorBg1']) {
+    for (const key of ['bg11', 'bg12', 'bg13', 'floorBg1', 'online_floor12', 'online_floor13']) {
       this.load.image(key, `assets/extracted/level1/${key}.png`)
     }
     for (const n of [2, 3, 4]) {
@@ -967,18 +974,25 @@ export class BattleScene extends Phaser.Scene {
     this.bg13Layer.setDepth(-30)
   }
 
-  /** L1 ground segment's NEAR platform-edge band: a second, larger/closer
-   * rendering of floorBg1's own carved-stone platform-edge motif (see the
-   * L1_GROUND_BAND_* constants), reusing the shared floorImg object. Only
-   * called for L1 -- L2-L4 keep using placeFloor() below unmodified. */
+  /** L1 ground segment's walkway: the REAL carved-stone corridor floor,
+   * recovered from the Online client's `stageInfo` package (`export.gameSence.
+   * sl12`/`sl13`, DefineSprite 335/323 -- these are the level's own static
+   * scene timeline, not the swappable "bg" backdrop class; the floor is baked
+   * directly into the walkable scene, separately from bg11/12/13). team-lead's
+   * return (2026-07-08) established the reference screenshot is an Online
+   * capture and this exact corridor (with the same baked "4399" watermark
+   * tiling) is Online-only -- vendor's bg12/bg13/floorBg1 genuinely have no
+   * equivalent (verified exhaustively before this find, see report §0).
+   * Extraction: `1.swf` fetched live off the 4399 CDN turned out to be
+   * byte-for-byte the same level-1 package vendor already has (same bg11/12/
+   * 13/floorBg1/Monster2-30 symbol table) -- no new floor there. The floor
+   * band instead lives in `stageInfo`'s consolidated sl11/12/13 (all levels'
+   * interactive-scene logic in one file); its own timeline still carries the
+   * static floor art alongside the StopPoint/MonsterAppearPoint markers.
+   * Reuses the shared floorImg object; only called for L1. */
   private placeL1GroundBand(): void {
-    if (!this.floorImg || !this.textures.exists('floorBg1')) return
-    const frameName = 'floorBg1__l1band'
-    const tex = this.textures.get('floorBg1')
-    if (!tex.has(frameName)) {
-      tex.add(frameName, 0, 0, L1_GROUND_BAND_CROP_TOP, 1440, L1_GROUND_BAND_CROP_H)
-    }
-    this.floorImg.setTexture('floorBg1', frameName)
+    if (!this.floorImg || !this.textures.exists('online_floor12')) return
+    this.floorImg.setTexture('online_floor12')
     this.floorImg.setPosition(0, L1_GROUND_BAND_Y)
     this.floorImg.setScale(L1_GROUND_BAND_SCALE)
   }
@@ -1012,8 +1026,15 @@ export class BattleScene extends Phaser.Scene {
     const near = this.textures.exists(`bg${n}2`) ? `bg${n}2` : `bg${n}1`
     const floor = n === 1 ? 'floorBg1' : `floorBg${n}`
     if (this.textures.exists(base)) {
-      this.bgBase?.setTexture(base)
+      // '__BASE' pinned explicitly: floorBg1's shared Texture object also
+      // carries a custom cropped sub-frame added by placeFloor() (floorImg's
+      // ground-band crop) -- omitting the frame here let Phaser fall back to
+      // that stale crop instead of the full image (root cause of the
+      // "palace almost invisible" report: bgBase was silently rendering
+      // floorBg1's bottom 504px crop, not the full 690px image).
+      this.bgBase?.setTexture(base, '__BASE')
       this.bgBase?.setScale(baseScale)
+      this.bgBase?.setPosition(n === 1 ? GROUND_BG_X : 0, n === 1 ? GROUND_BG_Y : 0)
     }
     const isL1 = n === 1
     this.bg12Layer?.setVisible(isL1)
@@ -1120,7 +1141,7 @@ export class BattleScene extends Phaser.Scene {
     // and still needs bg11 at its original scale 1 for the vertical pan
     // math (CLIMB_TOP_Y etc. were tuned against that). bg12/bg13's ground
     // layers have no role mid-climb, so they're hidden for the duration.
-    this.bgBase?.setTexture('bg11').setScale(1)
+    this.bgBase?.setTexture('bg11', '__BASE').setScale(1).setPosition(0, 0)
     this.bg12Layer?.setVisible(false)
     this.bg13Layer?.setVisible(false)
     this.showLevelBanner('双跳向上攀爬，登顶引出巫鹰')
@@ -1151,7 +1172,7 @@ export class BattleScene extends Phaser.Scene {
     this.cameras.main.scrollY = 0
     // Restore the ground-mode backdrop (floorBg1@GROUND_BG_SCALE) and bring
     // bg12/bg13's ground layers back now that the climb is over.
-    this.bgBase?.setTexture('floorBg1').setScale(GROUND_BG_SCALE)
+    this.bgBase?.setTexture('floorBg1', '__BASE').setScale(GROUND_BG_SCALE).setPosition(GROUND_BG_X, GROUND_BG_Y)
     this.bg12Layer?.setVisible(true).setScale(GROUND_BG12_SCALE).setPosition(0, GROUND_BG12_Y).setScrollFactor(0.55, 0)
     this.bg13Layer
       ?.setVisible(true)
