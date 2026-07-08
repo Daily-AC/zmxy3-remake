@@ -6,6 +6,8 @@ import {
   createMonsterBehaviorState,
   advanceMonsterBehavior,
   spawnedHitboxToRect,
+  createSkillOverlayState,
+  advanceSkillOverlay,
   type MonsterBehaviorSpec,
   type MonsterBehaviorState,
   type MonsterBehaviorTarget,
@@ -74,7 +76,10 @@ for (const spec of [Monster3Spec, Monster7Spec, Monster13Spec]) {
       expect(events).toContainEqual({ type: 'attack-start', x: 500, y: 0 })
     })
 
-    it('does not attack when the decision roll fails', () => {
+    // Monster3's real AS3 boss-branch probability is 1 (guaranteed proc) --
+    // see Monster3Spec's header -- so there is no roll value that can ever
+    // fail its `random() <= normalAttackRate` check; skip for that spec only.
+    it.skipIf(spec.normalAttackRate >= 1)('does not attack when the decision roll fails', () => {
       const state = createMonsterBehaviorState(spec, 500, 0)
       const target = alive(500 + spec.attackRange - 5)
       advanceMonsterBehavior(state, spec, bounds, target, null, spec.decisionIntervalMs, neverAttack)
@@ -188,8 +193,125 @@ describe('monsterBehaviors: Monster3 hit2 skill gate (deterministic, no roll)', 
     const spawn = events.find((e) => e.type === 'attack-spawn')?.spawn
     expect(spawn).toBeDefined()
     expect(spawn!.kind).toBe('hitbox')
-    expect(spawn!.damage).toBe(18)
+    // 7, not kagami's stale 18 -- AS3 attackBackInfoDict.hit2.power (打开我开始玩.swf,
+    // export.monster.Monster3), see monsterBehaviors.ts's Monster3Spec header.
+    expect(spawn!.damage).toBe(7)
     if (spawn!.kind === 'hitbox') expect(spawn!.attackKind).toBe('magic')
+  })
+})
+
+// behavior-wiring pen (2026-07-09): AS3 numeric regression for 巫鹰, corrected
+// off kagami's Monster3Tuning per tasks/audit-numbers-report.md §6. Source:
+// export.monster.Monster3's gc.curStage==1&&curLevel==1 boss branch, 打开我
+// 开始玩.swf (this port's own ffdec decompile) -- see Monster3Spec's header
+// comment for the full field-by-field citation.
+describe('monsterBehaviors: Monster3 AS3 numeric regression (behavior-wiring pen)', () => {
+  it('hp is 300 (5*60), not kagami\'s 926', () => {
+    expect(Monster3Spec.hp).toBe(300)
+  })
+
+  it('def/attackRange/speed/normalAttackRate match the AS3 boss branch', () => {
+    expect(Monster3Spec.def).toBe(6)
+    expect(Monster3Spec.attackRange).toBe(250)
+    expect(Monster3Spec.normalAttackRate).toBe(1) // AS3 boss-branch probability
+    expect(Monster3Spec.speed).toBeCloseTo(90, 5) // horizenSpeed=3 px/frame @ 30fps
+  })
+
+  it('hit1 power/knockback/hitMaxCount match attackBackInfoDict.hit1', () => {
+    const attack = Monster3Spec.normalMove.attack
+    expect(attack.damage).toBe(14)
+    expect(attack.attackKind).toBe('physics')
+    if (attack.kind === 'hitbox') {
+      expect(attack.maxHits).toBe(99)
+      expect(attack.knockbackX).toBe(6)
+      expect(attack.knockbackY).toBe(-5)
+    }
+  })
+
+  it('hit2 power/knockback/hitMaxCount/attackInterval match attackBackInfoDict.hit2', () => {
+    const attack = Monster3Spec.skill!.move.attack
+    expect(attack.damage).toBe(7)
+    expect(attack.attackKind).toBe('magic')
+    if (attack.kind === 'hitbox') {
+      expect(attack.maxHits).toBe(99)
+      expect(attack.hitIntervalFrames).toBe(4)
+      expect(attack.knockbackX).toBe(-5)
+      expect(attack.knockbackY).toBe(0)
+    }
+  })
+})
+
+// behavior-wiring pen: the skill-overlay API BattleScene uses to layer
+// Monster3's hit2 on top of its own monsterSim-driven boss state machine
+// (see monsterBehaviors.ts's overlay section header for why it isn't a full
+// switch to advanceMonsterBehavior).
+describe('monsterBehaviors: skill overlay (BattleScene boss hit2 wiring)', () => {
+  const gate = Monster3Spec.skill!
+  const host = { x: 500, y: 0, facing: 1 as const }
+
+  it('starts on its initialCooldownMs and rejects a trigger before it elapses', () => {
+    const overlay = createSkillOverlayState(gate)
+    expect(overlay.cooldownMs).toBe(gate.initialCooldownMs)
+    const events = advanceSkillOverlay(overlay, gate, host, gate.triggerRange - 10, true, 16)
+    expect(events).toEqual([])
+    expect(overlay.active).toBeNull()
+  })
+
+  it('fires attack-start once off cooldown, in range, and canTrigger is true', () => {
+    const overlay = createSkillOverlayState(gate)
+    overlay.cooldownMs = 0
+    const events = advanceSkillOverlay(overlay, gate, host, gate.triggerRange - 10, true, 16)
+    expect(events).toEqual([{ type: 'attack-start' }])
+    // Starts fresh at elapsedMs 0 on the trigger frame itself (mirrors
+    // advanceMonsterBehavior's own startAttack -- modeElapsedMs resets to 0,
+    // the same call's delta isn't folded in until the next tick).
+    expect(overlay.active).toEqual({ elapsedMs: 0, hitApplied: false })
+    expect(overlay.cooldownMs).toBe(gate.cooldownMs) // re-armed on its own repeat cooldown
+  })
+
+  it('does not trigger when canTrigger is false (host mid hit1 / hurt / dead)', () => {
+    const overlay = createSkillOverlayState(gate)
+    overlay.cooldownMs = 0
+    const events = advanceSkillOverlay(overlay, gate, host, gate.triggerRange - 10, false, 16)
+    expect(events).toEqual([])
+    expect(overlay.active).toBeNull()
+  })
+
+  it('does not trigger when the hero is outside triggerRange', () => {
+    const overlay = createSkillOverlayState(gate)
+    overlay.cooldownMs = 0
+    const events = advanceSkillOverlay(overlay, gate, host, gate.triggerRange + 10, true, 16)
+    expect(events).toEqual([])
+    expect(overlay.active).toBeNull()
+  })
+
+  it('spawns the hit2 hitbox at spawnAtMs, offset by facing, exactly once', () => {
+    const overlay = createSkillOverlayState(gate)
+    overlay.cooldownMs = 0
+    advanceSkillOverlay(overlay, gate, host, gate.triggerRange - 10, true, 0)
+    const beforeSpawn = advanceSkillOverlay(overlay, gate, host, 0, false, gate.move.spawnAtMs - 1)
+    expect(beforeSpawn).toEqual([])
+
+    const atSpawn = advanceSkillOverlay(overlay, gate, host, 0, false, 2)
+    expect(atSpawn).toHaveLength(1)
+    expect(atSpawn[0].type).toBe('attack-spawn')
+    const spawn = atSpawn[0].spawn!
+    expect(spawn.damage).toBe(7)
+    expect(spawn.attackKind).toBe('magic')
+    expect(spawn.x).toBe(host.x + host.facing * gate.move.attack.offsetX)
+
+    // Only once per cast, even ticking further before it ends.
+    const later = advanceSkillOverlay(overlay, gate, host, 0, false, 2)
+    expect(later).toEqual([])
+  })
+
+  it('emits done at durationMs and clears active so the host can resume its own AI', () => {
+    const overlay = createSkillOverlayState(gate)
+    overlay.cooldownMs = 0
+    advanceSkillOverlay(overlay, gate, host, gate.triggerRange - 10, true, 0)
+    const events = advanceSkillOverlay(overlay, gate, host, 0, false, gate.move.durationMs)
+    expect(events.some((e) => e.type === 'done')).toBe(true)
+    expect(overlay.active).toBeNull()
   })
 })
 

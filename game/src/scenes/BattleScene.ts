@@ -17,6 +17,15 @@ import {
   initMonster,
   advanceMonster,
 } from '../systems/monsterSim'
+import {
+  Monster3Spec,
+  MonsterSkillGate,
+  SkillOverlayState,
+  SpawnedHitbox,
+  createSkillOverlayState,
+  advanceSkillOverlay,
+  spawnedHitboxToRect,
+} from '../systems/monsterBehaviors'
 import { heroAttackBox, centeredBox, overlaps } from '../systems/hitbox'
 import { DropEntity, PickupConfig, DEFAULT_PICKUP_RADIUS, spawnDrop, stepDrops } from '../systems/pickup'
 import { createInventory, addItem, listStacks, Inventory } from '../systems/inventory'
@@ -69,7 +78,7 @@ import {
   revealTransferDoor,
   tryClearArena,
 } from '../systems/level'
-import { LEVEL_1_WUYING, LEVEL1_MONSTER_NAMES } from '../data/levels/level1'
+import { LEVEL_1_WUYING, LEVEL1_MONSTER_NAMES, LEVEL1_MONSTER_STATS } from '../data/levels/level1'
 import { LEVEL_2_TIANWANG, LEVEL2_MONSTER_NAMES } from '../data/levels/level2'
 import { LEVEL_3_ERLANGSHEN, LEVEL3_MONSTER_NAMES } from '../data/levels/level3'
 import { LEVEL_4_XIENIAN, LEVEL4_MONSTER_NAMES } from '../data/levels/level4'
@@ -219,6 +228,45 @@ const BOSS_ATTACK_POWER: Record<string, { power: number; kind: AttackKind }> = {
   monster22: { power: 345, kind: 'physics' }, // 二郎神 hit1 (post-buff)
   monster34: { power: 829, kind: 'physics' }, // 邪·悟空 hit1
 }
+
+// behavior-wiring pen (2026-07-09): real recovered AS3 "skill" gates from
+// systems/monsterBehaviors.ts, layered on top of the boss's own monsterSim
+// state machine as an overlay (see monsterBehaviors.ts's "Skill overlay"
+// section header for why -- MonsterState/MonsterBehaviorState aren't
+// structurally compatible, and isBossDead/the HP bar/several __shell hooks
+// already depend on the boss staying a MonsterEntity/MonsterState). Extend
+// this map if a future L1/L2 boss's spec defines its own `skill`.
+const MONSTER_SKILL_GATES: Record<string, MonsterSkillGate> = {
+  monster3: Monster3Spec.skill!, // 巫鹰 hit2 (real AS3 magic nova, see report)
+}
+
+// Hero hurtbox for enemy *skill* hitboxes (Monster3's hit2 etc.) -- the
+// project's existing incoming-melee model (monsterSim's meleeReach) is a pure
+// x-distance+facing check with no y-axis at all, which can't express "stand
+// in this AoE box or dodge it". Size matches the hero's own melee attack box
+// height (hitbox.ts's DEFAULT_ATTACK_BOX) and a plausible hero silhouette
+// width -- project-chosen, not from AS3 (which resolves hits with per-pixel
+// HitTest, see hitbox.ts's own header note).
+const HERO_HURTBOX_W = 90
+const HERO_HURTBOX_H = 150
+
+// behavior-wiring pen: L1 climb-intro swarm (prefab-compiler-report.md §5.4's
+// documented gap -- the original StageListener11 spams
+// `createMonster(30, randHero.x+rand, randHero.y-rand)` throughout the climb;
+// this remake deferred all of stop point 0's monsters to the post-climb
+// ground phase instead). Real spawn rate/cap were never decompiled -- both
+// below are project-chosen for playability (monster30 is a 1-hp "one-shot
+// swarm imp", so even a small live cap reads as a real harassment threat
+// without becoming unplayable spam), TODO-verify against a real capture if
+// one ever surfaces.
+const CLIMB_SWARM_INTERVAL_MS = 1500
+const CLIMB_SWARM_MAX_ALIVE = 4
+// TODO-verify: Monster30's real AS3 vertical flight speed was never
+// decompiled (see monsterSim.ts's VerticalFollowConfig doc comment) -- this
+// starting value came from a rough in-browser calibration pass (fast enough
+// to close in during the climb, not so fast it teleports onto the hero's
+// face); tune here if a future hands-on pass wants it adjusted.
+const CLIMB_VERTICAL_FOLLOW_SPEED = 7
 
 const HERO_TEX = 'role1_0'
 // Weapon overlay sheet: same 200×200 grid + same action frames as role1_0, with
@@ -412,6 +460,12 @@ interface MonsterEntity {
   hitQueue: { attackId: number; damage: number }[]
   /** Grunt head HP bar (bosses use the top BossHpBar instead). */
   hpBar?: MonsterHpBar
+  // behavior-wiring pen: real AS3 "skill" (e.g. Monster3's hit2), layered on
+  // top of this entity's own monsterSim state machine -- see
+  // MONSTER_SKILL_GATES / advanceEntity. undefined for every species without
+  // one (everything except monster3, currently).
+  skillGate?: MonsterSkillGate
+  skillOverlay?: SkillOverlayState
 }
 
 /**
@@ -440,6 +494,10 @@ export class BattleScene extends Phaser.Scene {
   // jump.ts itself (groundY is a plain per-scene config field).
   private climbActive = false
   private climbFloorY = GROUND_Y
+  // behavior-wiring pen: accumulator for the climb-intro Monster30 swarm (see
+  // CLIMB_SWARM_INTERVAL_MS / updateClimbSwarm) -- the real StageListener11
+  // gap this closes, see prefab-compiler-report.md §5.4.
+  private climbSwarmAccMs = 0
   private bossEntity: MonsterEntity | null = null
   private portal?: Phaser.GameObjects.Container
   private floorImg?: Phaser.GameObjects.Image
@@ -1186,6 +1244,7 @@ export class BattleScene extends Phaser.Scene {
   private startClimb(): void {
     this.climbActive = true
     this.climbFloorY = GROUND_Y
+    this.climbSwarmAccMs = 0
     this.heroConfig.jump.groundY = GROUND_Y
     this.heroConfig.minX = CLIMB_MIN_X
     this.heroConfig.maxX = CLIMB_MAX_X
@@ -1222,12 +1281,49 @@ export class BattleScene extends Phaser.Scene {
     if (this.heroState.vertical.y <= CLIMB_TOP_Y) this.finishClimb()
   }
 
+  /** L1 climb-intro Monster30 swarm (prefab-compiler-report.md §5.4's
+   * documented no-threat gap): while climbActive, updateLevel() (the normal
+   * wave/boss machine, including its own per-entity advanceEntity loop) is
+   * skipped entirely, so without this the climb has zero monsters. Spawns a
+   * capped trickle of monster30 near the hero's current altitude (mirroring
+   * the original's `createMonster(30, randHero.x+rand, randHero.y-rand)`,
+   * rate/cap project-chosen, see CLIMB_SWARM_INTERVAL_MS/_MAX_ALIVE) and
+   * drives the SAME advanceEntity/reapMonsters this.monsters already uses for
+   * every other level -- monsterConfigFor gives monster30 a live
+   * verticalFollow config for exactly this call path (species==='monster30'
+   * && this.climbActive). */
+  private updateClimbSwarm(delta: number): void {
+    const heroAlive = !isHeroDead(this.identity)
+    this.climbSwarmAccMs += delta
+    const aliveSwarm = this.monsters.filter(
+      (e) => e.species === 'monster30' && e.state.mode !== 'dead' && e.state.mode !== 'gone',
+    ).length
+    if (this.climbSwarmAccMs >= CLIMB_SWARM_INTERVAL_MS && aliveSwarm < CLIMB_SWARM_MAX_ALIVE && heroAlive) {
+      this.climbSwarmAccMs = 0
+      const hx = this.heroState.x + (Math.random() * 2 - 1) * 100
+      const hy = this.heroState.vertical.y - (100 + Math.random() * 100) // above the hero, like the original's y-rand
+      this.spawnEntity('monster30', LEVEL1_MONSTER_STATS.monster30, hx, false, hy)
+    }
+    for (const e of this.monsters) this.advanceEntity(e, delta, heroAlive)
+    this.reapMonsters()
+  }
+
   /** Climb complete: hand back to the normal flat arena exactly as it was
    * before this task (same GROUND_Y/MIN_X/MAX_X, same first updateLevel()
    * call spawning LEVEL_1_WUYING's unmodified stop point 0). */
   private finishClimb(): void {
     this.climbActive = false
     this.resetClimbState()
+    // Clear any climb-swarm survivors so the ground phase's own scripted
+    // stop point 0 (LEVEL_1_WUYING's own monster30 wave) starts clean rather
+    // than carrying over stragglers from the climb -- the climb swarm is a
+    // self-contained pre-arena harassment mechanic, not part of the wave
+    // sequence's own accounting (aliveGruntCount/updateLevelSpawn).
+    for (const e of this.monsters) {
+      e.hpBar?.destroy()
+      e.sprite.destroy()
+    }
+    this.monsters = []
     this.heroState.x = HERO_START_X
     this.heroState.vertical.y = GROUND_Y
     this.heroState.vertical.vy = 0
@@ -1300,6 +1396,16 @@ export class BattleScene extends Phaser.Scene {
       // defaults for species not yet decompiled (L2+, TODO-verify).
       attackHitFraction: timing?.fraction,
       meleeReach: timing?.reach,
+      // behavior-wiring pen: monster30 is only ever spawned mid-climb while
+      // this.climbActive is true (updateClimbSwarm) -- everywhere else
+      // (post-climb ground waves, L2+) it spawns with climbActive already
+      // false, so this stays undefined (byte-identical to before) for every
+      // other spawn. See monsterSim.ts's VerticalFollowConfig doc comment for
+      // the speed TODO-verify.
+      verticalFollow:
+        species === 'monster30' && this.climbActive
+          ? { enabled: true, speed: CLIMB_VERTICAL_FOLLOW_SPEED, arriveThreshold: 20 }
+          : undefined,
     }
   }
 
@@ -1317,10 +1423,14 @@ export class BattleScene extends Phaser.Scene {
     return { power: Math.min(60, 8 + stats.def * 1.5), kind: 'physics' }
   }
 
-  private spawnEntity(species: string, stats: MonsterStats, x: number, isBoss: boolean): MonsterEntity {
+  /** `y` defaults to GROUND_Y for every existing caller (ground waves/boss);
+   * the L1 climb swarm (updateClimbSwarm) is the only caller that passes a
+   * real value, spawning monster30 near the hero's current altitude instead
+   * of the ground. */
+  private spawnEntity(species: string, stats: MonsterStats, x: number, isBoss: boolean, y: number = GROUND_Y): MonsterEntity {
     const data = MONSTER_DATA[species] ?? MONSTER_DATA.monster30
     const config = this.monsterConfigFor(species, stats)
-    const state = initMonster(config, x, GROUND_Y)
+    const state = initMonster(config, x, y)
     const tex = this.textures.exists(species) ? species : 'monster30'
     // Every species sheet is a native SWF-pixel export in the same coordinate
     // space as the hero's — a boss's SWF art is simply drawn bigger, a small
@@ -1332,8 +1442,9 @@ export class BattleScene extends Phaser.Scene {
     // grunt ~85-95% of hero height) and the SWF's own idle-frame silhouettes
     // (monster-scale-report.md).
     const scale = HERO_SCALE
-    const sprite = this.add.sprite(x, GROUND_Y, tex).setScale(scale).setDepth(isBoss ? 9 : 8)
+    const sprite = this.add.sprite(x, y, tex).setScale(scale).setDepth(isBoss ? 9 : 8)
     const atk = this.monsterAttackPower(species, stats, isBoss)
+    const skillGate = MONSTER_SKILL_GATES[species]
     const entity: MonsterEntity = {
       species,
       state,
@@ -1350,6 +1461,8 @@ export class BattleScene extends Phaser.Scene {
       hitQueue: [],
       // Grunts get a head HP bar; the boss uses the top BossHpBar.
       hpBar: isBoss ? undefined : new MonsterHpBar(this),
+      skillGate,
+      skillOverlay: skillGate ? createSkillOverlayState(skillGate) : undefined,
     }
     this.monsters.push(entity)
     return entity
@@ -1736,7 +1849,15 @@ export class BattleScene extends Phaser.Scene {
     const jumped = edges.pressJump && this.heroState.vertical.grounded
     advanceHero(this.heroState, edges, delta, this.heroConfig)
     if (jumped) this.playSfx('heroJump', 0.4)
-    if (this.climbActive) this.updateClimb()
+    if (this.climbActive) {
+      this.updateClimb()
+      // Re-check: updateClimb() may have just called finishClimb() this same
+      // frame (reached CLIMB_TOP_Y), which clears this.monsters -- skip the
+      // swarm tick on that exact transition frame so it can't spawn a stray
+      // monster30 a moment before updateLevel() spawns the ground phase's own
+      // stop point 0 roster below.
+      if (this.climbActive) this.updateClimbSwarm(delta)
+    }
 
     // Hero melee: push combo damage into every monster the swing overlaps.
     this.resolveHeroHits()
@@ -1780,19 +1901,25 @@ export class BattleScene extends Phaser.Scene {
   private resolveHeroHits(): void {
     const s = this.heroState
     if (s.combo.stage === 0) return
-    const box = heroAttackBox(s.x, GROUND_Y, s.facing)
+    // behavior-wiring pen: use the hero's/monster's REAL y (was hardcoded
+    // GROUND_Y) -- latent bug exposed by wiring the L1 climb swarm, which is
+    // the first time either side of this overlap check is ever off GROUND_Y.
+    // Harmless everywhere else: outside the climb, heroState.vertical.y and
+    // every monster's state.y both always equal GROUND_Y already, so this is
+    // byte-identical for every other level/encounter.
+    const box = heroAttackBox(s.x, s.vertical.y, s.facing)
     const hitKey = COMBO_STAGE_HIT[s.combo.stage] ?? 'hit1'
     const atk = heroTotalAtk(this.identity, this.equipment)
     const crit = heroStats(this.identity, this.equipment).crit
     const damage = Math.max(1, Math.round(calculateNormalAttackPower(hitKey, atk, { critChance: crit })))
     let firstHit: MonsterEntity | null = null
     for (const e of this.aliveMonsters()) {
-      const mBox = centeredBox(e.state.x, GROUND_Y, 120, 140)
+      const mBox = centeredBox(e.state.x, e.state.y, 120, 140)
       if (!overlaps(box, mBox)) continue
       if (e.state.resolvedAttackIds.includes(s.attackId)) continue
       if (e.hitQueue.some((h) => h.attackId === s.attackId)) continue
       e.hitQueue.push({ attackId: s.attackId, damage })
-      this.floatText(e.state.x, GROUND_Y - 90, `-${damage}`, 'damage')
+      this.floatText(e.state.x, e.state.y - 90, `-${damage}`, 'damage')
       if (!firstHit) firstHit = e
     }
     if (firstHit && !this.playedHitIds.has(s.attackId)) {
@@ -1860,10 +1987,42 @@ export class BattleScene extends Phaser.Scene {
 
   private advanceEntity(e: MonsterEntity, delta: number, heroAlive: boolean): void {
     if (e.state.mode === 'gone') return
+
+    // behavior-wiring pen: Monster3's hit2 (or any future MONSTER_SKILL_GATES
+    // entry) runs as a side overlay on this entity's own monsterSim state
+    // machine -- see monsterBehaviors.ts's "Skill overlay" section header for
+    // why it isn't a full switch to advanceMonsterBehavior. `canTrigger` only
+    // while 'chase' (an acquired target, not already mid its own hit1/hurt)
+    // mirrors 巫鹰's real beforeSkill1Start() requiring a curAttackTarget.
+    if (e.skillGate && e.skillOverlay && e.state.mode !== 'dead') {
+      const xDist = Math.abs(this.heroState.x - e.state.x)
+      const canTrigger = e.state.mode === 'chase' && !e.skillOverlay.active
+      const skillEvents = advanceSkillOverlay(
+        e.skillOverlay,
+        e.skillGate,
+        { x: e.state.x, y: e.state.y, facing: e.state.facing },
+        xDist,
+        canTrigger,
+        delta,
+      )
+      for (const ev of skillEvents) {
+        if (ev.type === 'attack-spawn' && ev.spawn) this.resolveEnemySkillHit(e, ev.spawn)
+      }
+      if (e.skillOverlay.active) {
+        // Mid-cast: force the special-move animation and hold position for
+        // the swing's duration -- skip this frame's own advanceMonster tick
+        // entirely (same reasoning monsterSim's own 'attack' mode already
+        // holds position; see report for the deferred-hitQueue tradeoff this
+        // implies while a cast is in flight).
+        e.state.action = e.skillGate.move.actionName
+        return
+      }
+    }
+
     // Burn tick -> queue as an incoming hit (monsterSim resolves it normally).
     if (e.state.mode !== 'dead' && e.burn && this.simClockMs >= e.burn.nextAtMs) {
       e.hitQueue.push({ attackId: ++this.burnAttackId, damage: e.burn.power })
-      this.floatText(e.state.x, GROUND_Y - 70, `烧 -${e.burn.power}`, 'burn')
+      this.floatText(e.state.x, e.state.y - 70, `烧 -${e.burn.power}`, 'burn')
       e.burn.ticksLeft -= 1
       e.burn.nextAtMs = this.simClockMs + BURN_INTERVAL_MS
       if (e.burn.ticksLeft <= 0) e.burn = null
@@ -1872,7 +2031,7 @@ export class BattleScene extends Phaser.Scene {
     const incomingHit = e.hitQueue.shift() ?? null
     const events = advanceMonster(
       e.state,
-      { heroX: this.heroState.x, heroAlive, incomingHit },
+      { heroX: this.heroState.x, heroY: this.heroState.vertical.y, heroAlive, incomingHit },
       frozen ? delta * 0.15 : delta,
       e.config,
     )
@@ -1890,6 +2049,19 @@ export class BattleScene extends Phaser.Scene {
         this.awardKillExp(ev.x, ev.y, e.species)
       }
     }
+  }
+
+  /** A skill hitbox (Monster3's hit2) reached its spawnAtMs -- test it against
+   * a real 2D hero hurtbox (unlike monsterSim's own x-distance-only melee
+   * reach) so the player can genuinely dodge by not standing in the AoE at
+   * the right instant, then route through the same mitigation/i-frame path
+   * as a normal hit, just with this move's own power/kind instead of the
+   * entity's hit1 attackPower/attackKind. */
+  private resolveEnemySkillHit(e: MonsterEntity, spawn: SpawnedHitbox): void {
+    if (isHeroDead(this.identity)) return
+    const heroBox = centeredBox(this.heroState.x, this.heroState.vertical.y, HERO_HURTBOX_W, HERO_HURTBOX_H)
+    if (!overlaps(spawnedHitboxToRect(spawn), heroBox)) return // dodged: out of the AoE at the hit instant
+    this.monsterHitsHero(e, spawn.damage, spawn.attackKind)
   }
 
   private reapMonsters(): void {
@@ -1952,15 +2124,20 @@ export class BattleScene extends Phaser.Scene {
   // (the old `> attackRange` check here was the actual bug: attackRange is a
   // 250px AI sensing radius, not melee reach, and it ran at attack-start
   // instead of the hit frame -- see MONSTER_ATTACK_TIMING's header comment).
-  private monsterHitsHero(e: MonsterEntity): void {
+  // `overridePower`/`overrideKind` (behavior-wiring pen): a skill overlay hit
+  // (Monster3's hit2, real AS3 magic power 7) has different power/kind than
+  // this entity's own hit1 attackPower/attackKind -- resolveEnemySkillHit
+  // already did its own real-hitbox dodge check before calling this, so both
+  // paths still funnel through the same mitigation/i-frame/knockback logic.
+  private monsterHitsHero(e: MonsterEntity, overridePower?: number, overrideKind?: AttackKind): void {
     if (isHeroDead(this.identity)) return
     if (isHeroInvincible(this.identity, this.simClockMs)) return
     const mitigated = Math.max(
       1,
       Math.round(
         resolveIncomingHeroDamage(
-          e.attackPower,
-          e.attackKind,
+          overridePower ?? e.attackPower,
+          overrideKind ?? e.attackKind,
           heroTotalDef(this.identity, this.equipment),
           heroMagicDef(this.identity),
         ),
@@ -1976,13 +2153,13 @@ export class BattleScene extends Phaser.Scene {
     const events = damageHero(this.identity, hit, this.simClockMs)
     for (const e of events) {
       if (e.type === 'hurt') {
-        this.floatText(this.heroState.x, GROUND_Y - 60, `-${mitigated}`, 'crit')
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'crit')
         this.hero.setTint(0xff9a9a)
         this.time.delayedCall(120, () => {
           if (!isHeroDead(this.identity)) this.hero.clearTint()
         })
       } else if (e.type === 'death') {
-        this.floatText(this.heroState.x, GROUND_Y - 60, `-${mitigated}`, 'crit')
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'crit')
         this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
       }
     }
@@ -2129,7 +2306,7 @@ export class BattleScene extends Phaser.Scene {
     const off = e.data.offset
     e.sprite.setPosition(e.state.x + off.x * e.scale, e.state.y + MON_RENDER_OFFSET_Y + off.y * e.scale)
     // Grunt head HP bar (hidden at full / on death); boss uses the top bar.
-    e.hpBar?.update(e.state.hp, e.config.stats.hp, e.state.x, GROUND_Y - 110)
+    e.hpBar?.update(e.state.hp, e.config.stats.hp, e.state.x, e.state.y - 110)
   }
 
   private updateParallax(): void {

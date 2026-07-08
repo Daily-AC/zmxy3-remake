@@ -469,73 +469,111 @@ export function advanceMonsterBehavior(
 }
 
 // ============================================================
-// Behavior 1: Monster3 — straight kagami port.
-// Source: vendor/kagami-phaser/src/systems/Monster3System.ts (full file, see
-// Monster3Tuning object). def is deliberately left at 0 — kagami's own
-// Monster3System.ts never models damage mitigation for this monster
-// (applyMonster3Hit subtracts damage from hp directly); this project's own
-// vendored SWF actually has `Monster3.def = 6`, but that SWF is a *different*
-// build than kagami's cited evidence (`[172845].swf` per their AS3 citations)
-// — see tasks/monster-behavior-report.md for the discrepancy. Blending the
-// two would misrepresent this as a verbatim kagami port, so def stays 0
-// (functionally identical to kagami's raw-subtraction behavior).
+// Behavior 1: Monster3 — 巫鹰 (L1 arena boss).
+//
+// CORRECTED (behavior-wiring pen, tasks/audit-numbers-report.md §6): this spec
+// started as a straight port of kagami's
+// vendor/kagami-phaser/src/systems/Monster3System.ts (Monster3Tuning), but an
+// independent audit found kagami's tuning constants are NOT the real AS3
+// values for this project's own vendored SWF (hp 926 vs real 300, and several
+// other fields below also diverged once checked). Re-decompiled directly from
+// `export.monster.Monster3` in 打开我开始玩.swf (this port's own ffdec
+// decompile, the same file Monster7/Monster13 below already cite), reading
+// the `gc.curStage==1 && gc.curLevel==1` boss branch (Monster3 is also a much
+// weaker non-boss grunt on other stages — not modeled here, this spec is
+// L1-boss-only):
+//   hp = 5*60 = 300, def = 6, horizenSpeed = 3 (px/frame), attackRange = 250,
+//   alertRange = 1000 (this one already matched kagami), boss-branch
+//   probability = 1 (-> normalAttackRate; matches data/levels/level1.ts's own
+//   monster3 MonsterStats, which already carried the correct AS3 numbers —
+//   only this file's independent copy was stale).
+//   hit1: attackBackInfoDict = {power:14, attackKind:"physics",
+//   attackBackSpeed:[6,-5], attackInterval:999, hitMaxCount:99}. Animation
+//   bank4 (hit1, setFrameStopCount row index 4, confirmed against this
+//   project's own monster3.json) = [2,2,2,1,1,7] (6 cells, 15 ticks total);
+//   enterFrameFunc fires doHi1() at cell index 3 / curFrameCount 1 ->
+//   cumulative 2+2+2+1 = 7 ticks in. (This hit1 timing/reach already matches
+//   what BattleScene.ts's own independently-decompiled MONSTER_ATTACK_TIMING
+//   table carries for monster3 — 7/15 fraction, reach 105 — cross-confirming
+//   both decompiles; monsterSim.ts + that table already drive the boss's real
+//   hit1 melee correctly, so only hit2 below is new wiring.)
+//   hit2: attackBackInfoDict = {power:7, attackKind:"magic",
+//   attackBackSpeed:[-5,0], attackInterval:4, hitMaxCount:99}. Animation
+//   bank5 (hit2) = [2,2,1,26] (4 cells, 31 ticks total); enterFrameFunc fires
+//   doHi2() at cell index 3 / curFrameCount 26 -> the very last tick (31 of
+//   31) — spawnAtMs below fires one tick early (30 ticks) to stay strictly
+//   inside [0, durationMs), the same convention Monster13 below uses for its
+//   own last-tick trigger.
+//   hit1/hit2 spawn offsets (105,-60) / (155,-30) already matched kagami's
+//   numbers (kept as-is). Hitbox width/height and activeDurationMs are NOT in
+//   Monster3's own constructor/doHi*() — the bullet's (SpecialEffectBullet)
+//   own on-screen geometry/lifetime lives in a class not decompiled this
+//   pass — kept as kagami's placeholder geometry, still unverified (same
+//   TODO-verify status Monster7's hitbox size already carries below).
+//   hit2's skill-gate shape (triggerRange/cooldownMs, a deterministic
+//   range+cooldown check) stays kagami's own simplified model, already flagged
+//   as an accepted divergence from the real per-frame stochastic
+//   BaseMonster.hasAttackTarget() roll in tasks/monster-behavior-report.md's
+//   "简化/未实现项" — this pass only corrects numbers, not that design choice.
 // ============================================================
 
 export const Monster3Spec: MonsterBehaviorSpec = {
   id: 'monster3',
-  source: 'vendor/kagami-phaser/src/systems/Monster3System.ts (Monster3Tuning)',
-  hp: 926,
-  def: 0,
-  speed: 240,
-  attackRange: 150,
-  alertRange: 1000,
-  hurtDurationMs: 250,
-  deadDurationMs: 1000,
+  source:
+    "export.monster.Monster3 (gc.curStage==1&&curLevel==1 boss branch), 打开我开始玩.swf (this port's own ffdec decompile) " +
+    '-- corrects kagami Monster3Tuning per tasks/audit-numbers-report.md §6, see file header',
+  hp: 300, // was 926 (kagami) -- AS3 setHp(5*60)
+  def: 6, // was 0 (kagami) -- AS3 protectedParamsObject.def
+  speed: 3 * (1000 / TICK_MS), // was 240 (kagami) -- AS3 horizenSpeed=3 px/frame -> px/s
+  attackRange: 250, // was 150 (kagami) -- AS3 attackRange
+  alertRange: 1000, // unchanged -- AS3 alertRange already matched kagami's value
+  hurtDurationMs: 15 * TICK_MS, // was 250ms (kagami) -- AS3 hurt bank [15]
+  deadDurationMs: 15 * TICK_MS, // was 1000ms (kagami) -- AS3 dead bank [2,2,2,2,2,5] (15 ticks)
   decisionIntervalMs: 1000,
-  normalAttackRate: 0.42,
-  waitRateWhenNoTarget: 0.137, // BaseMonster.as:32 default; Monster3System.ts has no patrol behavior of its own to override it.
+  normalAttackRate: 1, // was 0.42 (kagami) -- AS3 boss-branch probability=1 (matches level1.ts's monster3 stats)
+  waitRateWhenNoTarget: 0.137, // BaseMonster.as:32 default; Monster3 does not override it.
   normalMove: {
     actionName: 'hit1',
-    durationMs: 500,
-    spawnAtMs: 100,
+    durationMs: 15 * TICK_MS, // was 500ms (kagami, coincidentally close) -- AS3 hit1 bank total (15 ticks)
+    spawnAtMs: 7 * TICK_MS, // was 100ms (kagami) -- AS3 doHi1() fires at cumulative tick 7 (2+2+2+1)
     attack: {
       kind: 'hitbox',
-      offsetX: 105,
-      offsetY: -60,
-      width: 120,
-      height: 90,
-      activeDurationMs: 380 - 100,
-      damage: 40,
-      attackKind: 'physics',
-      knockbackX: 6,
-      knockbackY: -5,
-      hitIntervalFrames: 999,
-      maxHits: 1,
+      offsetX: 105, // AS3 doHi1(): this.x ± 105 -- matches kagami's number, kept
+      offsetY: -60, // AS3 doHi1(): this.y - 60 -- matches kagami's number, kept
+      width: 120, // kagami placeholder geometry -- SpecialEffectBullet's real hitbox size not decompiled this pass, TODO-verify
+      height: 90, // same TODO-verify as width
+      activeDurationMs: 380 - 100, // kagami placeholder active window -- not decompiled this pass, TODO-verify
+      damage: 14, // was 40 (kagami) -- AS3 attackBackInfoDict.hit1.power
+      attackKind: 'physics', // unchanged -- matches AS3 attackKind
+      knockbackX: 6, // AS3 attackBackSpeed[0] -- matches kagami's number, kept
+      knockbackY: -5, // AS3 attackBackSpeed[1] -- matches kagami's number, kept
+      hitIntervalFrames: 999, // unchanged -- AS3 attackInterval matches kagami's number
+      maxHits: 99, // was 1 (kagami) -- AS3 hitMaxCount
     },
   },
   skill: {
     move: {
       actionName: 'hit2',
-      durationMs: 800,
-      spawnAtMs: 200,
+      durationMs: 31 * TICK_MS, // was 800ms (kagami) -- AS3 hit2 bank total (31 ticks)
+      spawnAtMs: 30 * TICK_MS, // was 200ms (kagami) -- AS3 doHi2() fires at the last tick (31 of 31), fired 1 tick early, see header
       attack: {
         kind: 'hitbox',
-        offsetX: 155,
-        offsetY: -30,
-        width: 140,
-        height: 100,
-        activeDurationMs: 650 - 200,
-        damage: 18,
-        attackKind: 'magic',
-        knockbackX: -5,
-        knockbackY: 0,
-        hitIntervalFrames: 999,
-        maxHits: 1,
+        offsetX: 155, // AS3 doHi2(): this.x ± 155 -- matches kagami's number, kept
+        offsetY: -30, // AS3 doHi2(): this.y - 30 -- matches kagami's number, kept
+        width: 140, // kagami placeholder geometry, TODO-verify (see header)
+        height: 100, // same TODO-verify
+        activeDurationMs: 650 - 200, // kagami placeholder active window, TODO-verify (see header)
+        damage: 7, // was 18 (kagami) -- AS3 attackBackInfoDict.hit2.power
+        attackKind: 'magic', // unchanged -- matches AS3 attackKind
+        knockbackX: -5, // AS3 attackBackSpeed[0] -- matches kagami's number, kept
+        knockbackY: 0, // AS3 attackBackSpeed[1] -- matches kagami's number, kept
+        hitIntervalFrames: 4, // was 999 (kagami) -- AS3 attackInterval
+        maxHits: 99, // was 1 (kagami) -- AS3 hitMaxCount
       },
     },
-    triggerRange: 200,
-    initialCooldownMs: 2000,
-    cooldownMs: 4000,
+    triggerRange: 200, // kept -- kagami's simplified deterministic gate, see header (not a direct single AS3 field)
+    initialCooldownMs: 2000, // kept -- same simplification
+    cooldownMs: 4000, // kept -- same simplification
   },
 }
 
@@ -665,4 +703,110 @@ export const Monster13Spec: MonsterBehaviorSpec = {
       maxHits: 1,
     },
   },
+}
+
+// ============================================================
+// Skill overlay: lets a boss that already runs on monsterSim.ts's own state
+// machine (MonsterState -- hp/patrol/chase/hit1/hurt/death, which
+// level.ts's isBossDead/tryClearArena, the boss HP bar, and several
+// BattleScene shell test hooks all already depend on) gain a SECOND,
+// real-AS3-sourced special attack (Monster3's hit2 is the first consumer)
+// WITHOUT replacing that state machine -- MonsterState and
+// MonsterBehaviorState above are not structurally compatible (different
+// required fields, resolvedAttackIds is number[] vs string[]), so running a
+// boss through advanceMonsterBehavior instead would mean re-deriving all of
+// the above from scratch. This overlay is a small, independent, boss-position
+// -aware ticker BattleScene can drive alongside its own advanceMonster call
+// (freezing the latter while the overlay is mid-cast, exactly like
+// monsterSim's own 'attack' mode already holds position) -- see
+// tasks/behavior-wiring-report.md for the wiring writeup.
+// ============================================================
+
+export interface SkillOverlayState {
+  cooldownMs: number
+  active: { elapsedMs: number; hitApplied: boolean } | null
+}
+
+export function createSkillOverlayState(gate: MonsterSkillGate): SkillOverlayState {
+  return { cooldownMs: gate.initialCooldownMs, active: null }
+}
+
+export interface SkillOverlayHost {
+  x: number
+  y: number
+  facing: -1 | 1
+}
+
+export interface SkillOverlayEvent {
+  type: 'attack-start' | 'attack-spawn' | 'done'
+  spawn?: SpawnedHitbox
+}
+
+/** Turn a skill move's hitbox spec into world-space spawn data, mirroring
+ * `buildSpawn`'s hitbox branch above but for a host tracked entirely by the
+ * caller (a monsterSim MonsterState) instead of this module's own
+ * MonsterBehaviorState. Only hitbox moves are supported -- no boss skill uses
+ * a projectile move yet. */
+export function buildOverlayHitboxSpawn(move: MonsterAttackMove, host: SkillOverlayHost): SpawnedHitbox {
+  const attack = move.attack
+  if (attack.kind !== 'hitbox') throw new Error('buildOverlayHitboxSpawn: only hitbox skill moves are supported')
+  return {
+    kind: 'hitbox',
+    actionName: move.actionName,
+    x: host.x + host.facing * attack.offsetX,
+    y: host.y + attack.offsetY,
+    width: attack.width,
+    height: attack.height,
+    activeDurationMs: attack.activeDurationMs,
+    damage: attack.damage,
+    attackKind: attack.attackKind,
+    knockbackX: attack.knockbackX * host.facing,
+    knockbackY: attack.knockbackY,
+    hitIntervalFrames: attack.hitIntervalFrames,
+    maxHits: attack.maxHits,
+  }
+}
+
+/**
+ * Advance a skill overlay by one frame. `xDist` is the host-to-hero x
+ * distance (mirrors this module's own attackRange/triggerRange convention,
+ * x-only); `canTrigger` gates whether a NEW cast may start this frame --
+ * BattleScene should pass `true` only while the host's own monsterSim mode is
+ * 'chase' (an acquired target, not already mid its own hit1/hurt/dead),
+ * mirroring 巫鹰's real `beforeSkill1Start()` requiring an acquired
+ * `curAttackTarget`. While `active` is truthy the caller should skip its own
+ * advanceMonster tick for the host (hold position + force the 'hit2'-style
+ * action for rendering) until a 'done' event fires.
+ */
+export function advanceSkillOverlay(
+  overlay: SkillOverlayState,
+  gate: MonsterSkillGate,
+  host: SkillOverlayHost,
+  xDist: number,
+  canTrigger: boolean,
+  deltaMs: number,
+): SkillOverlayEvent[] {
+  const events: SkillOverlayEvent[] = []
+  const safeDelta = Math.max(0, deltaMs)
+  if (overlay.cooldownMs > 0) overlay.cooldownMs = Math.max(0, overlay.cooldownMs - safeDelta)
+
+  if (overlay.active) {
+    overlay.active.elapsedMs += safeDelta
+    if (!overlay.active.hitApplied && overlay.active.elapsedMs >= gate.move.spawnAtMs) {
+      overlay.active.hitApplied = true
+      events.push({ type: 'attack-spawn', spawn: buildOverlayHitboxSpawn(gate.move, host) })
+    }
+    if (overlay.active.elapsedMs >= gate.move.durationMs) {
+      overlay.active = null
+      events.push({ type: 'done' })
+    }
+    return events
+  }
+
+  if (canTrigger && overlay.cooldownMs <= 0 && xDist < gate.triggerRange) {
+    overlay.active = { elapsedMs: 0, hitApplied: false }
+    overlay.cooldownMs = gate.cooldownMs
+    events.push({ type: 'attack-start' })
+  }
+  return events
 }
