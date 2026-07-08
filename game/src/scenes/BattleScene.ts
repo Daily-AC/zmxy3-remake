@@ -1215,12 +1215,12 @@ export class BattleScene extends Phaser.Scene {
     this.bossBar.setVisible(false)
     // Dock chrome (无双 + cluster + 5 slots) flush to the bottom-left corner.
     // Cluster icons wired to their real handlers where the milestone has one
-    // (青包=B toggle, 设置=Esc pause); the rest toast honestly instead of
+    // (背包=B toggle, 设置=Esc pause); the rest toast honestly instead of
     // silently ignoring clicks (2026-07-08 user report: "背包技能全都打不开").
     this.skillBar = new SkillBarHud(this, 2, 366, {
       scale: 1.2,
       onIconClick: (icon) => {
-        if (icon === 'qingbao') this.toggleBackpack()
+        if (icon === 'beibao') this.toggleBackpack()
         else if (icon === 'shezhi') this.togglePause()
         else if (icon === 'jineng') this.showToast('技能学习与按键设置：世界地图 → 学习技能', '#e0b060')
         else this.showToast('敬请期待', '#e0b060')
