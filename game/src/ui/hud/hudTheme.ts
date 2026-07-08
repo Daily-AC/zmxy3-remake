@@ -47,7 +47,7 @@ const ICON = 'assets/extracted/icons/'
 export const HUD_TEXTURES: TextureRef[] = [
   { key: 'hud_avatar_wukong', url: `${UI}hud_avatar_wukong.png` }, // extracted RoleInfo avatar (ink-framed 悟空 portrait)
   { key: 'hud_boss_bar_fill', url: `${UI}hud_boss_bar_fill.png` }, // extracted boss red-brush fill
-  { key: 'hud_ink_band', url: `${UI}dialogue_textpanel_crop.png` }, // 水墨 text band for toasts
+  { key: 'hud_ink_band', url: `${UI}dialogue_textpanel_crop.png` }, // procedurally generated ink-brush band for toasts/dialogue (see Toast.ts header -- this file used to be a dirty cutscene-screenshot crop)
   // S4: full BackPack window chrome, re-extracted from backpack1.swf's
   // export.pack.BackPack (chid444) default-state render — every baked button/
   // label/tab/stat-box comes from this one image; only dynamic text, the exp

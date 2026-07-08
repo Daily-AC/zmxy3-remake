@@ -12,9 +12,17 @@ import Phaser from 'phaser'
 //    UI itself lives there now, not in this panel. This box stays chat-only.
 
 const INK_TEX = 'ink_panel'
-// The original 水墨 panel art has its own text baked into the middle, so we use
-// only the text-free brushstroke strips along its top and bottom edges as
-// decorative borders over a clean dark panel.
+// ink_panel loads assets/extracted/ui/dialogue_textpanel_crop.png (see
+// BattleScene.preload) -- the same file Toast.ts's hud_ink_band points at.
+// It used to be a raw crop off a story-cutscene screenshot with a spoken
+// line and character-sprite fragments baked in (bleeding into the top/bottom
+// edges too, not just the center -- the "杂乱悟空" users saw on every
+// dialogue popup). Replaced with a procedurally generated ink-brush band, no
+// baked photographic content; see Toast.ts's header comment + MANIFEST.md
+// §1 for why extraction from the original SWF library wasn't an option and
+// tasks/backpack-toast-report.md for the generation method. Top/bottom
+// brushstroke strips are still sampled as decorative borders over a clean
+// dark panel, same technique as before -- just off a clean source now.
 const BRUSH_TOP = 'brush_top'
 const BRUSH_BOT = 'brush_bot'
 
@@ -61,9 +69,11 @@ export class DialogueBox {
 
   private ensureInkBand(): void {
     const tex = this.scene.textures.get(INK_TEX)
-    // Text-free brushstroke strips (the art's baked text sits in the middle band).
-    if (!tex.has(BRUSH_TOP)) tex.add(BRUSH_TOP, 0, 0, 0, 942, 30)
-    if (!tex.has(BRUSH_BOT)) tex.add(BRUSH_BOT, 0, 0, 90, 942, 24)
+    // Same 942x114 sheet as Toast.ts's hud_ink_band: top rule rows 0-34,
+    // bottom rule rows 84-114 (kept as two separately-named frames here
+    // since this file scales/flips them slightly differently than Toast).
+    if (!tex.has(BRUSH_TOP)) tex.add(BRUSH_TOP, 0, 0, 0, 942, 34)
+    if (!tex.has(BRUSH_BOT)) tex.add(BRUSH_BOT, 0, 0, 84, 942, 30)
   }
 
   private build(): void {
