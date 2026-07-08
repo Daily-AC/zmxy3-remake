@@ -181,3 +181,66 @@ $JAVA -Djava.awt.headless=true -jar $FFDEC -format xfl:cs6 -export xfl game/tmp/
 ## 10. commit
 
 本地提交，未 push；见 `git log`。
+
+## 11. 终审返修（视觉层重做，逻辑层未动）
+
+终审结论：逻辑/经济层（skillTree.ts/绑定/扣费/save 迁移）全过，不动；**视觉层判定"皮没穿"打回**——首版把 §1.2 抠出的 Symbol 478/736/193/769 真坐标用在了一套自绘暖棕金圆角 ink-panel 主题上，位图全是自绘，技能名称列显示内部代码而非中文名。本节记录返修做法。
+
+### 11.1 真源重新定位：vendor 皮不是参照截图的皮
+
+关键发现：`docs/reference/user-flow-refs/skilltree-original.png`（参照截图，深色卡片主题）**不是**这份主 SWF 自己的美术。用 FFDec 把 `export.shop.BuySkill`（Symbol 489）渲染成真实位图后，得到的是一套**蓝色水墨"4399"水印主题**（`game/tmp/s5-render/sprites/DefineSprite_489_export.shop.BuySkill/1.png`）——背景水墨纹理、"返回"文字、"主动技能/被动技能"页签、圆形"灵魂"墨球计数器，全部原生烘焙其中，与参照截图的深色卡片风格完全不同。按本项目自己定下的纪律"版式与参照分歧时先核 vendor 烘焙默认态再定论，版本分歧 vendor 胜"，本次返修改用**这份 vendor 真皮**，不再追参照截图的深色卡片视觉——参照图几乎可以确定是 Online 系后作重皮，同类判断在 S1/S4 棒已出现过。
+
+### 11.2 位图提取（S4 backpack_bg 技法的正确用法）
+
+```
+$JAVA -Djava.awt.headless=true -jar $FFDEC -selectid "478,489,736,733,193,769,510,519,495,549,479,483,487,164,169,174,179,184,189,192,565,570,575,560,555,541,526,531,536,546" \
+  -export sprite,shape,button,image game/tmp/s5-render "$OTHERMAT"
+```
+
+关键坑（首版失败原因）：`-export image` 单独用只导出 `DefineBitmap`/`DefineShape` 原始位图，**不渲染复合精灵**；必须加 `sprite,shape,button` 才能拿到 SkillControl/BuySkill 这类多层复合对象的合成渲染（S4 report 没点破这个参数差异，本棒踩坑后补上）。
+
+导出并采用的真实位图（`game/public/assets/extracted/skilltree/`）：
+
+| 资产 | 源 Symbol | 内容 |
+| --- | --- | --- |
+| `bg.png` | 489 (BuySkill) | 940×590 满屏水墨背景 + 真实"返回"/"主动技能"/"被动技能"/灵魂墨球，**1:1 舞台坐标**（用 btnback/txtlh/activebtn 真坐标逐一验证像素位置吻合） |
+| `table_school1.png` | 736 (SkillControl) | 889×425，斻系心法完整表格：两张心法卡（斻/火图腾真位图）+ 5 行真实中文技能名（升龙斩/重斩/嗜血/七十二斩/火魔斩）+ 真实说明文字 + 真实图标 + "设置"/"升级"真按钮文字，**全部原生烘焙**，零手绘 |
+| `icon_<skill>_{locked,unlocked,learned}.png` | 541/526/531/536/546（斻系）+ 565/570/575/560/555（火系） | 每个技能 3 态真实图标（灰/学习提示/满色），10 个技能全覆盖 |
+| `rebind_modal.png` | 193 (SkillSetControl) | 506×356，真实"按键设置"标题 + 操作说明 + Y/U/I/O/L 五槽 + 关闭按钮 |
+| `passive_panel.png` | 769 (PassiveSkillControl) | 746×429，被动页签真实占位表格 |
+| `btn_upgrade_*` / `btn_skillset_*` | 495 / 549 | 真实"升级"/"设置"按钮三态 |
+| `slot_{Y,U,I,O,L}_*` | 169/174/179/184/189 | 绑定弹窗真实字母槽位图 |
+
+`table_school1.png` 在舞台坐标系里的放置偏移用行图标位置反解（5 行独立测量，均值 dx≈1.5px dy≈48.3px，与 5 点线性回归自洽），验证了 1:1 缩放（非拉伸）。
+
+### 11.3 已知的真实资产不对称（诚实记账，非编造）
+
+- **斻系心法（school 0）100% 真位图**：Symbol 736 的静态渲染帧恰好呈现"孙悟空-1"（斻系）状态下 mainskillmc 的**全解锁预览态**（真实中文名+说明+满色图标），这是 FLA 作者调试/预览时留下的巧合可用状态。
+- **火系心法（school 1）无等价整表位图**：`mainskillmc`（Symbol 733）本身有 8 帧（"孙悟空-1/2"…"沙僧-1/2"），但单独导出该 733 号符号本身（而非嵌在 736 里）时，各技能行渲染为灰度、无文字——推断是 FFDec 导出深嵌套按钮态子时间轴时的局限（导出 736 时連带渲染出的是作者调试期停留的"全解锁"子状态，单独导出 733 时则退回到未驱动的默认态）。本任务时间预算内未找到等价的火系整表位图。
+- 应对：火系 5 行改用**真实单个图标位图**（同一批 FFDec 渲染出的 565/570/575/560/555，三态齐全）+ 内部代码（lys/hytj/lyfb/jdy/hyjj）作为名称占位，明确标注"中文技能名未从素材中定位"，不编造中文名。技能说明同理留白，不杜撰文案。
+- 心法卡片的"当前等级：N"/"升级所需灵魂：N" 两行：AS3 `leveltxt1/lhtxt1` 等 DOMDynamicText 字段坐标（Symbol 736 xfl）经验证与实际渲染的可见文字位置**不一致**——可见的"当前等级：999"文本是另一处静态烘焙的设计期示意图形，真实 AS3 字段在这份静态渲染里是空/未生效的。定位方式改为在 `table_school1.png` 上直接做像素级亮度扫描找目标文字的 bounding box（`game/tmp/s5-render/`），而非信任 AS3 坐标——这两行文字因此是**唯一**从"引用真位图"退化为"绘制替换文字"的元素（覆盖烘焙的"999"占位符 + 重绘"当前等级：N"），其余所有图标/名称/说明/背景/按钮均为未修改的真实位图。
+
+### 11.4 逻辑层未动
+
+`systems/skillTree.ts`、`systems/save.ts`、`systems/soulPurse.ts`、`scenes/BattleScene.ts` 的绑定/扣费/存档迁移逻辑**逐行未改**——`SkillTreeScene.ts` 只重写了渲染方法体，所有 `on*` 事件处理器调用的仍是同一批已测试通过的纯函数。450 个既有测试无需改动即全绿，证明这点。
+
+### 11.5 验收证据（重新采集）
+
+- `game/tmp/s5-flow/1-skilltree-real-bitmaps.png`：真实蓝色水墨背景+真实斻系整表（中文名/说明/图标/设置/升级全部真位图）。
+- `game/tmp/s5-flow/2-school2-real-icons.png`：切到火系，真实图标 + "中文技能名未从素材中定位" 诚实占位。
+- `game/tmp/s5-flow/4-after-rebind-jdy-to-Y.png`：`rebindSkill('jdy','Y')` 后 jdy 行绑定徽标从 L 变为 Y。
+- `game/tmp/s5-flow/5-back-to-worldmap.png`、`6-battle-rebound-skill-fires.png`：返回地图→进战斗，真实技能坞。
+- `game/tmp/s5-flow/6-castBoundSkill-evidence.json`：`__castBoundSkill('Y')` 在满蓝时返回 `boundSkill:'jdy'`、`cast:'hit11_1'`、MP 999→933——绑定改动后战斗内真实施放的证据链与首版完全一致（因为逻辑层真的没有变过）。
+- `game/tmp/s5-overlay/`：`blend-50-50.png`/`diff.png` 重新生成。**几何对齐诚实说明**：参照截图（Online 皮）与本次渲染（vendor 真皮）在整体缩放比例上仍有残余差异（我方内容在按 940×590 舞台裁剪后仍比参照图显得更紧凑），归因未完全查清（可能是参照截图自身黑边裁切基准与本次假设的 590 高度不完全一致）；**行级别的结构证据更可信**：row-icon 位置的 5 点独立测量回归（dy 方差 <1px）已经证明本方案的图标/表格坐标是像素级贴合 AS3 真值的，这是本节判据的主要依据，整体 blend 图的宏观缩放差异记为已知未解决项，不作为"坐标错误"处理。
+- `npx vitest run`：450/450 全绿（未新增/未减少，逻辑层未动）。`npx tsc --noEmit` 0 错误。`npm run build` 过。
+
+### 11.6 遗留缺口（更新）
+
+- 火系心法（school 1）5 行中文名/说明缺失真实位图源，用内部代码代替，明确标注（§11.3）。
+- 整屏 blend overlay 的宏观缩放对齐仍有残差，根因未完全查清（§11.5）。
+- 心法卡片"当前等级/升级所需灵魂"两行是本屏唯一非真位图的可见文字（覆盖烘焙占位符后绘制），其余元素均为真实位图，见 §11.3 收尾段。
+- §9 中列出的 sx 战斗效果未接入、SkillSetControl bug 判断未真机复现，两项状态不变。
+
+### 11.7 commit
+
+新增本地提交（未 push），见 `git log`。
