@@ -201,6 +201,37 @@ const FLOOR_TOP_Y = 356
 const MIN_X = 90
 const MAX_X = 1460
 const WORLD_W = 1560
+
+// --- Level 1 climb intro (S1 巫鹰关, tools/prefab-compiler target C1) ---
+// StageListener11.as (the level's real AS3 sub-stage 1 controller) is a pure
+// vertical climb through open sky: monsters spawn near the player while they
+// repeatedly double-jump upward (base.BaseHero.jump(), the same jumpCount<2 /
+// gravity model already ported verbatim in systems/jump.ts) until
+// hero.y<=-1900 triggers the boss and the camera tweens on. There is NO
+// platform/floor collider anywhere in that climb -- verified by a full-text
+// search of 1.swf's swf2xml (zero named PlaceObjects in the whole level
+// pack) and of StageListener11.as itself. The prior flat single-screen L1
+// arena (this file's original MIN_X/MAX_X/GROUND_Y-only design) dropped this
+// climb entirely, which is what the user's morning report meant by "现第一
+// 关是横版平地" -- Adapted rather than fabricated per CLAUDE.md's移植协议:
+// this climb intro restores the real STRUCTURE (a genuine double-jump
+// traversal challenge, real bg11.png art panned via camera, no invented
+// platforms) using bg11's own compiled bounds
+// (tools/prefab-compiler, 1132x3051, local origin (0.052,0.777) near the
+// bottom -- tasks/prefab-compiler-report.md) for the background, while
+// keeping the arena's own monster-wave simulation (systems/level.ts,
+// systems/monsterSim.ts) completely untouched: monsterSim has no vertical
+// axis, so making Monster30 actually swarm mid-air would require a systems/
+// change outside this task's boundary ("不动 systems/ 战斗与存档逻辑") --
+// documented gap, see tasks/prefab-compiler-report.md. The SAME Monster30
+// swarm (LEVEL_1_WUYING's stop point 0, unmodified) now spawns immediately
+// after the climb instead of on the flat arena's very first frame.
+const CLIMB_TOP_Y = 80 // world y the hero must reach to finish the climb
+const CLIMB_BOUNDS_TOP = CLIMB_TOP_Y - 40
+const CLIMB_BOUNDS_HEIGHT = GROUND_Y + 140 - CLIMB_BOUNDS_TOP
+const CLIMB_MIN_X = HERO_START_X - 140
+const CLIMB_MAX_X = HERO_START_X + 140
+
 const HERO_LOOP = new Set(['wait', 'wait2', 'walk', 'run'])
 const MON_LOOP = new Set(['wait', 'walk'])
 const NPC_ANIM_PREFIX = 'npc_'
@@ -299,6 +330,15 @@ export class BattleScene extends Phaser.Scene {
   private campaignIndex = 0
   private levelState!: LevelState
   private monsters: MonsterEntity[] = []
+  // Level 1 climb intro (see CLIMB_TOP_Y header comment). climbFloorY is a
+  // one-way ratchet: systems/jump.ts's stepVertical() always lands the hero
+  // back at heroConfig.jump.groundY, so plain double-jumping from a fixed
+  // floor can only ever bounce ~180-200px up and fall right back -- this
+  // raises that floor to the hero's own best (lowest) y each time they climb
+  // past it, so a landed double-jump never loses progress, without touching
+  // jump.ts itself (groundY is a plain per-scene config field).
+  private climbActive = false
+  private climbFloorY = GROUND_Y
   private bossEntity: MonsterEntity | null = null
   private portal?: Phaser.GameObjects.Container
   private floorImg?: Phaser.GameObjects.Image
@@ -931,6 +971,73 @@ export class BattleScene extends Phaser.Scene {
     this.bannerTimer?.remove(false)
     this.swapBackground(this.campaignIndex)
     this.showLevelBanner(def.name)
+    if (this.campaignIndex === 0) this.startClimb()
+    else this.resetClimbState()
+  }
+
+  /** Start L1's vertical climb intro (see CLIMB_TOP_Y header comment):
+   * narrows the hero to a corridor, opens up vertical camera bounds, pans
+   * bg11 with the camera instead of pinning it, and holds off
+   * updateLevel()'s wave spawner (skipped in update() while climbActive)
+   * until the hero reaches the top. */
+  private startClimb(): void {
+    this.climbActive = true
+    this.climbFloorY = GROUND_Y
+    this.heroConfig.jump.groundY = GROUND_Y
+    this.heroConfig.minX = CLIMB_MIN_X
+    this.heroConfig.maxX = CLIMB_MAX_X
+    this.heroState.x = HERO_START_X
+    this.heroState.vertical.y = GROUND_Y
+    this.heroState.vertical.vy = 0
+    this.heroState.vertical.grounded = true
+    this.heroState.vertical.jumpCount = 0
+    this.heroState.vertical.airAction = null
+    this.cameras.main.setBounds(0, CLIMB_BOUNDS_TOP, WORLD_W, CLIMB_BOUNDS_HEIGHT)
+    // bg11 is normally pinned (scrollFactor(0.12, 0), see buildBackground) so
+    // only its top ~540px crop -- the summit -- ever shows. Following the
+    // camera vertically (scrollFactor y=1) instead reveals the climb through
+    // clouds as the hero rises, using the same real bitmap, no new asset.
+    this.bgBase?.setScrollFactor(0.12, 1)
+    this.showLevelBanner('双跳向上攀爬，登顶引出巫鹰')
+  }
+
+  /** Per-frame climb bookkeeping, called from update() while climbActive.
+   * Must run AFTER advanceHero() has applied this frame's jump/gravity. */
+  private updateClimb(): void {
+    if (this.heroState.vertical.y < this.climbFloorY) {
+      this.climbFloorY = this.heroState.vertical.y
+      this.heroConfig.jump.groundY = this.climbFloorY
+    }
+    if (this.heroState.vertical.y <= CLIMB_TOP_Y) this.finishClimb()
+  }
+
+  /** Climb complete: hand back to the normal flat arena exactly as it was
+   * before this task (same GROUND_Y/MIN_X/MAX_X, same first updateLevel()
+   * call spawning LEVEL_1_WUYING's unmodified stop point 0). */
+  private finishClimb(): void {
+    this.climbActive = false
+    this.resetClimbState()
+    this.heroState.x = HERO_START_X
+    this.heroState.vertical.y = GROUND_Y
+    this.heroState.vertical.vy = 0
+    this.heroState.vertical.grounded = true
+    this.heroState.vertical.jumpCount = 0
+    this.heroState.vertical.airAction = null
+    this.cameras.main.scrollY = 0
+    this.showLevelBanner('登顶！巫鹰关')
+  }
+
+  /** Restores the pre-climb config/camera. Called both when finishing the
+   * climb and (defensively) whenever a non-L1 level starts, so a mid-climb
+   * scene restart or debug level jump can never strand the hero in the
+   * narrowed corridor or the tall camera bounds. */
+  private resetClimbState(): void {
+    this.climbActive = false
+    this.heroConfig.jump.groundY = GROUND_Y
+    this.heroConfig.minX = MIN_X
+    this.heroConfig.maxX = MAX_X
+    this.cameras.main.setBounds(0, 0, WORLD_W, 540)
+    this.bgBase?.setScrollFactor(0.12, 0)
   }
 
   private showLevelBanner(name: string): void {
@@ -1107,7 +1214,18 @@ export class BattleScene extends Phaser.Scene {
     this.bossBar = new BossHpBar(this)
     this.bossBar.setVisible(false)
     // Dock chrome (无双 + cluster + 5 slots) flush to the bottom-left corner.
-    this.skillBar = new SkillBarHud(this, 2, 366, { scale: 1.2 })
+    // Cluster icons wired to their real handlers where the milestone has one
+    // (青包=B toggle, 设置=Esc pause); the rest toast honestly instead of
+    // silently ignoring clicks (2026-07-08 user report: "背包技能全都打不开").
+    this.skillBar = new SkillBarHud(this, 2, 366, {
+      scale: 1.2,
+      onIconClick: (icon) => {
+        if (icon === 'qingbao') this.toggleBackpack()
+        else if (icon === 'shezhi') this.togglePause()
+        else if (icon === 'jineng') this.showToast('技能学习与按键设置：世界地图 → 学习技能', '#e0b060')
+        else this.showToast('敬请期待', '#e0b060')
+      },
+    })
     this.skillBar.container.setScrollFactor(0).setDepth(100)
     this.backpack = new BackpackWindow(this, {
       iconKeyFor: (item) => (this.textures.exists('icon_' + item.id) ? 'icon_' + item.id : ICON_FALLBACK_KEY),
@@ -1378,12 +1496,16 @@ export class BattleScene extends Phaser.Scene {
     const jumped = edges.pressJump && this.heroState.vertical.grounded
     advanceHero(this.heroState, edges, delta, this.heroConfig)
     if (jumped) this.playSfx('heroJump', 0.4)
+    if (this.climbActive) this.updateClimb()
 
     // Hero melee: push combo damage into every monster the swing overlaps.
     this.resolveHeroHits()
     // Level machine: spawn waves, advance every monster + the boss, reveal the
-    // portal on boss death, and hand off to the next level when used.
-    this.updateLevel(delta)
+    // portal on boss death, and hand off to the next level when used. Held
+    // off during the L1 climb intro (see CLIMB_TOP_Y header comment) so
+    // LEVEL_1_WUYING's stop point 0 (Monster30 swarm) spawns once the hero
+    // reaches the top, not on the climb's very first frame.
+    if (!this.climbActive) this.updateLevel(delta)
     // Hero combat upkeep: hurt->ready, i-frame expiry, knockback integration,
     // and auto-respawn (in place near the level start, clear of the monster).
     const combatEvents = updateHeroIdentity(

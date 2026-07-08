@@ -24,9 +24,13 @@ import {
   keyForSkill,
   rebindSkill,
   getLearnedLevel,
+  SKILL_DISPLAY,
+  skillDisplayName,
 } from '../systems/skillTree'
 import type { SkillTreeState, Role1TreeSkillId, BindKey } from '../systems/skillTree'
 import { Toast } from '../ui/hud/Toast'
+import { PrefabLoader, type PrefabDocument } from '../prefab/PrefabLoader'
+import passiveSkillControlPrefab from '../data/prefab/PassiveSkillControl.prefab.json'
 
 // S5 技能树/学习技能. Layout AND skin source: dual extraction of the main
 // SWF's export.shop.{BuySkill,SkillControl,SkillSetControl,PassiveSkillControl}
@@ -73,11 +77,16 @@ const ROW_BIND_X = 784 // AS3 real coord: mainskillmc.skillsetN x (135.95) + reg
 const ROW_UPGRADE_X = 856 // AS3 real coord: mainskillmc.upgradeN x (207.05) + reg point x (648.45)
 // AS3 real coords: mainskillmc.skillN local y + reg point y (317.2), rows 1-5.
 const ROW_Y = [125.55, 203.2, 280.2, 357.15, 436.2]
-// Row content band to mask+replace for school 2 (icon+name+desc only; the
-// 设置/升级 buttons and divider lines are shared baked chrome, kept as-is).
-const ROW_MASK_X = 335
-const ROW_MASK_W = 360
+// Row content band to mask+replace for school 2. Extends LEFT over the
+// 技能名称 column too -- the baked school-1 names live there, and masking
+// only the icon/说明 band printed TWO names per row (baked 升龙斩 + drawn
+// 烈焰闪; caught in 2026-07-08 live verification). 设置/升级 buttons and
+// divider lines are shared baked chrome, kept as-is. Name-column center
+// measured on table_school1.png (table-local ~300 + offset).
+const ROW_MASK_X = 245
+const ROW_MASK_W = 450
 const ROW_MASK_H = 68
+const ROW_NAME_CX = 301.5
 
 const GOLD = '#f2c65a'
 const CREAM = '#f2eddf'
@@ -89,10 +98,24 @@ const SKILLTREE_TEXTURES: { key: string; url: string }[] = [
   { key: 'st_bg', url: `${SKILLTREE_DIR}bg.png` },
   { key: 'st_table1', url: `${SKILLTREE_DIR}table_school1.png` },
   { key: 'st_rebind_modal', url: `${SKILLTREE_DIR}rebind_modal.png` },
-  { key: 'st_passive_panel', url: `${SKILLTREE_DIR}passive_panel.png` },
+  // st_passive_panel (passive_panel.png, the old single flattened bitmap)
+  // dropped: buildPassivePanel now renders the compiled PassiveSkillControl
+  // prefab (PASSIVE_PREFAB_TEXTURES below) instead.
   { key: 'st_btn_upgrade_up', url: `${SKILLTREE_DIR}btn_upgrade_up.png` },
   { key: 'st_btn_upgrade_over', url: `${SKILLTREE_DIR}btn_upgrade_over.png` },
   ...(['Y', 'U', 'I', 'O', 'L'] as const).map((k) => ({ key: `st_slot_${k}`, url: `${SKILLTREE_DIR}slot_${k}_1.png` })),
+]
+// tools/prefab-compiler output for PassiveSkillControl (Symbol 769): the real
+// bg shape (758) + the 5 real pskill row widgets (768, flattened -- see
+// tools/prefab-compiler/README.md's --flatten-sprite) compiled straight from
+// OtherMat1.swf's swf2xml, replacing the single flattened `passive_panel.png`
+// hand-collage buildPassivePanel used before. Texture keys below match the
+// compiler's own default textureKey ("<characterId>" / "<characterId>_<frame>")
+// 1:1 so no textureKeyFor override is needed in PrefabLoader.build().
+const PREFAB_DIR = 'assets/extracted/prefab/PassiveSkillControl/'
+const PASSIVE_PREFAB_TEXTURES: { key: string; url: string }[] = [
+  { key: '758', url: `${PREFAB_DIR}758.png` },
+  ...[1, 2, 3, 4, 5, 6].map((i) => ({ key: `768_${i}`, url: `${PREFAB_DIR}768_${i}.png` })),
 ]
 const SCHOOL_SKILL_IDS: Role1TreeSkillId[] = ['slz', 'lys', 'hytj', 'lyfb', 'jdy', 'qsez', 'zz', 'hmz', 'hyjj', 'sx']
 for (const id of SCHOOL_SKILL_IDS) {
@@ -131,7 +154,7 @@ export class SkillTreeScene extends Phaser.Scene {
   }
 
   preload(): void {
-    for (const t of SKILLTREE_TEXTURES) {
+    for (const t of [...SKILLTREE_TEXTURES, ...PASSIVE_PREFAB_TEXTURES]) {
       if (!this.textures.exists(t.key)) this.load.image(t.key, t.url)
     }
   }
@@ -256,9 +279,20 @@ export class SkillTreeScene extends Phaser.Scene {
       .setStrokeStyle(1, 0xf2c65a, 0.5)
     this.root.addAt(this.tabHighlight, 1)
 
-    this.buildSchoolCards()
-    if (this.activeTab === 'active') this.buildSkillRows()
-    else if (this.activeTab === 'passive') this.buildPassivePanel()
+    // The baked active-skill table (st_table1) AND the 心法 school cards
+    // (当前等级/升级所需灵魂, cardsLayer) only apply to the active-skill tab --
+    // both are drawn unconditionally by a prior fix that only caught the
+    // table bitmap, not the cards layer, so switching to 被动技能 still
+    // showed "心法二/当前等级：4/升级所需灵魂：2000" text bleeding through the
+    // new prefab-rendered passive rows (caught in this task's own screenshot
+    // verification, 2026-07-08). Both layers are scoped to the active tab.
+    this.tableLayer.setVisible(this.activeTab === 'active')
+    if (this.activeTab === 'active') {
+      this.buildSchoolCards()
+      this.buildSkillRows()
+    } else if (this.activeTab === 'passive') {
+      this.buildPassivePanel()
+    }
   }
 
   private buildSchoolCards(): void {
@@ -383,23 +417,33 @@ export class SkillTreeScene extends Phaser.Scene {
         // No baked school-2 row content is reachable from this extraction
         // (see file header) -- mask table_school1's baked school-1 row here
         // (fully opaque -- a translucent mask still let bright baked text
-        // bleed through) and overlay real school-2 icon bitmap + fallback id
-        // text (Chinese names not located in the extraction, see report).
+        // bleed through) and overlay real school-2 icon bitmap + official
+        // name/description strings (SKILL_DISPLAY -- 火系 names supplied by
+        // the user from the official Online client, 2026-07-08; they are
+        // runtime-served in the original and exist in no extractable asset).
         this.rowsLayer.add(this.add.rectangle(ROW_MASK_X + ROW_MASK_W / 2, y, ROW_MASK_W, ROW_MASK_H, 0x14141a, 1))
         const icon = this.add.image(ROW_ICON_X, y, iconKeyFor(skillName, learned, isUnlocked))
         this.rowsLayer.add(icon)
+        // Mirror the baked column layout: name centered in the 技能名称
+        // column, description centered in the 技能说明 column.
         this.rowsLayer.add(
-          this.add.text(ROW_NAME_X, y - 6, `${skillName}${learned ? `  Lv${level}` : ''}`, {
-            fontSize: '15px',
-            color: learned ? CREAM : isUnlocked ? DIM : '#6b6458',
-            fontStyle: 'bold',
-          }),
+          this.add
+            .text(ROW_NAME_CX, y, `${skillDisplayName(skillName)}${learned ? ` Lv${level}` : ''}`, {
+              fontSize: '15px',
+              color: learned ? CREAM : isUnlocked ? DIM : '#6b6458',
+              fontStyle: 'bold',
+            })
+            .setOrigin(0.5),
         )
         this.rowsLayer.add(
-          this.add.text(ROW_NAME_X, y + 14, isUnlocked ? '(中文技能名未从素材中定位)' : '', {
-            fontSize: '10px',
-            color: '#8a8f9e',
-          }),
+          this.add
+            .text(ROW_NAME_X + 108, y, SKILL_DISPLAY[skillName]?.desc ?? '', {
+              fontSize: '11px',
+              color: '#a8aebc',
+              wordWrap: { width: 240 },
+              align: 'center',
+            })
+            .setOrigin(0.5),
         )
       } else if (!learned) {
         // School-1: baked icon already shows the correct locked/unlocked
@@ -460,7 +504,7 @@ export class SkillTreeScene extends Phaser.Scene {
     }
     const learned = learnSkill(this.skillTree, schoolIndex, slotIndex)
     this.persist()
-    this.toastUi.show(`已学习${learned}`, '#ffd873')
+    this.toastUi.show(`已学习${learned ? skillDisplayName(learned) : ''}`, '#ffd873')
     this.refresh()
   }
 
@@ -477,20 +521,47 @@ export class SkillTreeScene extends Phaser.Scene {
   }
 
   private buildPassivePanel(): void {
-    // Real PassiveSkillControl render (Symbol 769) -- its 5 baked rows all
-    // read "热血" (a generic placeholder label, not "嗜血"/sx -- confirmed by
-    // inspecting the render, game/tmp/s5-render), independent of hero/school.
-    // sx (the only Role1 passive this project implements) is already fully
-    // handled through the 心法 tree, not through this separate panel -- shown
-    // dimmed/non-interactive, per brief's "无系统支撑→置灰不造内容".
-    const img = this.add.image(97, 100, 'st_passive_panel').setOrigin(0, 0).setAlpha(0.55)
-    this.rowsLayer.add(img)
+    // Compiled PassiveSkillControl (Symbol 769, tools/prefab-compiler) --
+    // replaces the single flattened `passive_panel.png` bitmap with the REAL
+    // scene graph: the bg shape (758) + 5 real pskill row widgets (768,
+    // positioned at the compiler's own recovered matrix tx/ty, which match
+    // tasks/skilltree-report.md §1.2's hand-verified coordinates exactly).
+    // The 6 baked frames of each row all read "热血" (a generic placeholder
+    // label, not "嗜血"/sx -- confirmed by inspecting the renders), so frame
+    // 1 is used uniformly; sx (the only Role1 passive this project
+    // implements) is already fully handled through the 心法 tree, not this
+    // separate panel -- shown dimmed/non-interactive, per brief's
+    // "无系统支撑→置灰不造内容". Grey-tinted (not translucent): translucency is
+    // what let this panel's rows bleed through over the active table before
+    // tableLayer got a visibility toggle for the tab switch.
+    const doc = passiveSkillControlPrefab as unknown as PrefabDocument
+    const bgBounds = doc.root.children?.[0]?.boundsPx
+    // Symbol 769 is never statically placed in BuySkill's timeline (verified:
+    // no PlaceObject for characterId 769 anywhere in OtherMat1's swf2xml) --
+    // it's instantiated by AS3 at runtime with no baked stage coordinate to
+    // recover. Adapted placement: anchor the compiled bg's own top-left to
+    // where the prior hand-placed flattened bitmap sat (97,100), so this
+    // swap doesn't relitigate a screen position nothing in the SWF specifies.
+    const rootX = 97 - (bgBounds?.xmin ?? 0)
+    const rootY = 100 - (bgBounds?.ymin ?? 0)
+    const built = new PrefabLoader(this).build(doc, { x: rootX, y: rootY })
+    built.root.list.forEach((child) => this.tintDeep(child as Phaser.GameObjects.GameObject))
+    this.rowsLayer.add(built.root)
     this.rowsLayer.add(
       this.add
         .text(470, 300, '被动技能：本作暂无系统支持', { fontSize: '15px', color: DIM, backgroundColor: '#1a0f08' })
         .setOrigin(0.5)
         .setPadding(8, 4),
     )
+  }
+
+  /** Recursively grey-tints every Image under a PrefabLoader-built subtree
+   * (Container has no tint of its own to set once for the whole group). */
+  private tintDeep(obj: Phaser.GameObjects.GameObject): void {
+    if (obj instanceof Phaser.GameObjects.Image) obj.setTint(0x9a9a9a)
+    else if (obj instanceof Phaser.GameObjects.Container) {
+      obj.list.forEach((child) => this.tintDeep(child as Phaser.GameObjects.GameObject))
+    }
   }
 
   // ---------- rebind modal (real SkillSetControl render, Symbol 193) ----------
@@ -507,7 +578,7 @@ export class SkillTreeScene extends Phaser.Scene {
     modal.add(this.add.image(imgX, imgY, 'st_rebind_modal').setOrigin(0, 0))
     modal.add(
       this.add
-        .text(470, imgY + 25, skillName, { fontSize: '13px', color: GOLD, fontStyle: 'bold' })
+        .text(470, imgY + 25, skillDisplayName(skillName), { fontSize: '13px', color: GOLD, fontStyle: 'bold' })
         .setOrigin(0.5),
     )
 

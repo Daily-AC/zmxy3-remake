@@ -1,0 +1,981 @@
+{
+  "symbol": "857",
+  "characterId": 857,
+  "sourceSwf": "worldmap_nodes.xml",
+  "root": {
+    "type": "container",
+    "characterId": 857,
+    "symbolKind": "sprite",
+    "frameCount": 3,
+    "frames": [
+      {
+        "frame": 1,
+        "children": [
+          {
+            "type": "image",
+            "characterId": 852,
+            "symbolKind": "shape",
+            "boundsPx": {
+              "xmin": -29.5,
+              "ymin": -50.0,
+              "xmax": 29.5,
+              "ymax": 50.0,
+              "w": 59.0,
+              "h": 100.0
+            },
+            "textureKey": "852",
+            "matrix": {
+              "tx": 0.0,
+              "ty": 0.0,
+              "scaleX": 1.0,
+              "scaleY": 1.0,
+              "rotSkew0": 0.0,
+              "rotSkew1": 0.0
+            },
+            "depth": 1,
+            "instanceName": null
+          }
+        ]
+      },
+      {
+        "frame": 2,
+        "children": [
+          {
+            "type": "container",
+            "characterId": 854,
+            "symbolKind": "sprite",
+            "frameCount": 19,
+            "frames": [
+              {
+                "frame": 1,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 2,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 3,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 4,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 5,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 6,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 7,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 8,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 9,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 10,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 11,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 12,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 13,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 14,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 15,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 16,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 17,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 18,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              },
+              {
+                "frame": 19,
+                "children": [
+                  {
+                    "type": "container",
+                    "characterId": 853,
+                    "symbolKind": "sprite",
+                    "children": [
+                      {
+                        "type": "image",
+                        "characterId": 852,
+                        "symbolKind": "shape",
+                        "boundsPx": {
+                          "xmin": -29.5,
+                          "ymin": -50.0,
+                          "xmax": 29.5,
+                          "ymax": 50.0,
+                          "w": 59.0,
+                          "h": 100.0
+                        },
+                        "textureKey": "852",
+                        "matrix": {
+                          "tx": 0.0,
+                          "ty": 0.0,
+                          "scaleX": 1.0,
+                          "scaleY": 1.0,
+                          "rotSkew0": 0.0,
+                          "rotSkew1": 0.0
+                        },
+                        "depth": 1,
+                        "instanceName": null
+                      }
+                    ],
+                    "matrix": {
+                      "tx": 0.0,
+                      "ty": 0.0,
+                      "scaleX": 1.0,
+                      "scaleY": 1.0,
+                      "rotSkew0": 0.0,
+                      "rotSkew1": 0.0
+                    },
+                    "depth": 1,
+                    "instanceName": null
+                  }
+                ]
+              }
+            ],
+            "matrix": {
+              "tx": 0.0,
+              "ty": 0.0,
+              "scaleX": 1.0,
+              "scaleY": 1.0,
+              "rotSkew0": 0.0,
+              "rotSkew1": 0.0
+            },
+            "depth": 1,
+            "instanceName": null
+          }
+        ]
+      },
+      {
+        "frame": 3,
+        "children": [
+          {
+            "type": "image",
+            "characterId": 856,
+            "symbolKind": "shape",
+            "boundsPx": {
+              "xmin": -74.75,
+              "ymin": -110.05,
+              "xmax": 76.25,
+              "ymax": 56.95,
+              "w": 151.0,
+              "h": 167.0
+            },
+            "textureKey": "856",
+            "matrix": {
+              "tx": 0.0,
+              "ty": 0.0,
+              "scaleX": 1.0,
+              "scaleY": 1.0,
+              "rotSkew0": 0.0,
+              "rotSkew1": 0.0
+            },
+            "depth": 1,
+            "instanceName": null
+          }
+        ]
+      }
+    ],
+    "originFrac": {
+      "x": 0.49503311258278143,
+      "y": 0.6589820359281438
+    },
+    "boundsPx": {
+      "xmin": -74.75,
+      "ymin": -110.05,
+      "xmax": 76.25,
+      "ymax": 56.95,
+      "w": 151.0,
+      "h": 167.0
+    }
+  },
+  "warnings": []
+}

@@ -1,0 +1,474 @@
+{
+  "symbol": "export.shop.PassiveSkillControl",
+  "characterId": 769,
+  "sourceSwf": "OtherMat1.xml",
+  "root": {
+    "type": "container",
+    "characterId": 769,
+    "symbolKind": "sprite",
+    "children": [
+      {
+        "type": "image",
+        "characterId": 758,
+        "symbolKind": "shape",
+        "boundsPx": {
+          "xmin": 116.0,
+          "ymin": 83.0,
+          "xmax": 862.0,
+          "ymax": 512.0,
+          "w": 746.0,
+          "h": 429.0
+        },
+        "textureKey": "758",
+        "textureFile": "758.png",
+        "exportedPngSize": {
+          "w": 746,
+          "h": 429
+        },
+        "matrix": {
+          "tx": 0.0,
+          "ty": 0.0,
+          "scaleX": 1.0,
+          "scaleY": 1.0,
+          "rotSkew0": 0.0,
+          "rotSkew1": 0.0
+        },
+        "depth": 1,
+        "instanceName": null
+      },
+      {
+        "type": "image",
+        "characterId": 768,
+        "symbolKind": "sprite-flattened",
+        "boundsPx": {
+          "xmin": 0.0,
+          "ymin": -3.6,
+          "xmax": 615.95,
+          "ymax": 22.4,
+          "w": 615.95,
+          "h": 26.0
+        },
+        "originFrac": {
+          "x": -0.0,
+          "y": 0.13846153846153847
+        },
+        "frameCount": 6,
+        "frames": [
+          {
+            "frame": 1,
+            "textureKey": "768_1",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/1.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 2,
+            "textureKey": "768_2",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/2.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 3,
+            "textureKey": "768_3",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/3.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 4,
+            "textureKey": "768_4",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/4.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 5,
+            "textureKey": "768_5",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/5.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 6,
+            "textureKey": "768_6",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/6.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          }
+        ],
+        "matrix": {
+          "tx": 124.0,
+          "ty": 144.95,
+          "scaleX": 1.0,
+          "scaleY": 1.0,
+          "rotSkew0": 0.0,
+          "rotSkew1": 0.0
+        },
+        "depth": 2,
+        "instanceName": null
+      },
+      {
+        "type": "image",
+        "characterId": 768,
+        "symbolKind": "sprite-flattened",
+        "boundsPx": {
+          "xmin": 0.0,
+          "ymin": -3.6,
+          "xmax": 615.95,
+          "ymax": 22.4,
+          "w": 615.95,
+          "h": 26.0
+        },
+        "originFrac": {
+          "x": -0.0,
+          "y": 0.13846153846153847
+        },
+        "frameCount": 6,
+        "frames": [
+          {
+            "frame": 1,
+            "textureKey": "768_1",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/1.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 2,
+            "textureKey": "768_2",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/2.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 3,
+            "textureKey": "768_3",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/3.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 4,
+            "textureKey": "768_4",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/4.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 5,
+            "textureKey": "768_5",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/5.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 6,
+            "textureKey": "768_6",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/6.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          }
+        ],
+        "matrix": {
+          "tx": 122.0,
+          "ty": 221.95,
+          "scaleX": 1.0,
+          "scaleY": 1.0,
+          "rotSkew0": 0.0,
+          "rotSkew1": 0.0
+        },
+        "depth": 9,
+        "instanceName": null
+      },
+      {
+        "type": "image",
+        "characterId": 768,
+        "symbolKind": "sprite-flattened",
+        "boundsPx": {
+          "xmin": 0.0,
+          "ymin": -3.6,
+          "xmax": 615.95,
+          "ymax": 22.4,
+          "w": 615.95,
+          "h": 26.0
+        },
+        "originFrac": {
+          "x": -0.0,
+          "y": 0.13846153846153847
+        },
+        "frameCount": 6,
+        "frames": [
+          {
+            "frame": 1,
+            "textureKey": "768_1",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/1.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 2,
+            "textureKey": "768_2",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/2.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 3,
+            "textureKey": "768_3",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/3.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 4,
+            "textureKey": "768_4",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/4.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 5,
+            "textureKey": "768_5",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/5.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 6,
+            "textureKey": "768_6",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/6.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          }
+        ],
+        "matrix": {
+          "tx": 122.0,
+          "ty": 304.95,
+          "scaleX": 1.0,
+          "scaleY": 1.0,
+          "rotSkew0": 0.0,
+          "rotSkew1": 0.0
+        },
+        "depth": 16,
+        "instanceName": null
+      },
+      {
+        "type": "image",
+        "characterId": 768,
+        "symbolKind": "sprite-flattened",
+        "boundsPx": {
+          "xmin": 0.0,
+          "ymin": -3.6,
+          "xmax": 615.95,
+          "ymax": 22.4,
+          "w": 615.95,
+          "h": 26.0
+        },
+        "originFrac": {
+          "x": -0.0,
+          "y": 0.13846153846153847
+        },
+        "frameCount": 6,
+        "frames": [
+          {
+            "frame": 1,
+            "textureKey": "768_1",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/1.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 2,
+            "textureKey": "768_2",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/2.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 3,
+            "textureKey": "768_3",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/3.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 4,
+            "textureKey": "768_4",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/4.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 5,
+            "textureKey": "768_5",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/5.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 6,
+            "textureKey": "768_6",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/6.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          }
+        ],
+        "matrix": {
+          "tx": 122.0,
+          "ty": 381.95,
+          "scaleX": 1.0,
+          "scaleY": 1.0,
+          "rotSkew0": 0.0,
+          "rotSkew1": 0.0
+        },
+        "depth": 23,
+        "instanceName": null
+      },
+      {
+        "type": "image",
+        "characterId": 768,
+        "symbolKind": "sprite-flattened",
+        "boundsPx": {
+          "xmin": 0.0,
+          "ymin": -3.6,
+          "xmax": 615.95,
+          "ymax": 22.4,
+          "w": 615.95,
+          "h": 26.0
+        },
+        "originFrac": {
+          "x": -0.0,
+          "y": 0.13846153846153847
+        },
+        "frameCount": 6,
+        "frames": [
+          {
+            "frame": 1,
+            "textureKey": "768_1",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/1.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 2,
+            "textureKey": "768_2",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/2.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 3,
+            "textureKey": "768_3",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/3.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 4,
+            "textureKey": "768_4",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/4.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 5,
+            "textureKey": "768_5",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/5.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          },
+          {
+            "frame": 6,
+            "textureKey": "768_6",
+            "textureFile": "DefineSprite_768_export.shop.PassiveSkill/6.png",
+            "exportedPngSize": {
+              "w": 731,
+              "h": 37
+            }
+          }
+        ],
+        "matrix": {
+          "tx": 122.0,
+          "ty": 460.95,
+          "scaleX": 1.0,
+          "scaleY": 1.0,
+          "rotSkew0": 0.0,
+          "rotSkew1": 0.0
+        },
+        "depth": 30,
+        "instanceName": null
+      }
+    ],
+    "originFrac": {
+      "x": -0.1554959785522788,
+      "y": -0.19347319347319347
+    },
+    "boundsPx": {
+      "xmin": 116.0,
+      "ymin": 83.0,
+      "xmax": 862.0,
+      "ymax": 512.0,
+      "w": 746.0,
+      "h": 429.0
+    }
+  },
+  "warnings": []
+}
