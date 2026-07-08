@@ -43,7 +43,16 @@ const BARS = [
 ] as const
 const NUM_X = 140 // "9999" centre over the bar (matches the composite)
 const LABELS = ['HP', 'MP', 'EXP']
-const LEVEL = { x: 22, y: 79 }
+// Level ink-ring centre, measured directly off hud_ri_bg.png's own pixels
+// (battle-fidelity brief B1, "不许目测"): the 226x86 bitmap bakes TWO
+// circles -- a big one under hud_ri_head (the avatar socket) and a small,
+// distinctly outlined ring at the bottom-left (alpha bbox x:[1,38] y:[54,86],
+// clipped by the image's own bottom edge) that is the actual level ring.
+// Its centre in the bitmap's local space is ~(19.5, 71); BG below is placed
+// at (1,2), so the ring's centre in RoleInfoHud's own coordinate space is
+// (1+19.5, 2+71) rounded. The previous (22, 79) sat near the ring's
+// bottom-left edge instead of its centre (team-lead's "数字在墨圈左下角" call).
+const LEVEL = { x: 20, y: 72 }
 // chid262 怒气/无双 charge meter — rendered empty (no rage system yet). Object-tree
 // translate is (111.7, 78) sx 0.68, but the sprite's shape has a ~-109px internal
 // x-offset, so the bar's left edge lands at x≈3 (calibrated by min-diff / white-bar
