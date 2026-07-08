@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 
 // Bottom-left skill dock, rebuilt on the original 造梦 chrome: the extracted
 // export.RoleInfo bottom bar (hud_roleinfo_bottom_skilldock) supplies the 无双
-// button + 法宝/宠物/技能/青包/设置 cluster + five carved slots; we only overlay
+// button + 法宝/宠物/技能/背包/设置 cluster + five carved slots; we only overlay
 // the live skill icon, a cooldown sweep, and the hotkey letter. Matching the
 // Online battle bar, the slots carry ONLY the hotkey letter (Y U I O L) — no
 // level / MP text on the dock (that lives in the skill panel).
@@ -33,13 +33,13 @@ export interface SkillSlotData {
   disabled?: boolean
 }
 
-export type DockIconId = 'fabao' | 'chongwu' | 'jineng' | 'qingbao' | 'shezhi'
+export type DockIconId = 'fabao' | 'chongwu' | 'jineng' | 'beibao' | 'shezhi'
 
 export interface SkillBarHudOptions {
   /** Dock scale (native art is 320x144). */
   scale?: number
   iconKeyFor?: (data: SkillSlotData) => string | undefined
-  /** Click handler for the five baked cluster icons (法宝/宠物/技能/青包/设置).
+  /** Click handler for the five baked cluster icons (法宝/宠物/技能/背包/设置).
    * They are baked pixels in the dock art, so without hit zones the cluster
    * is decorative-only -- which players read as "背包技能全都打不开"
    * (2026-07-08 user report). */
@@ -52,7 +52,7 @@ const DOCK_ICONS: { id: DockIconId; cx: number; cy: number }[] = [
   { id: 'fabao', cx: 52, cy: 25 },
   { id: 'chongwu', cx: 90, cy: 19 },
   { id: 'jineng', cx: 21, cy: 52 },
-  { id: 'qingbao', cx: 21, cy: 97 },
+  { id: 'beibao', cx: 21, cy: 97 },
   { id: 'shezhi', cx: 60, cy: 112 },
 ]
 
@@ -80,7 +80,7 @@ export class SkillBarHud {
 
     const children: Phaser.GameObjects.GameObject[] = []
     if (scene.textures.exists(DOCK_TEX)) {
-      // Use ONLY the left cluster (无双 + 法宝/宠物/技能/青包/设置) from the dock art;
+      // Use ONLY the left cluster (无双 + 法宝/宠物/技能/背包/设置) from the dock art;
       // its grey empty slots are dropped so the icon-frames form the slot row.
       const tex = scene.textures.get(DOCK_TEX)
       if (!tex.has('dock_cluster')) tex.add('dock_cluster', 0, 0, 0, CLUSTER_W, DOCK_NATIVE_H)
