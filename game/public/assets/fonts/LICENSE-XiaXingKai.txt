@@ -1,0 +1,38 @@
+演示夏行楷 (Yanshi XiaXingKai) — font license record
+=====================================================
+
+Author/字稿作者: 刘锡栋 (中国漓江书画艺术家协会理事)
+Production/字库制作: Keynote 研究所"人生哥" (半自动流程字稿制作)
+Source page (primary, verified 2026-07-08): https://www.maoken.com/freefonts/6085.html
+Download used: https://oss.maoken.com/猫啃字体/中国大陆/演示夏行楷_猫啃网.zip (via Referer: https://www.maoken.com/)
+
+License model: author's public declaration ("作者声明"), same family/
+template as 演示秋鸿楷 (LICENSE-QiuHongKai.txt in this directory) -- verified
+by direct fetch of the primary source page, not a secondhand blog summary
+(a web-search snippet for this font claimed embedded use was restricted;
+the primary source page directly contradicts that, same discrepancy found
+and resolved for QiuHongKai).
+
+Author's declaration: "面向全社会提供全媒体免费可商用" (free, all-media,
+commercial use offered to the whole of society), "企业、个人均可免费商用"
+(both enterprises and individuals may use it commercially for free).
+
+License table on the primary source page explicitly marks as PERMITTED
+(✓ 可以), quoted verbatim:
+
+  "各类嵌入式应用(包括:应用程序iOS、Android、HarmonyOS、Windows、macOS、
+  电子屏显、电子辞典、打印机、机顶盒、导航仪、SoC芯片、网页、H5应用、
+  小程序、音像制品、电子图书、电子报刊、电子文档、电子课件等嵌入)"
+
+Also explicitly permitted per the same table: poster design, packaging
+design, film/TV works, and GAMES (游戏).
+
+Prohibited: reselling the font file itself standalone, modifying/creating
+derivatives of the font, using the author's name/org to promote a product,
+unlawful uses. Trademark/VI use generally excluded (not relevant here).
+
+Bundled in the original download zip: 字体授权.txt (Chinese, generic
+"free for both personal and commercial use" statement, referring back to
+maoken.com for the authoritative terms).
+
+Conclusion: safe to embed as a webfont in this desktop game.
