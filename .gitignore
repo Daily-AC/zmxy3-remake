@@ -5,6 +5,7 @@ tools/ffdec/
 tools/packaging/electron/out/
 tools/packaging/electron/renderer/
 tmp/
+social-server/data/
 *.swf
 .DS_Store
 __pycache__/
