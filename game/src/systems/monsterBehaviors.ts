@@ -731,6 +731,16 @@ export function createSkillOverlayState(gate: MonsterSkillGate): SkillOverlaySta
   return { cooldownMs: gate.initialCooldownMs, active: null }
 }
 
+/** hitstun-triad pen (blue-team catch, tasks/review-blue-findings.md): `x/y`
+ * must be the host's RENDERED VISUAL CENTER (BattleScene's
+ * `monsterVisualCenter()` -- state.x/y + the species' own render offset*
+ * scale), not its bare sim state.x/y. This project has no extracted
+ * per-pixel AS3 `colipse` hit-test art, so every hit-test box is defined to
+ * live in visual-center space (matching what the player actually sees
+ * overlapping) -- the hero hurtbox this spawn gets tested against
+ * (BattleScene's `heroVisualCenter()`) already lives there, and a caller
+ * passing bare state.x/y here would silently reintroduce the exact
+ * render-vs-hitbox mismatch this pen fixed everywhere else. */
 export interface SkillOverlayHost {
   x: number
   y: number
