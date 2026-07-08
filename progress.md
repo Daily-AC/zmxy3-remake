@@ -229,3 +229,8 @@
 - 下一棒：S4 个人资料/背包（brief=tasks/profile-backpack-brief.md）。
 - 05:5x **S4 个人资料/背包棒完成并过终审**（3ac9ad6，未 push，s4-profile/codex 执行）：BackPack/BackPackElement/PackThings AS3 全读，5×5 网格公式 x=col*(w+11) y=row*(h+9) 直译；战斗力 getFightingForce() 四项中照译 ①level*15 ③装备攻击（②被动④roleid 专属无输入通道，诚实丢弃记档）；出售白装照译（普通且非头衔 → 灵魂+20）；装备槽真实语义纠正 spec 肉眼说法（zbfj=防具/zbsp=饰品/zbfb=法宝/zbtx=头衔/zbsz=时装）；闪避/回血原版本就是纯装备字段，UI 诚实显 0 非占位。origin 用三按钮模板互相关锁仿射偏移（analytic 法有 filter-padding 坑）。新增 combatPower/soulPurse 纯逻辑+8 测（421 全绿）。终审：结构层单线对齐；右下控制条与参照分歧经 vendor 烘焙底图裁决为版本差异、vendor 胜不返修；顺修面板红叉空实现 bug。遗留：armor/accessory/talisman 槽因 slotForItem Stage A 限制恒空（既有缺口）；装备图标 fallback。
 - 下一棒：S5 技能树（brief=tasks/skilltree-brief.md）。
+- 06:5x~10:2x **S5 技能树棒完成并过终审（一次大返修）**（2d107a9/98aaadf/7c68146，未 push）：
+  - 逻辑层首审即过，AS3 考古全夜最高质量：**kagami 三处实错纠正**（学习上限 10→AS3 实为 5、技能封顶"特殊18级"→实为全员 9 级无区分、升级费用公式整条不同→AS3 真式 150*slev²*√slev）；SkillSetControl 拖拽绑定悬挂 bug 识别并按移植协议 Adapted；学习不扣灵魂、学习即按 YUIOL 顺序自动上坞、心法升级 100/200/500/1000/2000 均对 AS3 逐行验证。skillTree/绑定/save 迁移 29 新测，450 全绿。
+  - 视觉层被打回（自造暖棕金主题未穿原版皮、技能名显内部码=spec 铁律级违规）；s5 会话换皮至 07:59 中断（**平台 AUP 误报第三击**），主会话就地收尾：遮盖条越界修复（280→196 宽，正是"重斩/火魔斩消失"根因）、删自造黄选中框（AS3 真语义=共享升级钮移位）、卡二补丁盖净。overlay 互相关配准后表格/卡片/图标单线重合，豁免逐项记档（含两处版本分歧 vendor 胜）。
+  - **中文技能名负结果记档**：全部可得包字节层均无该字符串（运行时下发配置），斩系五技名来自烘焙表位图可用；**火系五技名待用户供官方名**（一行修复）。
+- 10:2x S6 主菜单微调小棒已派（brief=tasks/menu-polish-brief.md，s6-menu/codex）。
