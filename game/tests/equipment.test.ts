@@ -75,6 +75,39 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
     expect(countItem(inv, 'chiyan')).toBe(1)
     expect(unequip(eq, inv, 'weapon')).toBe(false) // nothing to remove now
   })
+
+  // Regression: equip() used to write eq[slot] unconditionally and only try
+  // (and possibly fail) to return the displaced item afterward -- a full bag
+  // with no stack for it to merge into deleted it outright. Reproduces
+  // whenever the incoming item comes from a stack of qty>=2 (removeItem only
+  // frees a bag slot when it empties a qty=1 stack to zero, so a qty>=2
+  // stack leaves the bag exactly as full as before).
+  it('rejects the swap instead of deleting the worn item when the bag is full and has no room for it', () => {
+    const eq = createEquipment()
+    eq.weapon = staff // already worn, NOT taking up a bag slot
+    const inv = createInventory(2)
+    addItem(inv, plainStaff, 2) // qty>=2 stack: removing 1 won't free a slot
+    addItem(inv, herb, 1) // fills the bag's second (and last) slot
+    expect(inv.stacks).toHaveLength(2) // bag is full at capacity 2
+
+    expect(equip(eq, inv, plainStaff)).toBe(false)
+    expect(eq.weapon?.id).toBe('chiyan') // staff is still worn, not lost
+    expect(countItem(inv, 'stick')).toBe(2) // rolled back to its original qty
+    expect(countItem(inv, 'herb')).toBe(1)
+    expect(inv.stacks).toHaveLength(2) // bag composition unchanged
+  })
+
+  it('still allows the swap once the bag has room to take the displaced item back', () => {
+    const eq = createEquipment()
+    eq.weapon = staff
+    const inv = createInventory(2)
+    addItem(inv, plainStaff, 2)
+    // Only one stack this time -- one free slot for the displaced staff.
+    expect(equip(eq, inv, plainStaff)).toBe(true)
+    expect(eq.weapon?.id).toBe('stick')
+    expect(countItem(inv, 'chiyan')).toBe(1) // staff displaced back into the bag
+    expect(countItem(inv, 'stick')).toBe(1) // one copy left in the bag, one equipped
+  })
 })
 
 describe('equipment combat numbers (装备接入伤害)', () => {
