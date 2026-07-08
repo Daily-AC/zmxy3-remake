@@ -94,10 +94,29 @@ const BG_X = (960 - BG_W) / 2 // 102.5
 const BG_Y = (540 - BG_H) / 2 // 21.5
 
 const CLOSE = { x: 699.2, y: 6.6, w: 40, h: 42 }
-const NAME_VALUE = { x: 127.1, y: 67.3 }
-const ZDL_VALUE = { x: 124.1, y: 93.1 }
+// Value-text anchors below are CENTERS (see makeValueText), not left edges.
+// Source: out_res/backpack1.swf's own DefineEditText tags for each named
+// field (txt_name/txt_zdl/txt_hp/... chid388/418/391/...), extracted via
+// `ffdec -format text:formatted -selectid <chids> -export text`. Every one of
+// them reports `align center` except txt_lh (灵魂) which is `align left` --
+// that's the real ground truth for "居中/居左": the report's box-left-edge
+// x's (still valid for POSITION) plus each field's own (xmin+xmax)/2 offset
+// (in the DefineEditText's local twips, applied unscaled since these
+// PlaceObjects carry no matrix scale) give the true center x used below.
+const NAME_VALUE = { x: 179.4, y: 67.3, w: 109 } // txt_name center = 127.1 + 52.3
+const ZDL_VALUE = { x: 176.4, y: 93.1, w: 109 } // txt_zdl center = 124.1 + 52.3
 const LEVEL_BADGE = { x: 268.6, y: 52.6, w: 83, h: 59 }
-const PORTRAIT = { x: 280, y: 235 } // headSit mount (169.9,182.6) is empty in AS3; centered under the badge, feet near the equip-slot baseline
+// headSit mount point, out_res/backpack1.swf sprite444 PlaceObject `name="headSit"`
+// local (tx,ty) = (280.25,235.85) twips/20 -> crop-space (169.9,182.6) via the
+// report's shared affine offset (-110.3,-53.3). The previous build used the
+// RAW un-transformed local (280,235) directly as a crop coordinate -- that's
+// the actual "武器栏里蹲了一只悟空" bug: it shifted the portrait ~110px right,
+// straight on top of the weapon/accessory equip-slot cluster (x 251.7-372.7).
+// Fixed to the real headSit x; size trimmed from 150->110 so it sits cleanly
+// in the gap between the title/fashion placeholders (right edge ~108) and the
+// equip-slot cluster (left edge 251.7), matching the reference screenshot's
+// layout (立绘 stands alone in that gap, not overlapping either icon column).
+const PORTRAIT = { x: 169.9, y: 182.6, fit: 110 }
 
 interface SlotSpec {
   x: number
@@ -117,25 +136,26 @@ const FASHION_PLACEHOLDER: SlotSpec = { x: 57.7, y: 113.4, w: 50, h: 50 } // zbs
 const FASHION_TOGGLE_PLACEHOLDER: SlotSpec = { x: 57.7, y: 165.6, w: 49, h: 18 } // showszmc
 
 // Left panel 10-stat table, 2 columns x 5 rows. Labels are baked into
-// backpack_bg; only the value text is drawn, left-top anchored at the AS3
-// TextField's own tx/ty (verified: markers land exactly at the start of each
-// box's inset value area, see report).
+// backpack_bg; only the value text is drawn. x below is each field's CENTER
+// (box-left-edge x from the report + that DefineEditText's own
+// (xmin+xmax)/2 offset -- see NAME_VALUE comment above); every one of these
+// ten fields is `align center` in the real SWF.
 const STAT_L = [
-  { key: 'hp', x: 104.2, y: 260.3 },
-  { key: 'atk', x: 104.9, y: 293.7 },
-  { key: 'luck', x: 103.2, y: 327.7 },
-  { key: 'crit', x: 103.2, y: 360.8 },
-  { key: 'hpRegen', x: 104.8, y: 394.2 },
+  { key: 'hp', x: 156.5, y: 260.3, w: 109 },
+  { key: 'atk', x: 157.1, y: 293.7, w: 108 },
+  { key: 'luck', x: 155.4, y: 327.7, w: 108 },
+  { key: 'crit', x: 157.5, y: 360.8, w: 113 },
+  { key: 'hpRegen', x: 157.8, y: 394.2, w: 110 },
 ] as const
 const STAT_R = [
-  { key: 'mp', x: 268.0, y: 260.3 },
-  { key: 'def', x: 267.9, y: 293.7 },
-  { key: 'magicDef', x: 267.2, y: 327.7 },
-  { key: 'dodge', x: 265.8, y: 361.3 },
-  { key: 'mpRegen', x: 267.0, y: 393.8 },
+  { key: 'mp', x: 319.9, y: 260.3, w: 108 },
+  { key: 'def', x: 321.6, y: 293.7, w: 111 },
+  { key: 'magicDef', x: 320.9, y: 327.7, w: 111 },
+  { key: 'dodge', x: 319.3, y: 361.3, w: 111 },
+  { key: 'mpRegen', x: 318.9, y: 393.8, w: 108 },
 ] as const
 
-const EXP_VALUE = { x: 127.1, y: 428.8 }
+const EXP_VALUE = { x: 195.1, y: 428.8, w: 140 } // txt_exp center = 127.1 + 68.0, also align center
 const EXP_FILL = { x: 215, y: 450, w: 214, h: 20 } // empirically located (see header)
 
 // Right panel: 4 category tabs, baked labels, 73x27 each, 74px pitch.
@@ -146,11 +166,13 @@ const GRID_COLS = 5
 const GRID_ROWS = 5
 const PAGE_SIZE = GRID_COLS * GRID_ROWS
 
-const SOUL_VALUE = { x: 554.4, y: 397.2 }
+// txt_lh (灵魂) is the one field the real SWF marks `align left` -- kept as
+// the box's left edge (matches the existing makeValueText left-origin path).
+const SOUL_VALUE = { x: 552.4, y: 397.2, w: 74 }
 const SELL_BTN = { x: 637.2, y: 392.2, w: 62, h: 28 }
 const PREV_BTN = { x: 498.7, y: 419.2, w: 86, h: 34 }
 const NEXT_BTN = { x: 616.9, y: 419.2, w: 86, h: 34 }
-const NOWPAGE = { x: 580.3, y: 425.6 }
+const NOWPAGE = { x: 590.3, y: 425.6, w: 70 } // nowpage: align center, center = 580.3 + 10.0
 
 const PORTRAIT_TEX = 'role1_0'
 const PORTRAIT_FRAME = 0
@@ -220,17 +242,21 @@ export class BackpackWindow {
         .on('pointerdown', () => this.opts.onClose?.()),
     )
 
-    this.nameText = add(this.makeValueText(NAME_VALUE.x, NAME_VALUE.y, 190))
-    this.zdlText = add(this.makeValueText(ZDL_VALUE.x, ZDL_VALUE.y, 150))
+    this.nameText = add(this.makeCenteredText(NAME_VALUE.x, NAME_VALUE.y, NAME_VALUE.w))
+    this.zdlText = add(this.makeCenteredText(ZDL_VALUE.x, ZDL_VALUE.y, ZDL_VALUE.w))
 
     this.levelLayer = add(scene.add.container(0, 0))
 
-    // Portrait (adapted: original composites a fully-dressed dynamic render;
-    // this project has no equivalent pipeline, so the idle battle sprite
-    // stands in, centered under the level badge / between the equip columns).
+    // Portrait (adapted: original composites a fully-dressed dynamic render
+    // into the headSit mount point; this project has no equivalent costume-
+    // compositing pipeline, so the idle battle sprite stands in). Positioned
+    // at headSit's real coordinate (see PORTRAIT comment above) and sized to
+    // fit the gap between the title/fashion placeholders and the equip-slot
+    // cluster without overlapping either -- the previous build's wrong
+    // coordinate is what put a full-size Wukong on top of the weapon slot.
     if (scene.textures.exists(PORTRAIT_TEX)) {
       const portrait = scene.add.image(PORTRAIT.x, PORTRAIT.y, PORTRAIT_TEX, PORTRAIT_FRAME).setOrigin(0.5, 0.85)
-      const fit = 150 / Math.max(portrait.width, portrait.height)
+      const fit = PORTRAIT.fit / Math.max(portrait.width, portrait.height)
       portrait.setScale(fit)
       add(portrait)
     }
@@ -240,11 +266,11 @@ export class BackpackWindow {
     this.buildPlaceholderSlot(FASHION_PLACEHOLDER, children)
     this.buildPlaceholderSlot(FASHION_TOGGLE_PLACEHOLDER, children)
 
-    // 10-stat table.
-    for (const s of STAT_L) this.statTexts[s.key] = add(this.makeValueText(s.x, s.y, 150))
-    for (const s of STAT_R) this.statTexts[s.key] = add(this.makeValueText(s.x, s.y, 150))
+    // 10-stat table -- all ten fields are `align center` in the real SWF.
+    for (const s of STAT_L) this.statTexts[s.key] = add(this.makeCenteredText(s.x, s.y, s.w))
+    for (const s of STAT_R) this.statTexts[s.key] = add(this.makeCenteredText(s.x, s.y, s.w))
 
-    this.expText = add(this.makeValueText(EXP_VALUE.x, EXP_VALUE.y, 260, 12))
+    this.expText = add(this.makeCenteredText(EXP_VALUE.x, EXP_VALUE.y, EXP_VALUE.w, 12))
     this.expFill = scene.textures.exists('backpack_exp_fill')
       ? add(scene.add.image(EXP_FILL.x, EXP_FILL.y, 'backpack_exp_fill').setOrigin(0, 0))
       : null
@@ -272,7 +298,7 @@ export class BackpackWindow {
 
     this.gridLayer = add(scene.add.container(0, 0))
 
-    this.soulText = add(this.makeValueText(SOUL_VALUE.x, SOUL_VALUE.y, 120))
+    this.soulText = add(this.makeValueText(SOUL_VALUE.x, SOUL_VALUE.y, SOUL_VALUE.w))
     add(
       scene.add
         .rectangle(SELL_BTN.x + SELL_BTN.w / 2, SELL_BTN.y + SELL_BTN.h / 2, SELL_BTN.w, SELL_BTN.h, 0xffffff, 0)
@@ -291,7 +317,7 @@ export class BackpackWindow {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this.setPage(this.page + 1)),
     )
-    this.nowpageText = add(this.makeValueText(NOWPAGE.x, NOWPAGE.y, 70, 13))
+    this.nowpageText = add(this.makeCenteredText(NOWPAGE.x, NOWPAGE.y, NOWPAGE.w, 13))
 
     this.container = scene.add
       .container(BG_X, BG_Y, children)
@@ -337,10 +363,21 @@ export class BackpackWindow {
 
   // ---------- internals ----------
 
+  /** Left-anchored value text -- only txt_lh (灵魂, `align left` in the real SWF) uses this. */
   private makeValueText(x: number, y: number, wrapWidth: number, size = 14): Phaser.GameObjects.Text {
     return this.scene.add
-      .text(x, y, '', { fontSize: `${size}px`, fontStyle: 'bold', color: HUD_COLORS.text, wordWrap: { width: wrapWidth } })
+      .text(x, y, '', { fontSize: `${size}px`, fontStyle: 'bold', color: HUD_COLORS.text, wordWrap: { width: wrapWidth }, align: 'left' })
       .setOrigin(0, 0)
+  }
+
+  /** Center-anchored value text -- every other stat/name/exp/nowpage field:
+   * every one of their DefineEditText tags in out_res/backpack1.swf reports
+   * `align center` (verified per-field, see the constants' comments above).
+   * `x` is the field's box CENTER, not its left edge. */
+  private makeCenteredText(x: number, y: number, boxWidth: number, size = 14): Phaser.GameObjects.Text {
+    return this.scene.add
+      .text(x, y, '', { fontSize: `${size}px`, fontStyle: 'bold', color: HUD_COLORS.text, wordWrap: { width: boxWidth }, align: 'center' })
+      .setOrigin(0.5, 0)
   }
 
   private buildPlaceholderSlot(spec: SlotSpec, children: Phaser.GameObjects.GameObject[]): void {

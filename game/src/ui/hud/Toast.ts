@@ -2,18 +2,35 @@ import Phaser from 'phaser'
 import { HUD_COLORS, FLOAT_STYLES, FloatKind } from './hudTheme'
 
 // Two feedback primitives:
-//  - Toast: a centered banner on the ORIGINAL 水墨 text band (hud_ink_band =
-//    dialogue_textpanel_crop, the ink brushstroke strip from the original story
-//    dialogue art). Used for pickup / level-up / craft messages.
+//  - Toast: a centered banner with a 水墨 ink-brush top/bottom rule
+//    (hud_ink_band). Used for pickup / level-up / craft messages.
 //  - spawnFloatingText: damage / heal / exp numbers that rise and fade. Styles
 //    come from hudTheme.FLOAT_STYLES (the parameter table the brief asks for);
 //    this renderer is a convenience -- callers may also read FLOAT_STYLES and
 //    render their own.
-
+//
+// hud_ink_band provenance: this used to be dialogue_textpanel_crop.png, a
+// crop straight off a story-cutscene screenshot (`Stage12XDialogue`, see
+// game/public/assets/extracted/ui/MANIFEST.md §1) -- it had the cutscene's
+// spoken line ("太上老君，滚出来...") and two character-sprite fragments baked
+// into it, which is exactly the "杂乱悟空" edge users were seeing on every
+// toast/dialogue popup (even the top/bottom-only crop this file already did
+// still caught the character fragments -- they bleed into the strip's very
+// edges, not just its center). Searched the vendor library for a real,
+// baked-text-free "ink band" symbol to replace it 1:1 (export.SayInfo,
+// chid344 OtherMat1.swf -- a plain grey tooltip pill, wrong style; and
+// GameCartoon's cutscene frames -- hand-painted per-frame art, no separable
+// template) and came up empty; MANIFEST.md itself already documents that the
+// original game has **no dedicated dialogue/toast UI component** at all (its
+// story only plays through baked comic-panel cutscenes), and explicitly says
+// this crop was meant only as a *style reference* ("面板背景应仿这个墨迹形状")
+// -- not as a live texture. So hud_ink_band is now a procedurally generated
+// ink-brush band (rough torn edge + a thin gold rim, matching the project's
+// existing ink+gold HUD language) built in that referenced style, with zero
+// baked photographic content. Generation script: tasks/backpack-toast-report.md.
 const INK_TEX = 'hud_ink_band'
-// The ink band art (942x114) has story text baked into its MIDDLE, so we sample
-// only its text-free brushstroke edges (top / bottom ~20px) as decoration --
-// same technique the dialogue box uses.
+// Both rules live in one 942x114 sheet: a top rule (rows 0-34, solid ink at
+// the very top edge fraying inward) and a bottom rule (rows 84-114, mirrored).
 const BRUSH_TOP = 'toast_brush_top'
 const BRUSH_BOT = 'toast_brush_bot'
 
@@ -44,7 +61,10 @@ export class Toast {
     const children: Phaser.GameObjects.GameObject[] = []
     if (this.scene.textures.exists(INK_TEX)) {
       this.ensureBrushFrames()
-      children.push(this.scene.add.image(0, 0, INK_TEX, BRUSH_TOP).setDisplaySize(w, 40).setOrigin(0.5).setTint(0x000000).setAlpha(0.9))
+      // No forced black tint here: that was papering over the old texture's
+      // baked colors (character-fragment art) by flattening it. The new
+      // hud_ink_band is already dark ink + a thin gold rim, so used as-is.
+      children.push(this.scene.add.image(0, 0, INK_TEX, BRUSH_TOP).setDisplaySize(w, 40).setOrigin(0.5).setAlpha(0.9))
     } else {
       const g = this.scene.add.graphics()
       g.fillStyle(0x000000, 0.82).fillRoundedRect(-w / 2, -20, w, 40, 10)
@@ -58,9 +78,8 @@ export class Toast {
 
   private ensureBrushFrames(): void {
     const tex = this.scene.textures.get(INK_TEX)
-    // 942x114 band: top and bottom ~20px strips are brushstroke only (no text).
-    if (!tex.has(BRUSH_TOP)) tex.add(BRUSH_TOP, 0, 0, 0, 942, 20)
-    if (!tex.has(BRUSH_BOT)) tex.add(BRUSH_BOT, 0, 0, 94, 942, 20)
+    if (!tex.has(BRUSH_TOP)) tex.add(BRUSH_TOP, 0, 0, 0, 942, 34)
+    if (!tex.has(BRUSH_BOT)) tex.add(BRUSH_BOT, 0, 0, 84, 942, 30)
   }
 
   /** Show a banner; color defaults to gold, or pass a FloatKind-ish css color. */
