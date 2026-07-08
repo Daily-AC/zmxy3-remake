@@ -7,6 +7,7 @@ import {
   initMonster,
   advanceMonster,
   MonsterInput,
+  VerticalFollowConfig,
 } from '../src/systems/monsterSim'
 import { TICK_MS } from '../src/systems/tick'
 
@@ -126,5 +127,61 @@ describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
     advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId: 9, damage: 50 } }, TICK_MS, cfg)
     expect(m.hp).toBe(hpBefore)
     expect(m.mode).toBe('gone')
+  })
+})
+
+describe('monsterSim vertical follow (opt-in Y-axis pursuit, verdict-fixes棒)', () => {
+  const follow = (overrides: Partial<VerticalFollowConfig> = {}): VerticalFollowConfig => ({
+    enabled: true,
+    speed: 10,
+    arriveThreshold: 5,
+    ...overrides,
+  })
+
+  it('does nothing when verticalFollow is absent (default) -- x-only monsters unaffected', () => {
+    const cfg = makeCfg() // no verticalFollow field at all
+    const m = initMonster(cfg, 500, 400)
+    run(m, { heroX: 800, heroY: 100, heroAlive: true, incomingHit: null }, 2000, cfg)
+    expect(m.y).toBe(400) // untouched regardless of how far x-chase/attack cycled
+  })
+
+  it('closes vertical distance toward heroY while chasing when enabled', () => {
+    const cfg: MonsterConfig = { ...makeCfg(), verticalFollow: follow() }
+    const m = initMonster(cfg, 500, 400)
+    // dist(x) = 300 > attackRange(250) -> chase-walk branch, still has a target.
+    advanceMonster(m, { heroX: 800, heroY: 100, heroAlive: true, incomingHit: null }, TICK_MS, cfg)
+    expect(m.mode).toBe('chase')
+    expect(m.y).toBe(390) // stepped speed(10) toward heroY(100), from 400
+  })
+
+  it('stops closing once within arriveThreshold of heroY (no overshoot/jitter)', () => {
+    const cfg: MonsterConfig = { ...makeCfg(), verticalFollow: follow({ speed: 10, arriveThreshold: 5 }) }
+    const m = initMonster(cfg, 500, 400)
+    m.y = 397 // within arriveThreshold(5) of heroY(400) below
+    advanceMonster(m, { heroX: 800, heroY: 400, heroAlive: true, incomingHit: null }, TICK_MS, cfg)
+    expect(m.y).toBe(397) // held, did not overshoot past heroY
+  })
+
+  it('does not move vertically when enabled:false (same as absent)', () => {
+    const cfg: MonsterConfig = { ...makeCfg(), verticalFollow: follow({ enabled: false }) }
+    const m = initMonster(cfg, 500, 400)
+    run(m, { heroX: 800, heroY: 100, heroAlive: true, incomingHit: null }, 2000, cfg)
+    expect(m.y).toBe(400)
+  })
+
+  it('regression: switch off leaves x/mode/action/hp trajectory identical to the pre-existing x-only baseline', () => {
+    // Same scenario as "melee-attacks (hit1) when the hero is inside attackRange
+    // on a decision tick" above, replayed once with no verticalFollow field and
+    // once with verticalFollow explicitly disabled -- both must land on the
+    // exact same state as the original (pre-feature) assertions.
+    for (const cfg of [makeCfg(() => 0), { ...makeCfg(() => 0), verticalFollow: follow({ enabled: false }) }]) {
+      const m = initMonster(cfg, 500, 400)
+      const events = run(m, { heroX: 600, heroY: 100, heroAlive: true, incomingHit: null }, 1050, cfg)
+      expect(m.mode).toBe('attack')
+      expect(m.action).toBe('hit1')
+      expect(m.x).toBe(500) // x-only baseline: attacking holds x in place
+      expect(m.y).toBe(400) // untouched regardless of heroY
+      expect(events.some((e) => e.type === 'attack-start')).toBe(true)
+    }
   })
 })

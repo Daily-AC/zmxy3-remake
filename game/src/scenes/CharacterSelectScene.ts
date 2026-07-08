@@ -65,8 +65,18 @@ const PANEL_W = ART_W / 5
 const BADGE_X = 69
 const BADGE_Y = 59
 
-const LOCKED_PANELS = [1, 2, 3, 4]
-const LOCKED_LABEL = ['唐僧', '猪八戒', '沙僧', '？？？']
+// Panels 1-3 (唐僧/猪八戒/沙僧) are real AS3 button slots (btn2/btn3/btn4,
+// tasks/selectrole-saveslots-report.md §1) -- locked this milestone, so the
+// "敬请期待" affordance is honest (a real character exists, just not playable
+// yet). Panel 4 ("???") is NOT in this list: AS3's SelectRole has no btn5 at
+// all for it -- it's pure decoration (DefineSprite_1011, static, no button
+// states, tasks/selectrole-saveslots-report.md §2), so any lock/label text on
+// top of it was self-added and never existed in the original. Verdict
+// 2026-07-08: removed -- the panel now renders exactly as baked into the
+// idle/selected art with zero affordance, matching AS3's own zero
+// interactivity there ("老玩家无感").
+const LOCKED_PANELS = [1, 2, 3]
+const LOCKED_LABEL = ['唐僧', '猪八戒', '沙僧']
 
 export class CharacterSelectScene extends Phaser.Scene {
   private slot: SlotId = 0
@@ -125,8 +135,10 @@ export class CharacterSelectScene extends Phaser.Scene {
         .on('pointerdown', () => this.onPanel1Click()),
     )
 
-    // Locked panels 2-5: same "敬请期待" affordance as before, restyled to
-    // sit flush in the full-bleed row (no boxed card look).
+    // Locked panels 2-4 (唐僧/猪八戒/沙僧): same "敬请期待" affordance as
+    // before, restyled to sit flush in the full-bleed row (no boxed card
+    // look). Panel 5 ("???") deliberately excluded -- see LOCKED_PANELS doc
+    // comment above.
     for (const i of LOCKED_PANELS) {
       const cx = i * PANEL_W
       const label = this.add
