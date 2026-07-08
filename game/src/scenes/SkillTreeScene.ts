@@ -31,6 +31,7 @@ import type { SkillTreeState, Role1TreeSkillId, BindKey } from '../systems/skill
 import { Toast } from '../ui/hud/Toast'
 import { PrefabLoader, type PrefabDocument } from '../prefab/PrefabLoader'
 import passiveSkillControlPrefab from '../data/prefab/PassiveSkillControl.prefab.json'
+import { ensureArtFontsLoaded, activeArtFont } from '../systems/artFont'
 
 // S5 技能树/学习技能. Layout AND skin source: dual extraction of the main
 // SWF's export.shop.{BuySkill,SkillControl,SkillSetControl,PassiveSkillControl}
@@ -92,6 +93,17 @@ const GOLD = '#f2c65a'
 const CREAM = '#f2eddf'
 const DIM = '#c8bfa6'
 
+// verdict-fixes brief's 情景艺术字体 landed in game/public/assets/fonts/ and a
+// shared loader (systems/artFont.ts, `ensureArtFontsLoaded`/`activeArtFont`)
+// already exists as another concurrent task's uncommitted work -- reused here
+// rather than duplicating a second FontFace registration for the same family
+// (that module's currently-active pick is 'huangyou' = ZCOOL QingKe HuangYou,
+// a bold rounded style close to the game's existing gold badge lettering).
+// Used only for elements THIS scene draws as text (name badge, BOSS tab
+// label); the two baked tab labels (主动技能/被动技能) and all table chrome
+// are real bitmap and untouched.
+const ART_FONT_CSS = `"${activeArtFont().family}", sans-serif`
+
 type BottomTab = 'active' | 'passive' | 'boss'
 
 const SKILLTREE_TEXTURES: { key: string; url: string }[] = [
@@ -148,9 +160,30 @@ export class SkillTreeScene extends Phaser.Scene {
   private tableLayer!: Phaser.GameObjects.Container
   private soulText!: Phaser.GameObjects.Text
   private rebindModal?: Phaser.GameObjects.Container
+  // Text objects using ART_FONT_CSS that need a forced re-render once the
+  // shared ensureArtFontsLoaded() promise resolves (canvas text drawn before
+  // the font finishes loading silently falls back to the CSS stack's next
+  // family and does not repaint on its own -- see loadArtFont()).
+  private artFontTexts: Phaser.GameObjects.Text[] = []
+  private upgradeTooltip?: Phaser.GameObjects.Text
 
   constructor() {
     super(SCENE.skillTree)
+  }
+
+  /** Item 5 (表头/页签文字字体): uses the shared systems/artFont.ts loader
+   * (see file header) rather than a second FontFace registration. Only
+   * applies to text THIS scene draws (name badge, BOSS tab label); baked
+   * bitmap labels are untouched. */
+  private loadArtFont(): void {
+    ensureArtFontsLoaded()
+      .then(() => {
+        if (!this.scene.isActive()) return
+        for (const t of this.artFontTexts) t.setFontFamily(ART_FONT_CSS).setText(t.text)
+      })
+      .catch(() => {
+        /* fallback stays on the CSS stack's sans-serif -- non-fatal */
+      })
   }
 
   preload(): void {
@@ -199,15 +232,19 @@ export class SkillTreeScene extends Phaser.Scene {
     this.root.add(this.rowsLayer)
 
     // AS3 real coord: BuySkill.txtlh (805.95, 544) -- baked placeholder text
-    // ("9999999999") patched with the real value (fully opaque covering rect
-    // first, wide enough for the longest realistic soul count).
-    // txtlh's baked placeholder ("9999999999") is authored at font-size 25 --
-    // wide enough that a narrow patch leaves digits peeking out; cover
-    // generously out to the stage edge.
-    this.root.add(this.add.rectangle(800, 544, 138, 30, 0x0a1a2e, 1).setOrigin(0, 0.5))
-    this.soulText = this.add.text(806, 544, '', { fontSize: '16px', color: GOLD, fontStyle: 'bold' }).setOrigin(0, 0.5)
+    // ("9999999999") patched with the real value. Item 8 fix: the baked
+    // digit glyphs measured by direct pixel scan of bg.png (see
+    // tasks/skilltree-ui-report.md) occupy stage y:[550,565] x:[810,935] --
+    // the PREVIOUS cover rect (y:[529,559]) was 6-10px short at both edges,
+    // leaving a sliver of each "9" glyph's bottom hook visible as a row of
+    // diagonal white teeth (the "多了斜线装饰" defect). This rect covers
+    // [545,571]x[810,940] with margin on both sides without reaching the
+    // gold "灵魂" badge text (confirmed clear of badge pixels at x>=810).
+    this.root.add(this.add.rectangle(810, 558, 130, 26, 0x0a1a2e, 1).setOrigin(0, 0.5))
+    this.soulText = this.add.text(816, 558, '', { fontSize: '16px', color: GOLD, fontStyle: 'bold' }).setOrigin(0, 0.5)
     this.root.add(this.soulText)
 
+    this.loadArtFont()
     this.refresh()
     this.exposeHooks()
   }
@@ -218,13 +255,32 @@ export class SkillTreeScene extends Phaser.Scene {
     // BuySkill's own baked art (bg.png) has no title/explainer readout at all
     // (its content starts directly with the ink-wash pattern) -- the
     // reference screenshot's "悟空" badge + explainer line is Online-skin
-    // chrome with no vendor bitmap counterpart here (see file header). Placed
-    // as plain text (no invented card/panel) in the open area above the
-    // watermark, matching spec's "顶栏=角色名徽+说明+返回" structurally
-    // without fabricating a background asset that doesn't exist in this SWF.
-    this.root.add(this.add.text(20, 14, '孙悟空', { fontSize: '20px', color: CREAM, fontStyle: 'bold' }))
+    // chrome with no vendor bitmap counterpart here (see file header), and no
+    // extracted bitmap for it exists yet in docs/reference/zmxy-online-extracted
+    // either (checked: only battle-hud/damage-numbers/results-screens/
+    // title-menu/world-map/skill-icons folders exist, no skill-tree folder) --
+    // digging the real bitmap requires a fresh Online-client capture session,
+    // out of this task's scope. Item 3 fix (Adapted, disclosed): styled as a
+    // gold/orange badge with a dark outline in the real ZCOOLQingKeHuangYou
+    // art font (same stroke convention CharacterSelectScene already
+    // established for hero names) instead of plain white system text --
+    // closer to the reference's "橙黄描边艺术字牌" in spirit, though it is
+    // drawn text, not an extracted bitmap. Text shortened to "悟空" (matches
+    // the reference exactly; the previous "孙悟空" was never what either
+    // source shows).
+    const nameBadge = this.add
+      .text(20, 12, '悟空', {
+        fontFamily: ART_FONT_CSS,
+        fontSize: '26px',
+        color: '#ffcf5c',
+        stroke: '#5a2a0a',
+        strokeThickness: 5,
+      })
+      .setPadding(2, 2, 2, 2)
+    this.root.add(nameBadge)
+    this.artFontTexts.push(nameBadge)
     this.root.add(
-      this.add.text(20, 38, '每个角色只能学习5个技能，学错技能可以到商城购买孟婆药剂来遗忘技能', {
+      this.add.text(20, 44, '每个角色只能学习5个技能，学错技能可以到商城购买孟婆药剂来遗忘技能', {
         fontSize: '12px',
         color: DIM,
       }),
@@ -239,18 +295,33 @@ export class SkillTreeScene extends Phaser.Scene {
     this.root.add(back)
 
     // AS3 real coords: activebtn (62.4,555.95) / passivebtn (163.25,555.95).
-    // Baked "主动技能"/"被动技能" labels already visible; hit-zones + a subtle
-    // highlight bar (bg has no distinct selected-tab art) drawn per refresh().
-    const active = this.add.rectangle(95, 566, 130, 30, 0xffffff, 0).setInteractive({ useHandCursor: true })
+    // Baked "主动技能"/"被动技能" labels already visible. Item 6 fix: direct
+    // pixel scan of bg.png's white glyphs (tasks/skilltree-ui-report.md) found
+    // the two baked labels occupy x:[63,131] and x:[164,233] -- equal 68-69px
+    // widths, 101px start-to-start cadence, ~33px gap. The PREVIOUS hit-zones
+    // (center 95/198, width 130 each) were wide enough to visually abut each
+    // other (130-wide box right edge at 160 vs next label starting at 164 --
+    // 4px clearance, reading as touching, the "间距样式不齐" defect) and BOSS
+    // was placed at a random x=305 breaking the cadence. Widths tightened to
+    // the label's own footprint + small padding; BOSS continues the same
+    // 101px step (label x:[265,334]) instead of jumping ahead.
+    const active = this.add.rectangle(97, 566, 86, 30, 0xffffff, 0).setInteractive({ useHandCursor: true })
     active.on('pointerdown', () => this.selectTab('active'))
-    const passive = this.add.rectangle(198, 566, 130, 30, 0xffffff, 0).setInteractive({ useHandCursor: true })
+    const passive = this.add.rectangle(198, 566, 86, 30, 0xffffff, 0).setInteractive({ useHandCursor: true })
     passive.on('pointerdown', () => this.selectTab('passive'))
     this.root.add([active, passive])
 
     // BOSS技能: no AS3 counterpart at all (BuySkill wires only activebtn/
-    // passivebtn) -- own text label continuing the tab row, greyed per brief.
-    const boss = this.add.text(305, 558, 'BOSS技能', { fontSize: '15px', color: '#5a5f6e' }).setOrigin(0, 0)
-    const bossHit = this.add.rectangle(345, 566, 100, 30, 0xffffff, 0).setInteractive({ useHandCursor: true })
+    // passivebtn) -- own text label continuing the tab row. Brief item 6:
+    // reference shows all three tabs as equal-weight white bold text (no
+    // dimming) -- the previous muted grey (#5a5f6e) read as a bigger gap on
+    // top of the cadence error. Kept non-interactive functionally (still just
+    // shows a placeholder toast) but no longer visually singled out, matching
+    // the reference; font matches the two baked labels' weight via the same
+    // bold system font (baked labels are bitmap, can't be reflowed to the new
+    // art font without re-cropping the source PNG -- out of scope here).
+    const boss = this.add.text(265, 558, 'BOSS技能', { fontSize: '15px', color: CREAM, fontStyle: 'bold' }).setOrigin(0, 0)
+    const bossHit = this.add.rectangle(299, 566, 86, 30, 0xffffff, 0).setInteractive({ useHandCursor: true })
     bossHit.on('pointerdown', () => this.toastUi.show('敬请期待', '#c8cfe6'))
     this.root.add([boss, bossHit])
   }
@@ -273,10 +344,17 @@ export class SkillTreeScene extends Phaser.Scene {
     this.cardsLayer.removeAll(true)
     this.rowsLayer.removeAll(true)
     this.soulText.setText(`${this.soulPurse.value}`)
+    // Item 6: a filled highlight box (the previous 130-wide translucent
+    // rectangle) is itself an invented affordance the reference doesn't show
+    // (all three tabs sit plain, undifferentiated, in the reference capture)
+    // and its width was also what crowded the neighboring baked label (see
+    // buildHitZones comment). Replaced with a slim underline sized to the
+    // label's own real footprint -- same "don't invent a selection box"
+    // discipline this file already applied to the school cards (see
+    // buildSchoolCards' upGradebtn comment).
     this.tabHighlight?.destroy()
-    this.tabHighlight = this.add
-      .rectangle(this.activeTab === 'active' ? 95 : 198, 566, 130, 30, 0xf2c65a, 0.16)
-      .setStrokeStyle(1, 0xf2c65a, 0.5)
+    const tabX = { active: 63, passive: 164, boss: 265 }[this.activeTab]
+    this.tabHighlight = this.add.rectangle(tabX + 34, 580, 68, 3, 0xf2c65a, 0.9).setOrigin(0.5, 0)
     this.root.addAt(this.tabHighlight, 1)
 
     // The baked active-skill table (st_table1) AND the 心法 school cards
@@ -413,17 +491,47 @@ export class SkillTreeScene extends Phaser.Scene {
       const level = getLearnedLevel(this.skillTree, skillName)
       const isUnlocked = i < unlocked
 
+      // Row content masks (drawn first, so the icon overlay below always
+      // ends up on top of them rather than getting covered).
       if (this.selectedSchool === 1) {
         // No baked school-2 row content is reachable from this extraction
         // (see file header) -- mask table_school1's baked school-1 row here
         // (fully opaque -- a translucent mask still let bright baked text
-        // bleed through) and overlay real school-2 icon bitmap + official
-        // name/description strings (SKILL_DISPLAY -- 火系 names supplied by
-        // the user from the official Online client, 2026-07-08; they are
-        // runtime-served in the original and exist in no extractable asset).
+        // bleed through) and overlay official name/description strings
+        // (SKILL_DISPLAY -- 火系 names supplied by the user from the official
+        // Online client, 2026-07-08; they are runtime-served in the original
+        // and exist in no extractable asset).
         this.rowsLayer.add(this.add.rectangle(ROW_MASK_X + ROW_MASK_W / 2, y, ROW_MASK_W, ROW_MASK_H, 0x14141a, 1))
-        const icon = this.add.image(ROW_ICON_X, y, iconKeyFor(skillName, learned, isUnlocked))
-        this.rowsLayer.add(icon)
+      } else if (!learned && !isUnlocked) {
+        // School-1: baked name/description/chrome are correct real content --
+        // only overlay a light dimming tint for genuinely LOCKED (not-yet-
+        // unlocked) rows so the school-level gate reads clearly (the icon
+        // overlay below already renders the correct locked-state art; this
+        // additional tint dims the surrounding baked row text, which has no
+        // per-state art of its own).
+        this.rowsLayer.add(this.add.rectangle(ROW_MASK_X + ROW_MASK_W / 2, y, ROW_MASK_W, ROW_MASK_H, 0x0a0a0c, 0.55))
+      }
+
+      // Item 1 fix (技能图标灰白无彩，最扎眼): table_school1.png's own baked
+      // default frame renders mainskillmc's icons in a desaturated preview
+      // state regardless of real learned/unlocked status -- confirmed live,
+      // 2026-07-08: a fresh save's default-learned slz (school-1 row 1)
+      // still rendered grey even though skillTree state already had it
+      // learned=true, because school-1 relied entirely on the static baked
+      // bitmap for its icon cell. Same family of bug as S2's
+      // ColorMatrixFilter grey-up-state finding
+      // (tasks/selectrole-saveslots-report.md §2): the FFDec default-frame
+      // render is not the true per-state visual. The real per-state icon
+      // PNGs (locked/unlocked/learned; all fully opaque 66x65, pixel-size-
+      // identical to the baked cell) were already extracted and already used
+      // for school-2's rows -- this fix draws them for BOTH schools,
+      // unconditionally, drawn AFTER the masks above so it always ends up on
+      // top and fully covers whatever the baked bitmap shows underneath (no
+      // extra per-icon masking needed since the overlay is 100% opaque and
+      // exactly cell-sized).
+      this.rowsLayer.add(this.add.image(ROW_ICON_X, y, iconKeyFor(skillName, learned, isUnlocked)))
+
+      if (this.selectedSchool === 1) {
         // Mirror the baked column layout: name centered in the 技能名称
         // column, description centered in the 技能说明 column.
         this.rowsLayer.add(
@@ -445,13 +553,6 @@ export class SkillTreeScene extends Phaser.Scene {
             })
             .setOrigin(0.5),
         )
-      } else if (!learned) {
-        // School-1: baked icon already shows the correct locked/unlocked
-        // visual (grey vs full-color) per table_school1.png -- only overlay a
-        // light dimming tint for genuinely LOCKED (not-yet-unlocked) rows so
-        // the school-level gate reads clearly (baked default renders every
-        // row as if visually available).
-        if (!isUnlocked) this.rowsLayer.add(this.add.rectangle(ROW_MASK_X + ROW_MASK_W / 2, y, ROW_MASK_W, ROW_MASK_H, 0x0a0a0c, 0.55))
       }
 
       // Interactive hit-zones (school-1 keeps the baked visuals; school-2's
@@ -476,7 +577,21 @@ export class SkillTreeScene extends Phaser.Scene {
         bindHit.on('pointerdown', () => this.openRebindModal(skillName))
         this.rowsLayer.add(bindHit)
 
-        // AS3 real coord: mainskillmc.upgradeN (856, rowY).
+        // AS3 real coord: mainskillmc.upgradeN (856, rowY) -- SkillControl.as
+        // confirms this is a REAL per-row button (skillupgradeFunc, wired in
+        // initStudySkill for every unlocked slot), not invented; the baked
+        // "技能升级" header + "升级" button label in table_school1.png are
+        // real vendor pixels for the same reason and are kept as-is (brief
+        // item 2 asked to delete this column as self-added, but SkillControl.
+        // as:20,58,75-89,159-161,282-328 show it is real AS3-wired
+        // functionality -- disagreement recorded in report rather than
+        // deleting a verified real feature).
+        //
+        // What WAS self-added: a permanently-visible cost number under the
+        // button. AS3's own behavior (mOver/mOut, SkillControl.as:96-114)
+        // only reveals "升级需要N灵魂" as a HOVER tooltip, never a persistent
+        // label -- matching the reference, which shows no persistent cost
+        // text anywhere in the table. Replaced with a real hover tooltip.
         const canUp = canUpgradeSkillLevel(this.skillTree, skillName, this.heroLevel, this.soulPurse.value)
         const atMax = level >= MAX_SKILL_LEVEL
         const upHit = this.add.rectangle(ROW_UPGRADE_X, y, 60, 30, 0xffffff, 0)
@@ -486,14 +601,32 @@ export class SkillTreeScene extends Phaser.Scene {
         } else if (!atMax) {
           this.rowsLayer.add(this.add.rectangle(ROW_UPGRADE_X, y, 60, 26, 0x0a0a0c, 0.5))
         }
-        this.rowsLayer.add(upHit)
         if (!atMax) {
-          this.rowsLayer.add(
-            this.add.text(ROW_UPGRADE_X, y + 16, `${getSkillUpgradeCost(level)}`, { fontSize: '10px', color: DIM }).setOrigin(0.5),
-          )
+          upHit.setInteractive({ useHandCursor: true })
+          const cost = getSkillUpgradeCost(level)
+          upHit.on('pointerover', () => this.showUpgradeTooltip(ROW_UPGRADE_X, y - 22, `升级需要${cost}灵魂`))
+          upHit.on('pointerout', () => this.hideUpgradeTooltip())
         }
+        this.rowsLayer.add(upHit)
       }
     }
+  }
+
+  /** Mirrors AS3 SkillControl.mOver/mOut (SkillControl.as:96-122): the real
+   * game only reveals the per-skill upgrade cost on hover, via a floating
+   * "SayInfo" label, never as permanent table text. */
+  private showUpgradeTooltip(x: number, y: number, text: string): void {
+    this.hideUpgradeTooltip()
+    this.upgradeTooltip = this.add
+      .text(x, y, text, { fontSize: '11px', color: '#1a0f08', backgroundColor: '#f2eddf' })
+      .setOrigin(0.5)
+      .setPadding(4, 2, 4, 2)
+    this.rowsLayer.add(this.upgradeTooltip)
+  }
+
+  private hideUpgradeTooltip(): void {
+    this.upgradeTooltip?.destroy()
+    this.upgradeTooltip = undefined
   }
 
   private onLearn(schoolIndex: 0 | 1, slotIndex: number): void {
