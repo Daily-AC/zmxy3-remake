@@ -232,5 +232,71 @@
       "qtyMax": 1,
       "chance": 0.06
     }
+  ],
+  "monster6": [
+    {
+      "itemId": "cotton_robe",
+      "name": "云纹布袍",
+      "kind": "equip",
+      "rarity": 2,
+      "weight": 1,
+      "qtyMin": 1,
+      "qtyMax": 1,
+      "chance": 0.375
+    },
+    {
+      "itemId": "star_blade",
+      "name": "星纹短刃",
+      "kind": "equip",
+      "rarity": 3,
+      "weight": 1,
+      "qtyMin": 1,
+      "qtyMax": 1,
+      "chance": 0.375
+    }
+  ],
+  "monster16": [
+    {
+      "itemId": "guard_boots",
+      "name": "踏云靴",
+      "kind": "equip",
+      "rarity": 3,
+      "weight": 1,
+      "qtyMin": 1,
+      "qtyMax": 1,
+      "chance": 0.3375
+    },
+    {
+      "itemId": "monkey_talisman",
+      "name": "灵猴护符",
+      "kind": "equip",
+      "rarity": 3,
+      "weight": 1,
+      "qtyMin": 1,
+      "qtyMax": 1,
+      "chance": 0.3375
+    }
+  ],
+  "monster15": [
+    {
+      "itemId": "monkey_talisman",
+      "name": "灵猴护符",
+      "kind": "equip",
+      "rarity": 3,
+      "weight": 1,
+      "qtyMin": 1,
+      "qtyMax": 1,
+      "chance": 0.3
+    },
+    {
+      "itemId": "star_blade",
+      "name": "星纹短刃",
+      "kind": "equip",
+      "rarity": 3,
+      "weight": 1,
+      "qtyMin": 1,
+      "qtyMax": 1,
+      "chance": 0.3
+    }
   ]
 }
