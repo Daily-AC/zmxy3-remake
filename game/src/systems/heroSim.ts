@@ -108,11 +108,6 @@ function tick(state: HeroState, edges: HeroEdges, cfg: HeroConfig): void {
   if (edges.releaseLeft) releaseLeft(state.move)
   if (edges.releaseRight) releaseRight(state.move)
 
-  const wasAttacking = state.combo.stage > 0
-
-  // Jump: only when not mid-combo. requestJump enforces the 2-jump ceiling.
-  if (edges.pressJump && !wasAttacking) requestJump(state.vertical, cfg.jump)
-
   // Combo: starts only on the ground (see combo.ts airborne note).
   const comboRes = stepCombo(
     state.combo,
@@ -122,6 +117,17 @@ function tick(state: HeroState, edges: HeroEdges, cfg: HeroConfig): void {
 
   // Each new combo stage is a fresh swing -> a new attack id for hit dedup.
   if (comboRes.changed && state.combo.stage > 0) state.attackId += 1
+
+  // Jump: blocked only while genuinely mid-swing (comboRes.attacking, i.e.
+  // AS3's isAttacking()) -- hitstun-triad pen: this used to key off
+  // `state.combo.stage > 0` computed BEFORE stepCombo, which (now that stage
+  // legitimately stays nonzero through the whole post-swing chain window,
+  // see combo.ts's header) would have kept blocking jump for up to 1500ms
+  // after every swing even though the hero is actually free to act again the
+  // instant the swing itself ends -- Role1.as's own jump case in myKeyDown()
+  // only rejects the press while isAttacking()||isBeAttacking(), never
+  // merely because a combo chain window is still open in the background.
+  if (edges.pressJump && !comboRes.attacking) requestJump(state.vertical, cfg.jump)
 
   // Horizontal movement, suppressed while a combo occupies the character.
   if (!comboRes.attacking) {
