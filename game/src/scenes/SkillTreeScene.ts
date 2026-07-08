@@ -294,7 +294,7 @@ export class SkillTreeScene extends Phaser.Scene {
       // mislabeled default ("斻系心法", a design-time placeholder bug in the
       // baked art affecting BOTH cards' name field) patched to "火系心法".
       if (schoolIndex === 1) {
-        this.cardsLayer.add(this.add.rectangle(nameCx, nameY, 110, 24, 0x1a0f08, 1))
+        this.cardsLayer.add(this.add.rectangle(nameCx, nameY, 150, 26, 0x000000, 1))
         this.cardsLayer.add(
           this.add.text(nameCx, nameY, ROLE1_SCHOOLS[1].name, { fontSize: '13px', color: CREAM }).setOrigin(0.5),
         )
@@ -305,8 +305,12 @@ export class SkillTreeScene extends Phaser.Scene {
       // disclosed departure from "real bitmap only" for these two short
       // status lines (icons/names/descriptions/buttons elsewhere on this
       // screen remain unmodified real pixels; see report §终审返修).
-      this.cardsLayer.add(this.add.rectangle(lineX, levelLineY, 280, 22, 0x1a0f08, 1).setOrigin(0, 0.5))
-      this.cardsLayer.add(this.add.rectangle(lineX, costLineY, 280, 22, 0x1a0f08, 1).setOrigin(0, 0.5))
+      // Width 196 keeps the mask inside the card column (card interior is
+      // pure #000, baked status text ends at table-local x=177); the earlier
+      // 280-wide brown strip spilled into the 技能名称 column and blotted out
+      // the baked row-2/row-5 names -- caught in final review.
+      this.cardsLayer.add(this.add.rectangle(lineX, levelLineY, 196, 22, 0x000000, 1).setOrigin(0, 0.5))
+      this.cardsLayer.add(this.add.rectangle(lineX, costLineY, 196, 22, 0x000000, 1).setOrigin(0, 0.5))
       this.cardsLayer.add(
         this.add.text(lineX, levelLineY, `当前等级：${school.level}`, { fontSize: '13px', color: DIM }).setOrigin(0, 0.5),
       )
@@ -317,30 +321,33 @@ export class SkillTreeScene extends Phaser.Scene {
           .setOrigin(0, 0.5),
       )
 
-      const selected = this.selectedSchool === schoolIndex
+      // No drawn selection box: the AS3's own selection cue IS the shared
+      // upgrade button position (firstXFFunc/secondXFFunc move ONE button
+      // between y=191.35/391.35) -- the earlier yellow outline was an
+      // invented affordance, removed in final review. Cards stay clickable
+      // via an invisible hit zone.
       const boxY = schoolIndex === 0 ? 130 : 330
-      const highlight = this.add
-        .rectangle(150, boxY + 90, 220, 180, 0, 0)
-        .setStrokeStyle(2, selected ? 0xf2c65a : 0x000000, selected ? 0.9 : 0)
       const hit = this.add.rectangle(150, boxY + 90, 220, 180, 0xffffff, 0).setInteractive({ useHandCursor: true })
       hit.on('pointerdown', () => {
         this.selectedSchool = schoolIndex
         this.refresh()
       })
-      this.cardsLayer.add([highlight, hit])
+      this.cardsLayer.add(hit)
 
       // AS3 real coord: upGradebtn (136.95, 191.35) -- SHARED single button
-      // that AS3 moves between the two y's (firstXFFunc/secondXFFunc) rather
-      // than two independent buttons. table_school1.png's baked default frame
-      // is "孙悟空-1" (school 1 selected), so only the y=191.35 position has a
-      // real baked "升级" visual -- school 1 gets a hit-zone over it; school 2
-      // (y=391.35) has no baked visual at that position (the real button
-      // simply isn't there in this static frame) and needs its own label.
-      if (cost !== undefined) {
+      // that AS3 moves between the two y's (firstXFFunc/secondXFFunc). The
+      // baked frame shows the button on card 1 only, so: card 1 selected ->
+      // baked visual + hit zone; card 2 selected -> mask card 1's baked
+      // visual and draw the same-language label at the mirrored (+200) y.
+      const selected = this.selectedSchool === schoolIndex
+      if (schoolIndex === 0 && !selected) {
+        this.cardsLayer.add(this.add.rectangle(172, 191.35, 80, 28, 0x000000, 1))
+      }
+      if (cost !== undefined && selected) {
         const btnY = schoolIndex === 0 ? 191.35 : 391.35
         if (schoolIndex === 1) {
           this.cardsLayer.add(
-            this.add.text(172, btnY, '升级心法', { fontSize: '13px', color: '#ffb347', fontStyle: 'bold' }).setOrigin(0.5),
+            this.add.text(172, btnY, '升 级', { fontSize: '15px', color: '#ffb347', fontStyle: 'bold' }).setOrigin(0.5),
           )
         }
         const hitBtn = this.add.rectangle(172, btnY, 70, 26, 0xffffff, 0).setInteractive({ useHandCursor: true })
