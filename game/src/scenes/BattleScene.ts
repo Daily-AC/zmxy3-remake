@@ -2082,10 +2082,28 @@ export class BattleScene extends Phaser.Scene {
     if (e.skillGate && e.skillOverlay && e.state.mode !== 'dead') {
       const xDist = Math.abs(this.heroState.x - e.state.x)
       const canTrigger = e.state.mode === 'chase' && !e.skillOverlay.active
+      // hitstun-triad pen (blue-team catch, tasks/review-blue-findings.md):
+      // was `{x: e.state.x, y: e.state.y, ...}` (the boss's raw sim anchor) --
+      // that left this the ONE hit-test box in the file still built in a
+      // different coordinate space than the hero hurtbox it's tested against
+      // (heroVisualCenter(), see resolveEnemySkillHit), a mismatch of exactly
+      // the boss's own render offset (Monster3: off.y=-5, scale=1.5 -> 7.5px;
+      // hero's own off.y=-15 -> 22.5px is the bigger half of the gap). Ruling
+      // (see monsterHitbox()'s header for the same call made on the
+      // hero-attacks-monster side): this project has no extracted per-pixel
+      // `colipse` art to anchor hit-tests on, so every AABB test box in this
+      // file is defined to live in RENDERED VISUAL CENTER space -- what the
+      // player actually sees overlapping. The AS3-sourced per-move offsetX/Y
+      // constants (Monster3's -60/-30, Monster7's -86, Monster13's -21, all
+      // from doHi*()'s literal `this.y - N`) still apply on top of that
+      // center exactly as decompiled; they shift by the character's own
+      // small render offset (a few px) relative to their literal AS3 meaning
+      // (offset from the raw un-rendered registration point), which is
+      // negligible next to the tens-of-px misalignment this fixes.
       const skillEvents = advanceSkillOverlay(
         e.skillOverlay,
         e.skillGate,
-        { x: e.state.x, y: e.state.y, facing: e.state.facing },
+        { ...this.monsterVisualCenter(e), facing: e.state.facing },
         xDist,
         canTrigger,
         delta,

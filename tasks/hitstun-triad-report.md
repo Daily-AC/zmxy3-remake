@@ -120,3 +120,17 @@ case "0100": // 攻击键
 ## Commit
 
 只 `git add`：`game/src/scenes/BattleScene.ts`、`game/src/systems/combo.ts`、`game/src/systems/heroSim.ts`、`game/tests/combo.test.ts`（+本报告）。工作树里同时存在其他棒正在改的文件（`SkillTreeScene.ts`/`WorldMapScene.ts`/`BackpackWindow.ts`/`FurnacePanel.ts`/`ResultBanner.ts`/`MenuButton.ts`/`DialogueBox.ts`/`saveSlots.ts`/新文件 `screenHit.ts`）——本棒确认过这些改动都不是自己做的，**一概不 add，不 push**。
+
+---
+
+## 追补：巫鹰 hit2 AoE 命中盒坐标基准不统一（蓝队复核发现，2026-07-09）
+
+蓝队在本棒在途 diff 里挖到一处真缝隙（`tasks/review-blue-findings.md` 对抗验证节第3条）：`monsterBehaviors.ts` 的 `buildOverlayHitboxSpawn()`（巫鹰 hit2 AoE 的生成点）当时仍然接的是 `advanceEntity()` 传进去的**裸 `{x: e.state.x, y: e.state.y}`**（怪物的原始逻辑锚点），而它命中检测对面的英雄受击盒（`resolveEnemySkillHit`）已经在本棒早前的改动里换成了 `heroVisualCenter()`（渲染视觉中心）——两侧基准不统一，相当于把英雄自己的渲染偏移量（`off.y=-15 × scale1.5 = 22.5px`）当噪声重新塞回了判定链路，属于本棒自己在修复过程中新引入的一处不一致，不是原有 bug。
+
+**裁定依据**：反编译 `doHi2()`/`doHi1()` 等确认，AS3 的 AoE 生成偏移常量（Monster3的-60/-30、Monster7的-86、Monster13的-21）字面上是 `this.y - N`——加在角色自身**原始注册点**（即 `state.y`）上，不是加在"渲染后可见位置"上。但 AS3 的真实命中判定走的是逐像素 `HitTest.complexHitTestObject(colipse, bullet)`，`colipse` 是美术手工摆放的碰撞子物件，其真实像素范围/对齐关系我们没有提取、也无法精确复刻。本项目全线命中盒都是简化 AABB（`hitbox.ts` 文件头本就承认），既然英雄攻击怪物那条链路（`resolveHeroHits`/`monsterHitbox`）已经统一定成"AABB 一律锚在渲染视觉中心"，为了不让同一个系统里出现两套并存的坐标语义，本棒判定：**怪物侧的 AoE 生成锚点也统一改用 `monsterVisualCenter()`**，AS3 原始偏移常量数值不变，只是改挂在视觉中心而非裸注册点上——偏差量级是攻击方自身的渲染偏移（本例 Monster3 的 `off.y=-5×1.5=7.5px`），远小于修复前英雄那 22.5px 的错位，可接受。
+
+修复：`BattleScene.ts` 的 `advanceEntity()` 传给 `advanceSkillOverlay()` 的 host 从 `{x:e.state.x, y:e.state.y, facing:e.state.facing}` 改成 `{...this.monsterVisualCenter(e), facing:e.state.facing}`；`monsterBehaviors.ts` 的 `SkillOverlayHost` 接口加了裁定说明的文档注释，防止未来的调用点再次传裸坐标进来。
+
+验证（浏览器，`localhost:5205`，站在真实 hit2 生成点位置）：英雄站在 AoE 真实生成坐标（`bossVisualCenter.x + facing×155`）时命中，`heroHp 240→233`（7点，与 monsterAttackPower 表里的真实 hit2 数值经减伤后一致）；英雄站在 triggerRange(200) 以内但明显超出 AoE 真实生成偏移(155±70)的位置时不掉血（`dmg:0`，确认不是"判定盒失效"而是"站的位置本来就不在真实挥砍范围内"这个 AS3 真实几何本身的体现）。
+
+Commit（追补）：只 `git add`：`game/src/scenes/BattleScene.ts`、`game/src/systems/monsterBehaviors.ts`（+本报告更新）。`npx vitest run` 40 files/485 passed,1 skipped（零测试改动，纯坐标基准修正）；`npx tsc --noEmit`0错误；`npm run build`过。
