@@ -124,6 +124,34 @@ interface SlotSpec {
   w: number
   h: number
 }
+
+// ---- input: scene-level screen-space hit-testing, NOT Phaser setInteractive ----
+// Every clickable rect below is tested by hand against the pointer's raw
+// screen coordinates (converted to this window's local space by subtracting
+// container.x/y) instead of using GameObject.setInteractive(). Reason: this
+// entire window sits in a setScrollFactor(0) container, and Phaser hit-tests
+// interactive objects by converting the pointer to WORLD space via the
+// camera's current scroll -- it does not account for scrollFactor(0) -- so
+// once BattleScene's camera scrolls even slightly (it does continuously,
+// following the hero, and vertically during the L1 climb intro), every
+// setInteractive() zone here drifts out from under its own rendered button
+// while the button itself (correctly) stays put on screen. Symptom filed by
+// the user: "打开背包后所有按钮点不动，窗口也关不掉" -- reproduced live via a
+// forced camera scroll (scrollX=400): identical clicks that worked at
+// scrollX=0 hit nothing once scrolled. Same root cause SkillBarHud hit first
+// (4662cd6) and fixed the same way; this window just never got the same fix.
+type Rect = { x: number; y: number; w: number; h: number }
+function within(x: number, y: number, r: Rect): boolean {
+  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h
+}
+type HitResult =
+  | { kind: 'close' }
+  | { kind: 'tab'; tab: BackpackTab }
+  | { kind: 'sell' }
+  | { kind: 'prev' }
+  | { kind: 'next' }
+  | { kind: 'equip'; slot: EquipSlot; item: Item; rect: Rect }
+  | { kind: 'grid'; stack: BackpackStack; rect: Rect }
 const EQUIP_SLOTS: Record<EquipSlot, SlotSpec> = {
   weapon: { x: 251.7, y: 113.4, w: 50, h: 50 }, // zbwq 武器
   accessory: { x: 322.7, y: 113.4, w: 50, h: 50 }, // zbsp 饰品
@@ -207,6 +235,13 @@ export class BackpackWindow {
   private tab: BackpackTab = 'equip'
   private page = 1
 
+  // Rebuilt by redrawEquip()/redrawGrid() whenever their contents change;
+  // consulted by resolveHit() instead of per-object setInteractive() (see the
+  // scene-level hit-testing note above SlotSpec).
+  private equipHits: { slot: EquipSlot; item: Item; rect: Rect }[] = []
+  private gridHits: { stack: BackpackStack; rect: Rect }[] = []
+  private hoveredItem: Item | null = null
+
   constructor(scene: Phaser.Scene, opts: BackpackWindowOptions = {}) {
     this.scene = scene
     this.opts = {
@@ -222,8 +257,11 @@ export class BackpackWindow {
       return o
     }
 
-    // Dim backdrop over the battlefield.
-    add(scene.add.rectangle(480, 270, 960, 540, 0x000000, 0.55).setInteractive())
+    // Dim backdrop over the battlefield (visual only -- click-blocking used
+    // to ride on setInteractive() here, but that's the same broken pattern
+    // this whole window is being moved off of; nothing else in this scene is
+    // mouse-clickable while battling, so there's nothing left to block).
+    add(scene.add.rectangle(480, 270, 960, 540, 0x000000, 0.55))
 
     if (scene.textures.exists('backpack_bg')) {
       add(scene.add.image(0, 0, 'backpack_bg').setOrigin(0, 0))
@@ -234,13 +272,8 @@ export class BackpackWindow {
       add(g)
     }
 
-    // Close hotspot over the baked red X.
-    add(
-      scene.add
-        .rectangle(CLOSE.x + CLOSE.w / 2, CLOSE.y + CLOSE.h / 2, CLOSE.w, CLOSE.h, 0xffffff, 0)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.opts.onClose?.()),
-    )
+    // Close hotspot over the baked red X: no GameObject needed, resolveHit()
+    // tests the CLOSE rect directly against pointer coords.
 
     this.nameText = add(this.makeCenteredText(NAME_VALUE.x, NAME_VALUE.y, NAME_VALUE.w))
     this.zdlText = add(this.makeCenteredText(ZDL_VALUE.x, ZDL_VALUE.y, ZDL_VALUE.w))
@@ -282,41 +315,20 @@ export class BackpackWindow {
         .setOrigin(0, 0)
         .setStrokeStyle(2, HUD_COLORS.goldBright, 0.9),
     )
+    // Disabled-tab dark overlays are still real GameObjects (visual only);
+    // the clickable tabs themselves are resolved by resolveHit() against
+    // TAB_ROW + index*pitch, no per-tab hotspot GameObject needed.
     TAB_ORDER.forEach((tabId, i) => {
+      if (!DISABLED_TABS.has(tabId)) return
       const tx = TAB_ROW.x + i * TAB_ROW.pitch
-      const disabled = DISABLED_TABS.has(tabId)
-      const hit = scene.add
-        .rectangle(tx + TAB_ROW.w / 2, TAB_ROW.y + TAB_ROW.h / 2, TAB_ROW.w, TAB_ROW.h, 0xffffff, 0)
-        .setInteractive({ useHandCursor: !disabled })
-      if (disabled) {
-        add(scene.add.rectangle(tx, TAB_ROW.y, TAB_ROW.w, TAB_ROW.h, 0x1a1a1a, 0.55).setOrigin(0, 0))
-      } else {
-        hit.on('pointerdown', () => this.setTab(tabId))
-      }
-      add(hit)
+      add(scene.add.rectangle(tx, TAB_ROW.y, TAB_ROW.w, TAB_ROW.h, 0x1a1a1a, 0.55).setOrigin(0, 0))
     })
 
     this.gridLayer = add(scene.add.container(0, 0))
 
     this.soulText = add(this.makeValueText(SOUL_VALUE.x, SOUL_VALUE.y, SOUL_VALUE.w))
-    add(
-      scene.add
-        .rectangle(SELL_BTN.x + SELL_BTN.w / 2, SELL_BTN.y + SELL_BTN.h / 2, SELL_BTN.w, SELL_BTN.h, 0xffffff, 0)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.opts.onSell?.()),
-    )
-    add(
-      scene.add
-        .rectangle(PREV_BTN.x + PREV_BTN.w / 2, PREV_BTN.y + PREV_BTN.h / 2, PREV_BTN.w, PREV_BTN.h, 0xffffff, 0)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.setPage(this.page - 1)),
-    )
-    add(
-      scene.add
-        .rectangle(NEXT_BTN.x + NEXT_BTN.w / 2, NEXT_BTN.y + NEXT_BTN.h / 2, NEXT_BTN.w, NEXT_BTN.h, 0xffffff, 0)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.setPage(this.page + 1)),
-    )
+    // Sell/prev/next hotspots: resolveHit() tests SELL_BTN/PREV_BTN/NEXT_BTN
+    // directly, no hotspot GameObjects needed.
     this.nowpageText = add(this.makeCenteredText(NOWPAGE.x, NOWPAGE.y, NOWPAGE.w, 13))
 
     this.container = scene.add
@@ -324,6 +336,83 @@ export class BackpackWindow {
       .setScrollFactor(0)
       .setDepth(200)
       .setVisible(false)
+
+    scene.input.on('pointerdown', this.onPointerDown)
+    scene.input.on('pointermove', this.onPointerMove)
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      scene.input.off('pointerdown', this.onPointerDown)
+      scene.input.off('pointermove', this.onPointerMove)
+    })
+  }
+
+  /** Pointer (screen coords) -> this window's local coords. Valid because
+   * the container is scrollFactor(0), scale 1, unrotated -- see the hit-
+   * testing note above SlotSpec. */
+  private toLocal(pointer: Phaser.Input.Pointer): { lx: number; ly: number } {
+    return { lx: pointer.x - this.container.x, ly: pointer.y - this.container.y }
+  }
+
+  private resolveHit(lx: number, ly: number): HitResult | null {
+    if (within(lx, ly, CLOSE)) return { kind: 'close' }
+    for (let i = 0; i < TAB_ORDER.length; i++) {
+      const tabId = TAB_ORDER[i]
+      if (DISABLED_TABS.has(tabId)) continue
+      const rect: Rect = { x: TAB_ROW.x + i * TAB_ROW.pitch, y: TAB_ROW.y, w: TAB_ROW.w, h: TAB_ROW.h }
+      if (within(lx, ly, rect)) return { kind: 'tab', tab: tabId }
+    }
+    if (within(lx, ly, SELL_BTN)) return { kind: 'sell' }
+    if (within(lx, ly, PREV_BTN)) return { kind: 'prev' }
+    if (within(lx, ly, NEXT_BTN)) return { kind: 'next' }
+    for (const h of this.equipHits) if (within(lx, ly, h.rect)) return { kind: 'equip', slot: h.slot, item: h.item, rect: h.rect }
+    for (const h of this.gridHits) if (within(lx, ly, h.rect)) return { kind: 'grid', stack: h.stack, rect: h.rect }
+    return null
+  }
+
+  private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
+    if (!this.container.visible) return
+    const { lx, ly } = this.toLocal(pointer)
+    const hit = this.resolveHit(lx, ly)
+    if (!hit) return
+    switch (hit.kind) {
+      case 'close':
+        this.opts.onClose?.()
+        break
+      case 'tab':
+        this.setTab(hit.tab)
+        break
+      case 'sell':
+        this.opts.onSell?.()
+        break
+      case 'prev':
+        this.setPage(this.page - 1)
+        break
+      case 'next':
+        this.setPage(this.page + 1)
+        break
+      case 'equip':
+        this.opts.onUnequip?.(hit.slot)
+        break
+      case 'grid':
+        if (hit.stack.item.kind === 'equip') this.opts.onEquip?.(hit.stack.item)
+        break
+    }
+  }
+
+  /** Hand cursor + tooltip on hover -- replaces the per-object
+   * useHandCursor/pointerover/pointerout that setInteractive() used to give
+   * for free (lost when this window moved off setInteractive(), see the
+   * hit-testing note above SlotSpec). */
+  private readonly onPointerMove = (pointer: Phaser.Input.Pointer): void => {
+    if (!this.container.visible) return
+    const { lx, ly } = this.toLocal(pointer)
+    const hit = this.resolveHit(lx, ly)
+    this.scene.input.manager.canvas.style.cursor = hit ? 'pointer' : ''
+    const item = hit?.kind === 'equip' || hit?.kind === 'grid' ? (hit.kind === 'equip' ? hit.item : hit.stack.item) : null
+    if (item !== this.hoveredItem) {
+      this.hoveredItem = item
+      if (item && hit && 'rect' in hit) this.showTooltip(hit.rect.x + hit.rect.w / 2, hit.rect.y + hit.rect.h / 2, item)
+      else this.hideTooltip()
+    }
   }
 
   open(): this {
@@ -334,6 +423,8 @@ export class BackpackWindow {
   close(): this {
     this.hideTooltip()
     this.container.setVisible(false)
+    this.scene.input.manager.canvas.style.cursor = ''
+    this.hoveredItem = null
     return this
   }
 
@@ -453,6 +544,7 @@ export class BackpackWindow {
 
   private redrawEquip(): void {
     this.equipLayer.removeAll(true)
+    this.equipHits = []
     if (!this.equipment) return
     ;(Object.keys(EQUIP_SLOTS) as EquipSlot[]).forEach((slot) => {
       const item = this.equipment![slot]
@@ -466,18 +558,14 @@ export class BackpackWindow {
         icon.setScale(Math.min(1, (spec.w - 6) / Math.max(icon.width, icon.height)))
         this.equipLayer.add(icon)
       }
-      const hit = this.scene.add
-        .rectangle(cx, cy, spec.w, spec.h, 0xffffff, 0)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.opts.onUnequip?.(slot))
-        .on('pointerover', () => this.showEquipTooltip(cx, cy, item))
-        .on('pointerout', () => this.hideTooltip())
-      this.equipLayer.add(hit)
+      // Click/hover hotspot: see resolveHit(), not a GameObject any more.
+      this.equipHits.push({ slot, item, rect: { x: spec.x, y: spec.y, w: spec.w, h: spec.h } })
     })
   }
 
   private redrawGrid(): void {
     this.gridLayer.removeAll(true)
+    this.gridHits = []
     this.hideTooltip()
     const items = this.filteredStacks().slice((this.page - 1) * PAGE_SIZE, this.page * PAGE_SIZE)
     for (let row = 0; row < GRID_ROWS; row++) {
@@ -518,19 +606,8 @@ export class BackpackWindow {
           .setShadow(1, 1, '#000000', 2),
       )
     }
-    const hit = this.scene.add
-      .rectangle(cx, cy, CELL.w, CELL.h, 0xffffff, 0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerover', () => this.showTooltip(cx, cy, stack.item))
-      .on('pointerout', () => this.hideTooltip())
-      .on('pointerdown', () => {
-        if (stack.item.kind === 'equip') this.opts.onEquip?.(stack.item)
-      })
-    this.gridLayer.add(hit)
-  }
-
-  private showEquipTooltip(cx: number, cy: number, item: Item): void {
-    this.showTooltip(cx, cy, item)
+    // Click/hover hotspot: see resolveHit(), not a GameObject any more.
+    this.gridHits.push({ stack, rect: { x, y, w: CELL.w, h: CELL.h } })
   }
 
   private showTooltip(cx: number, cy: number, item: Item): void {
