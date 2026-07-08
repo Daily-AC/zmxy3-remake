@@ -6,6 +6,13 @@ import type { RoomSnapshot } from "./ws-protocol.js";
 // restart, which is acceptable for this MVP. In-combat real-time sync is not
 // implemented here by design: the pre-decided architecture is
 // room-owner-authority plus WebSocket broadcasts for lobby-only events.
+//
+// Performance target (2026-07-08 用户拍板): 10 人同房不卡. The server's role
+// stays "room routing + message fanout, no arbitration" at this scale too --
+// it never simulates or referees anything, it only relays. See
+// ws-protocol.ts's StateMessage/EventMessage for the two message shapes this
+// implies (high-frequency unreliable-by-convention state vs. low-frequency
+// reliable events) and ws-server.ts's handleState/handleEvent for the relay.
 
 export interface RoomMember {
   userId: string;
@@ -22,7 +29,10 @@ export interface Room {
   createdAt: number;
 }
 
-export const ROOM_CAPACITY = 4;
+// Single source of truth for room size -- every capacity check reads this
+// constant (joinRoom below; rooms.test.ts's full-room test also derives its
+// fixture from it), nothing hardcodes the number elsewhere.
+export const ROOM_CAPACITY = 10;
 
 export function createRoom(id: string, levelId: LevelId, owner: RoomMember): Room {
   return {
