@@ -85,16 +85,21 @@ const BADGE_X = 69
 const BADGE_Y = 59
 
 // Panels 1-3 (唐僧/猪八戒/沙僧) are real AS3 button slots (btn2/btn3/btn4,
-// tasks/selectrole-saveslots-report.md §1) -- locked this milestone. Panel 4
-// ("???") has no btn5 in AS3 at all (DefineSprite_1011, static decoration,
-// tasks/selectrole-saveslots-report.md §2). The 2026-07-08 verdict-fixes棒
-// removed panel 4's label on that AS3-fidelity argument; team-lead brief the
-// same day REVERSED that call after visual review -- user wants the label
-// kept on all four locked panels for UI consistency (a deliberate departure
-// from AS3 fidelity, not an oversight), just redesigned so it doesn't sit on
-// top of a face. Restored panel 4 to this list.
-const LOCKED_PANELS = [1, 2, 3, 4]
-const LOCKED_LABEL = ['唐僧', '猪八戒', '沙僧', '？？？']
+// tasks/selectrole-saveslots-report.md §1) -- locked this milestone, so the
+// "敬请期待" label is honest (a real character exists, just not playable
+// yet). Panel 4 ("???") has no btn5 in AS3 at all (DefineSprite_1011, static
+// decoration, tasks/selectrole-saveslots-report.md §2) -- pure "???"
+// silhouette, no label. This flipped twice in one day (round 1: removed
+// panel 4's label on the AS3-fidelity argument -> round 2: team-lead brief
+// said the user reversed that, restore it to all four -> round 2 terminal
+// review: team-lead corrected that the reversal was scoped to the *style*
+// of panels 1-3's label only, panel 4 was never meant to get one back, the
+// "定案" stands). This is the terminal state: panel 4 excluded, matching the
+// very first (round 1) decision. If this flips again, resist the urge to
+// "reconcile" the two rounds' doc comments into a novel -- just state the
+// current rule and cite the round-1/selectrole-saveslots-report.md AS3 facts.
+const LOCKED_PANELS = [1, 2, 3]
+const LOCKED_LABEL = ['唐僧', '猪八戒', '沙僧']
 
 // Label vertical position: native-art y-band that's genuinely empty gradient
 // background on every panel -- below the character's feet/shadow (~y430-460)
@@ -172,11 +177,12 @@ export class CharacterSelectScene extends Phaser.Scene {
         .on('pointerdown', () => this.onPanel1Click()),
     )
 
-    // Locked panels 2-5 (唐僧/猪八戒/沙僧/???): single-line "敬请期待" sitting
-    // in the empty gradient gap between the character's feet and the baked
-    // name row (LOCKED_LABEL_Y doc comment above) -- redesigned 2026-07-08 so
-    // it no longer overlaps any face (the old two-line ART_H*0.42 placement
-    // did, per the feedback screenshot's blue boxes).
+    // Locked panels 2-4 (唐僧/猪八戒/沙僧): single-line "敬请期待" sitting in
+    // the empty gradient gap between the character's feet and the baked name
+    // row (LOCKED_LABEL_Y doc comment above) -- redesigned 2026-07-08 so it
+    // no longer overlaps any face (the old two-line ART_H*0.42 placement
+    // did, per the feedback screenshot's blue boxes). Panel 5 ("???")
+    // deliberately excluded -- see LOCKED_PANELS doc comment above.
     for (const i of LOCKED_PANELS) {
       const cx = i * PANEL_W
       const label = this.add

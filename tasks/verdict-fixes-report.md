@@ -234,3 +234,20 @@ const events = advanceMonster(
 - `tasks/verdict-fixes-report.md`（本文件）
 
 **未 `git add`**：`game/src/systems/monsterSim.ts`（其他棒的在途改动，本棒只做了一处不影响其设计的最小补全，见上文"跨棒小插曲"，不归属本次 commit）。其余并发改动（`CLAUDE.md`/`progress.md`/`docs/design/imperceptibility-gaps.md` 等）同样不碰，由各自负责的棒/主会话自行提交。
+
+---
+
+## 第四轮：一处终审修正（第五格标签回退）
+
+团队 lead 终审指出：第二轮的"翻案"只针对唐僧/猪八戒/沙僧三格的**样式**（离脸+艺术字），不包括第五格"???"——第五格维持第一轮定案（AS3 无 btn5，纯装饰，不应有标签），第二轮把它一并加回去是理解偏差。改回 `LOCKED_PANELS = [1, 2, 3]`（去掉索引 4），`LOCKED_LABEL` 同步去掉 `'？？？'`。代码注释记录了这次"同一天两次翻案"的历史，避免以后棒再看到 git blame 时误以为是随意反复。
+
+第三轮做的改名「再续西游」/字体切马善政/L1+L2 收缩，团队 lead 确认已收到（消息交叉），未重做。
+
+验证：`npx tsc --noEmit` 0 错误，`npx vitest run` 470/470（本轮零测试改动，纯 UI 逻辑）,`npm run build` 过。终态三图（Playwright 实测，960×540 无缩放）：
+- `game/tmp/verdict-fixes-flow/terminal-1-mainmenu.png`：主菜单「再续西游」+ 马善政毛笔字，菜单项无裁切。
+- `game/tmp/verdict-fixes-flow/terminal-2-charselect.png`：选人屏，唐僧/猪八戒/沙僧三格"敬请期待"（毛笔字，离脸），第五格纯"???"无标签，开始游戏/返回主菜单按钮在位。
+- `game/tmp/verdict-fixes-flow/terminal-3-worldmap-l3l4-locked.png` + 同步 `__shellMapState()` 核对：s1_3（L3）/s2_1（L4）恒为 `locked`。
+
+### Commit（第四轮）
+
+只 1 个文件：`game/src/scenes/CharacterSelectScene.ts`（LOCKED_PANELS 回退 + 注释）+ 本报告更新。
