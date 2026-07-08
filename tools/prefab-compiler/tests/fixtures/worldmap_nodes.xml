@@ -1,0 +1,748 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<swf><tags><item type="DefineButton2Tag" buttonId="973" forceWriteAsLong="true" reserved="0" trackAsMenu="false">
+      <characters>
+        <item type="BUTTONRECORD" buttonHasBlendMode="false" buttonHasFilterList="false" buttonStateDown="false" buttonStateHitTest="false" buttonStateOver="false" buttonStateUp="true" characterId="970" placeDepth="1" reserved="0">
+          <placeMatrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+          <colorTransform type="CXFORMWITHALPHA" hasAddTerms="false" hasMultTerms="false" nbits="1" />
+        </item>
+        <item type="BUTTONRECORD" buttonHasBlendMode="false" buttonHasFilterList="false" buttonStateDown="true" buttonStateHitTest="true" buttonStateOver="true" buttonStateUp="false" characterId="972" placeDepth="1" reserved="0">
+          <placeMatrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+          <colorTransform type="CXFORMWITHALPHA" hasAddTerms="false" hasMultTerms="false" nbits="1" />
+        </item>
+      </characters>
+      <actions />
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="852">
+      <shapeBounds type="RECT" Xmax="590" Xmin="-590" Ymax="1000" Ymin="-1000" nbits="11" />
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="851" fillStyleType="67">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="11" scaleX="20.0" scaleY="20.0" translateX="-590" translateY="-1000" />
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles />
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle1="1" moveBits="11" moveDeltaX="590" moveDeltaY="1000" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false" />
+          <item type="StraightEdgeRecord" deltaX="-1180" generalLineFlag="false" numBits="10" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="-2000" generalLineFlag="false" numBits="10" vertLineFlag="true" />
+          <item type="StraightEdgeRecord" deltaX="1180" generalLineFlag="false" numBits="10" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="2000" generalLineFlag="false" numBits="10" vertLineFlag="true" />
+          <item type="EndShapeRecord" endOfShape="0" />
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="856">
+      <shapeBounds type="RECT" Xmax="1525" Xmin="-1495" Ymax="1139" Ymin="-2201" nbits="13" />
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="855" fillStyleType="67">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="13" scaleX="20.0" scaleY="20.0" translateX="-1495" translateY="-2201" />
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles />
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle1="1" moveBits="13" moveDeltaX="-1495" moveDeltaY="-2201" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false" />
+          <item type="StraightEdgeRecord" deltaX="3020" generalLineFlag="false" numBits="11" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="3340" generalLineFlag="false" numBits="11" vertLineFlag="true" />
+          <item type="StraightEdgeRecord" deltaX="-3020" generalLineFlag="false" numBits="11" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="-3340" generalLineFlag="false" numBits="11" vertLineFlag="true" />
+          <item type="EndShapeRecord" endOfShape="0" />
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="866">
+      <shapeBounds type="RECT" Xmax="1190" Xmin="-1190" Ymax="500" Ymin="-500" nbits="12" />
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="865" fillStyleType="67">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="12" scaleX="20.0" scaleY="20.0" translateX="-1190" translateY="-500" />
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles />
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle1="1" moveBits="12" moveDeltaX="1190" moveDeltaY="500" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false" />
+          <item type="StraightEdgeRecord" deltaX="-2380" generalLineFlag="false" numBits="11" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="-1000" generalLineFlag="false" numBits="9" vertLineFlag="true" />
+          <item type="StraightEdgeRecord" deltaX="2380" generalLineFlag="false" numBits="11" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="1000" generalLineFlag="false" numBits="9" vertLineFlag="true" />
+          <item type="EndShapeRecord" endOfShape="0" />
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="870">
+      <shapeBounds type="RECT" Xmax="1770" Xmin="-1510" Ymax="749" Ymin="-851" nbits="12" />
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="869" fillStyleType="67">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="12" scaleX="20.0" scaleY="20.0" translateX="-1510" translateY="-851" />
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles />
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle1="1" moveBits="12" moveDeltaX="1770" moveDeltaY="749" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false" />
+          <item type="StraightEdgeRecord" deltaX="-3280" generalLineFlag="false" numBits="11" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="-1600" generalLineFlag="false" numBits="10" vertLineFlag="true" />
+          <item type="StraightEdgeRecord" deltaX="3280" generalLineFlag="false" numBits="11" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="1600" generalLineFlag="false" numBits="10" vertLineFlag="true" />
+          <item type="EndShapeRecord" endOfShape="0" />
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="926">
+      <shapeBounds type="RECT" Xmax="560" Xmin="-560" Ymax="620" Ymin="-620" nbits="11" />
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="925" fillStyleType="67">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="11" scaleX="20.0" scaleY="20.0" translateX="-560" translateY="-620" />
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles />
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle1="1" moveBits="11" moveDeltaX="-560" moveDeltaY="-620" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false" />
+          <item type="StraightEdgeRecord" deltaX="1120" generalLineFlag="false" numBits="10" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="1240" generalLineFlag="false" numBits="10" vertLineFlag="true" />
+          <item type="StraightEdgeRecord" deltaX="-1120" generalLineFlag="false" numBits="10" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="-1240" generalLineFlag="false" numBits="10" vertLineFlag="true" />
+          <item type="EndShapeRecord" endOfShape="0" />
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="930">
+      <shapeBounds type="RECT" Xmax="930" Xmin="-1870" Ymax="1139" Ymin="-1081" nbits="12" />
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="929" fillStyleType="67">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="12" scaleX="20.0" scaleY="20.0" translateX="-1870" translateY="-1081" />
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles />
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle1="1" moveBits="12" moveDeltaX="-1870" moveDeltaY="-1081" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false" />
+          <item type="StraightEdgeRecord" deltaX="2800" generalLineFlag="false" numBits="11" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="2220" generalLineFlag="false" numBits="11" vertLineFlag="true" />
+          <item type="StraightEdgeRecord" deltaX="-2800" generalLineFlag="false" numBits="11" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="-2220" generalLineFlag="false" numBits="11" vertLineFlag="true" />
+          <item type="EndShapeRecord" endOfShape="0" />
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="970">
+      <shapeBounds type="RECT" Xmax="520" Xmin="-520" Ymax="1130" Ymin="-1130" nbits="12" />
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="969" fillStyleType="67">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="12" scaleX="20.0" scaleY="20.0" translateX="-520" translateY="-1130" />
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles />
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle1="1" moveBits="12" moveDeltaX="520" moveDeltaY="1130" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false" />
+          <item type="StraightEdgeRecord" deltaX="-1040" generalLineFlag="false" numBits="10" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="-2260" generalLineFlag="false" numBits="11" vertLineFlag="true" />
+          <item type="StraightEdgeRecord" deltaX="1040" generalLineFlag="false" numBits="10" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="2260" generalLineFlag="false" numBits="11" vertLineFlag="true" />
+          <item type="EndShapeRecord" endOfShape="0" />
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineShapeTag" forceWriteAsLong="true" shapeId="972">
+      <shapeBounds type="RECT" Xmax="1500" Xmin="-1500" Ymax="1640" Ymin="-1640" nbits="12" />
+      <shapes type="SHAPEWITHSTYLE" numFillBits="1" numLineBits="0">
+        <fillStyles type="FILLSTYLEARRAY">
+          <fillStyles>
+            <item type="FILLSTYLE" bitmapId="971" fillStyleType="67">
+              <bitmapMatrix type="MATRIX" hasRotate="false" hasScale="true" nRotateBits="0" nScaleBits="22" nTranslateBits="12" scaleX="20.0" scaleY="20.0" translateX="-1500" translateY="-1640" />
+            </item>
+          </fillStyles>
+        </fillStyles>
+        <lineStyles type="LINESTYLEARRAY">
+          <lineStyles />
+        </lineStyles>
+        <shapeRecords>
+          <item type="StyleChangeRecord" fillStyle1="1" moveBits="12" moveDeltaX="-1500" moveDeltaY="-1640" stateFillStyle0="false" stateFillStyle1="true" stateLineStyle="false" stateMoveTo="true" stateNewStyles="false" />
+          <item type="StraightEdgeRecord" deltaX="3000" generalLineFlag="false" numBits="11" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="3280" generalLineFlag="false" numBits="11" vertLineFlag="true" />
+          <item type="StraightEdgeRecord" deltaX="-3000" generalLineFlag="false" numBits="11" vertLineFlag="false" />
+          <item type="StraightEdgeRecord" deltaY="-3280" generalLineFlag="false" numBits="11" vertLineFlag="true" />
+          <item type="EndShapeRecord" endOfShape="0" />
+        </shapeRecords>
+      </shapes>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="1" hasEndTag="true" spriteId="853">
+      <subTags>
+        <item type="PlaceObject2Tag" characterId="852" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+      </subTags>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="19" hasEndTag="true" spriteId="854">
+      <subTags>
+        <item type="PlaceObject3Tag" characterId="853" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="true" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="false" placeFlagOpaqueBackground="false" reserved="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="0.0" blurY="0.0" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.0">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="1.11114501953125" blurY="1.11114501953125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.4375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="2.2222900390625" blurY="2.2222900390625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.87890625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="3.333282470703125" blurY="3.333282470703125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.328125">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="4.444427490234375" blurY="4.444427490234375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.7695312">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="5.555572509765625" blurY="5.555572509765625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.21875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="6.666717529296875" blurY="6.666717529296875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.65625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="7.7777099609375" blurY="7.7777099609375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.109375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="8.88885498046875" blurY="8.88885498046875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.546875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="10.0" blurY="10.0" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="4.0">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="8.88885498046875" blurY="8.88885498046875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.546875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="7.7777099609375" blurY="7.7777099609375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.109375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="6.666717529296875" blurY="6.666717529296875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.65625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="5.555572509765625" blurY="5.555572509765625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.21875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="4.444427490234375" blurY="4.444427490234375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.7695312">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="3.333282470703125" blurY="3.333282470703125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.328125">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="2.2222900390625" blurY="2.2222900390625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.87890625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="1.11114501953125" blurY="1.11114501953125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.4375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="0.0" blurY="0.0" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.0">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+      </subTags>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="3" hasEndTag="true" spriteId="857">
+      <subTags>
+        <item type="PlaceObject2Tag" characterId="852" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="RemoveObject2Tag" depth="1" forceWriteAsLong="false" />
+        <item type="PlaceObject2Tag" characterId="854" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="true" placeFlagMove="false" ratio="1">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="RemoveObject2Tag" depth="1" forceWriteAsLong="false" />
+        <item type="PlaceObject2Tag" characterId="856" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+      </subTags>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="1" hasEndTag="true" spriteId="867">
+      <subTags>
+        <item type="PlaceObject2Tag" characterId="866" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+      </subTags>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="19" hasEndTag="true" spriteId="868">
+      <subTags>
+        <item type="PlaceObject3Tag" characterId="867" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="true" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="false" placeFlagOpaqueBackground="false" reserved="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="0.0" blurY="0.0" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.0">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="1.11114501953125" blurY="1.11114501953125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.4375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="2.2222900390625" blurY="2.2222900390625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.87890625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="3.333282470703125" blurY="3.333282470703125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.328125">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="4.444427490234375" blurY="4.444427490234375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.7695312">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="5.555572509765625" blurY="5.555572509765625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.21875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="6.666717529296875" blurY="6.666717529296875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.65625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="7.7777099609375" blurY="7.7777099609375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.109375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="8.88885498046875" blurY="8.88885498046875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.546875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="10.0" blurY="10.0" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="4.0">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="8.88885498046875" blurY="8.88885498046875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.546875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="7.7777099609375" blurY="7.7777099609375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.109375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="6.666717529296875" blurY="6.666717529296875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.65625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="5.555572509765625" blurY="5.555572509765625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.21875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="4.444427490234375" blurY="4.444427490234375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.7695312">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="3.333282470703125" blurY="3.333282470703125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.328125">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="2.2222900390625" blurY="2.2222900390625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.87890625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="1.11114501953125" blurY="1.11114501953125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.4375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="0.0" blurY="0.0" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.0">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+      </subTags>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="3" hasEndTag="true" spriteId="871">
+      <subTags>
+        <item type="PlaceObject2Tag" characterId="866" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="RemoveObject2Tag" depth="1" forceWriteAsLong="false" />
+        <item type="PlaceObject2Tag" characterId="868" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="true" placeFlagMove="false" ratio="1">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="RemoveObject2Tag" depth="1" forceWriteAsLong="false" />
+        <item type="PlaceObject2Tag" characterId="870" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+      </subTags>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="1" hasEndTag="true" spriteId="927">
+      <subTags>
+        <item type="PlaceObject2Tag" characterId="926" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+      </subTags>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="19" hasEndTag="true" spriteId="928">
+      <subTags>
+        <item type="PlaceObject3Tag" characterId="927" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="true" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="false" placeFlagOpaqueBackground="false" reserved="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="0.0" blurY="0.0" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.0">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="1.11114501953125" blurY="1.11114501953125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.4375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="2.2222900390625" blurY="2.2222900390625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.87890625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="3.333282470703125" blurY="3.333282470703125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.328125">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="4.444427490234375" blurY="4.444427490234375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.7695312">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="5.555572509765625" blurY="5.555572509765625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.21875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="6.666717529296875" blurY="6.666717529296875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.65625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="7.7777099609375" blurY="7.7777099609375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.109375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="8.88885498046875" blurY="8.88885498046875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.546875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="10.0" blurY="10.0" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="4.0">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="8.88885498046875" blurY="8.88885498046875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.546875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="7.7777099609375" blurY="7.7777099609375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="3.109375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="6.666717529296875" blurY="6.666717529296875" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.65625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="5.555572509765625" blurY="5.555572509765625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="2.21875">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="4.444427490234375" blurY="4.444427490234375" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.7695312">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="3.333282470703125" blurY="3.333282470703125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="1.328125">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="2.2222900390625" blurY="2.2222900390625" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.87890625">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="1.11114501953125" blurY="1.11114501953125" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.4375">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="PlaceObject3Tag" depth="1" forceWriteAsLong="true" placeFlagHasBlendMode="false" placeFlagHasCacheAsBitmap="false" placeFlagHasCharacter="false" placeFlagHasClassName="false" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasFilterList="true" placeFlagHasImage="false" placeFlagHasMatrix="false" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagHasVisible="false" placeFlagMove="true" placeFlagOpaqueBackground="false" reserved="false">
+          <surfaceFilterList>
+            <item type="GLOWFILTER" blurX="0.0" blurY="0.0" compositeSource="true" id="2" innerGlow="false" knockout="false" passes="1" strength="0.0">
+              <glowColor type="RGBA" alpha="255" blue="102" green="255" red="255" />
+            </item>
+          </surfaceFilterList>
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+      </subTags>
+    </item>
+    <item type="DefineSpriteTag" forceWriteAsLong="true" frameCount="3" hasEndTag="true" spriteId="931">
+      <subTags>
+        <item type="PlaceObject2Tag" characterId="926" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="RemoveObject2Tag" depth="1" forceWriteAsLong="false" />
+        <item type="PlaceObject2Tag" characterId="928" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="true" placeFlagMove="false" ratio="1">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+        <item type="RemoveObject2Tag" depth="1" forceWriteAsLong="false" />
+        <item type="PlaceObject2Tag" characterId="930" depth="1" forceWriteAsLong="false" placeFlagHasCharacter="true" placeFlagHasClipActions="false" placeFlagHasClipDepth="false" placeFlagHasColorTransform="false" placeFlagHasMatrix="true" placeFlagHasName="false" placeFlagHasRatio="false" placeFlagMove="false">
+          <matrix type="MATRIX" hasRotate="false" hasScale="false" nRotateBits="0" nScaleBits="0" nTranslateBits="0" translateX="0" translateY="0" />
+        </item>
+        <item type="ShowFrameTag" forceWriteAsLong="false" />
+      </subTags>
+    </item>
+    <item type="SymbolClassTag" forceWriteAsLong="true"><tags><item>931</item><item>871</item><item>857</item></tags><names><item>OtherMat_fla.Timeline_218</item><item>OtherMat_fla.Timeline_194</item><item>OtherMat_fla.Timeline_188</item></names></item></tags></swf>

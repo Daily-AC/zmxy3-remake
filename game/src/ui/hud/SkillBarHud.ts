@@ -33,11 +33,28 @@ export interface SkillSlotData {
   disabled?: boolean
 }
 
+export type DockIconId = 'fabao' | 'chongwu' | 'jineng' | 'qingbao' | 'shezhi'
+
 export interface SkillBarHudOptions {
   /** Dock scale (native art is 320x144). */
   scale?: number
   iconKeyFor?: (data: SkillSlotData) => string | undefined
+  /** Click handler for the five baked cluster icons (法宝/宠物/技能/青包/设置).
+   * They are baked pixels in the dock art, so without hit zones the cluster
+   * is decorative-only -- which players read as "背包技能全都打不开"
+   * (2026-07-08 user report). */
+  onIconClick?: (icon: DockIconId) => void
 }
+
+/** Baked cluster icon centers in native dock px (measured on
+ * hud_roleinfo_bottom_skilldock.png; icon radius ~19). */
+const DOCK_ICONS: { id: DockIconId; cx: number; cy: number }[] = [
+  { id: 'fabao', cx: 52, cy: 25 },
+  { id: 'chongwu', cx: 90, cy: 19 },
+  { id: 'jineng', cx: 21, cy: 52 },
+  { id: 'qingbao', cx: 21, cy: 97 },
+  { id: 'shezhi', cx: 60, cy: 112 },
+]
 
 interface SlotView {
   cx: number
@@ -68,6 +85,15 @@ export class SkillBarHud {
       const tex = scene.textures.get(DOCK_TEX)
       if (!tex.has('dock_cluster')) tex.add('dock_cluster', 0, 0, 0, CLUSTER_W, DOCK_NATIVE_H)
       children.push(scene.add.image(0, 0, DOCK_TEX, 'dock_cluster').setOrigin(0, 0).setScale(this.scale))
+    }
+    if (opts.onIconClick) {
+      for (const icon of DOCK_ICONS) {
+        const zone = scene.add
+          .circle(icon.cx * this.scale, icon.cy * this.scale, 19 * this.scale, 0xffffff, 0)
+          .setInteractive({ useHandCursor: true })
+        zone.on('pointerdown', () => opts.onIconClick?.(icon.id))
+        children.push(zone)
+      }
     }
     // Dark ledge under the slot row (the icon-frames sit flush on it).
     const ledge = scene.add.graphics()

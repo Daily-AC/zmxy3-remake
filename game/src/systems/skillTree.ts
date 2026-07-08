@@ -103,6 +103,30 @@ export const ROLE1_SCHOOLS: readonly [SchoolConfig, SchoolConfig] = [
   { name: '火系心法', skills: ['lys', 'hytj', 'lyfb', 'jdy', 'hyjj'] },
 ]
 
+/** Official display names + descriptions. 斩系 strings from the baked vendor
+ * table art (OtherMat1 table_school1); 火系 from the official Online client's
+ * fire-school screen supplied by the user (2026-07-08 screenshot) -- these
+ * strings are runtime-served in the original and exist in no extractable
+ * asset (negative-result hunt: tasks/skilltree-report.md 终审返修 §3). The
+ * pinyin ids match 1:1: lys=烈焰闪, hytj=火焰突击, lyfb=烈焰风暴, jdy=筋斗云,
+ * hyjj=火眼金睛. */
+export const SKILL_DISPLAY: Record<Role1TreeSkillId, { name: string; desc: string }> = {
+  slz: { name: '升龙斩', desc: '近身后用力将怪物挑到空中' },
+  zz: { name: '重斩', desc: '蓄气后用力斩杀前方怪物' },
+  sx: { name: '嗜血', desc: '被动增加5%吸血和5%暴击效果' },
+  qsez: { name: '七十二斩', desc: '迅速向前冲去，对怪物施展多次攻击，并有概率留下残影' },
+  hmz: { name: '火魔斩', desc: '冲向空中施放火魔九连斩，落地后为最后一斩，造成极高的伤害' },
+  lys: { name: '烈焰闪', desc: '向前冲刺对碰到的怪物造成伤害，冲刺过程处于无敌状态' },
+  hytj: { name: '火焰突击', desc: '打退前方怪物并造成多次伤害' },
+  lyfb: { name: '烈焰风暴', desc: '快速旋转震开周围怪物并造成多次伤害' },
+  jdy: { name: '筋斗云', desc: '召唤筋斗云可以冲向云霄' },
+  hyjj: { name: '火眼金睛', desc: '眼睛变红对最近的怪物造成较大伤害' },
+}
+
+export function skillDisplayName(id: Role1TreeSkillId): string {
+  return SKILL_DISPLAY[id]?.name ?? id
+}
+
 export const MAX_SCHOOL_LEVEL = 5
 /** SkillControl.as:358-379 `findNextNeedLHValue`, index = current school level. */
 export const SCHOOL_UPGRADE_COST: readonly number[] = [100, 200, 500, 1000, 2000]
