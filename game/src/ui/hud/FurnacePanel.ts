@@ -3,6 +3,7 @@ import type { Item } from '../../systems/items'
 import { HUD_COLORS, ICON_FALLBACK_KEY } from './hudTheme'
 import { rarityCss } from './rarity'
 import { withinRect, type Rect } from '../screenHit'
+import { MODAL_PANEL_DEPTH } from './depths'
 
 // 炼丹炉 (forge) window on the ORIGINAL art: the official StrengthEquipment 打造
 // tab. Two pieces of real 4399 art compose it:
@@ -176,7 +177,7 @@ export class FurnacePanel {
     const closeLabel = scene.add.text(792, 92, '返回', { fontSize: '14px', color: '#f2eddf' }).setOrigin(0.5)
     children.push(closeBtn, closeLabel)
 
-    this.container = scene.add.container(0, 0, children).setScrollFactor(0).setDepth(210).setVisible(false)
+    this.container = scene.add.container(0, 0, children).setScrollFactor(0).setDepth(MODAL_PANEL_DEPTH).setVisible(false)
 
     scene.input.on('pointerdown', this.onPointerDown)
     scene.input.on('pointermove', this.onPointerMove)

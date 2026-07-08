@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { HUD_COLORS, FLOAT_STYLES, FloatKind } from './hudTheme'
+import { TOAST_DEPTH } from './depths'
 
 // Two feedback primitives:
 //  - Toast: a centered banner with a 水墨 ink-brush top/bottom rule
@@ -106,7 +107,12 @@ export class Toast {
     }
     children.push(label)
 
-    const c = this.scene.add.container(this.x, this.y, children).setScrollFactor(0).setDepth(210)
+    // TOAST_DEPTH is deliberately above every modal panel (FurnacePanel,
+    // BackpackWindow, ResultBanner, ...) so a toast fired while one is open
+    // (e.g. a craft validation failure with the forge still up) always
+    // renders on top instead of racing it on an identical literal depth --
+    // see ui/hud/depths.ts.
+    const c = this.scene.add.container(this.x, this.y, children).setScrollFactor(0).setDepth(TOAST_DEPTH)
     c.setScale(0.8)
     this.current = c
     this.scene.tweens.add({ targets: c, scale: 1, duration: 180, ease: 'Back.easeOut' })
