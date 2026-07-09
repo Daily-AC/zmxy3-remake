@@ -1704,7 +1704,9 @@ export class BattleScene extends Phaser.Scene {
       const beamSrcH = (this.textures.get('platform_beam').getSourceImage() as { height: number }).height
       for (const wall of this.currentWalls) {
         if (wall.type === 'solid') continue
-        if (wall.width > 600) continue // 全场穿透膜（1100 宽），非平台
+        // 2026-07-10 02:0x 用户踩空实锤：1100 宽的段间穿透地板（-1872 的
+        // throughUpButDown 等）是真实可站立平台，此前被当"出入口膜"跳过不
+        // 铺贴图——tileSprite 平铺不怕宽，一律铺梁。
         const h = Math.min(46, Math.max(32, wall.width * 0.16))
         const beam = this.add
           .tileSprite(wall.x, wall.y + STAND_SINK, wall.width, h, 'platform_beam')
