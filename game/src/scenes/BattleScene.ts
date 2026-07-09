@@ -616,7 +616,12 @@ interface MonsterEntity {
 
 interface RemoteHeroPuppet {
   sprite: Phaser.GameObjects.Sprite
-  label: Phaser.GameObjects.Text
+  /** 王者荣耀式头顶名牌（2026-07-10 用户拍板，参照图37）：名字 + 等级圈 +
+   * 蓝色血条，整体一个容器随人头顶移动。 */
+  plate: Phaser.GameObjects.Container
+  hpFill: Phaser.GameObjects.Graphics
+  levelText: Phaser.GameObjects.Text
+  lastHpKey: string
 }
 
 /**
@@ -668,6 +673,7 @@ export class BattleScene extends Phaser.Scene {
   // 只有 debug 线框可视（rebuildPlatformDebugOverlay 默认隐藏），正常游玩里
   // 玩家看到的是"踩空气"——2026-07-09 用户打磨反馈后补上正式可视层。
   private climbClouds: Phaser.GameObjects.GameObject[] = []
+  private pillarBg?: Phaser.GameObjects.TileSprite
   private drops: DropEntity[] = []
   private dropSprites = new Map<DropEntity, Phaser.GameObjects.Container>()
   private enemyProjectiles: EnemyProjectile[] = []
@@ -838,6 +844,9 @@ export class BattleScene extends Phaser.Scene {
     // 该件——按总纲用生图补（gpt-image-2，喂原版截图当风格参照；青白玉+淡金
     // 云纹浮雕，1743x292 可横向平铺条）。
     this.load.image('platform_beam', 'assets/generated/platform_beam.png')
+    // L1 爬塔背景：原版是云纹雕柱塔身（用户参照图），bg11 云海图与之不符——
+    // 生图柱墙（同风格锚，上下镜像拼接保证竖向无缝），爬塔段整体替换 bg11。
+    this.load.image('pillar_wall', 'assets/generated/pillar_wall.jpg')
     for (let i = 1; i <= TRANSFERWIND_FRAME_COUNT; i++) {
       this.load.image(`transferwind_${i}`, `assets/extracted/effects/transferwind_${i}.png`)
     }
@@ -1302,7 +1311,11 @@ export class BattleScene extends Phaser.Scene {
         if (!overlaps(box, mBox)) continue
         const attackId = ++this.skillAttackId
         if (e.state.resolvedAttackIds.includes(attackId)) continue
-        if (this.queueOrSendHeroHit(e, attackId, dmg)) this.floatText(e.state.x, e.state.y - 90, `-${dmg}`, 'damage')
+        if (this.queueOrSendHeroHit(e, attackId, dmg)) {
+          const mcs = this.monsterVisualCenter(e)
+          this.floatText(mcs.x, mcs.y - 70, `-${dmg}`, 'damage')
+          this.onLocalHitFx(mcs.x, mcs.y, facing)
+        }
       }
     }
     if (hb.activeAfterMs > 0) this.time.delayedCall(hb.activeAfterMs, fire)
@@ -1595,6 +1608,8 @@ export class BattleScene extends Phaser.Scene {
     this.level1Chain = undefined
     this.level1Spawner = undefined
     this.levelState = createLevelState(def)
+    this.pillarBg?.setVisible(false)
+    this.bgBase?.setVisible(true)
     this.rebuildClimbClouds(false)
     this.swapBackground(this.campaignIndex)
     this.showLevelBanner(def.name)
@@ -1633,11 +1648,25 @@ export class BattleScene extends Phaser.Scene {
       cameraBounds.right - cameraBounds.left,
       cameraBounds.bottom - cameraBounds.top,
     )
-    // 爬塔段 bg11 横向 +7%：原始 1132px 放置在 x=-79 只盖到 1053，相机右界
-    // 1132 时右缘露 79px 黑边（2026-07-09 梁版截图暴露）。轻微横向拉伸补满。
-    const bgScaleX = stage.mode === 'climb' ? (stage.bounds.right - bgPlacement.x) / 1132 : 1
-    this.bgBase?.setTexture(stage.background.base, '__BASE').setScale(bgScaleX, 1).setPosition(bgPlacement.x, bgPlacement.y)
-    this.bgBase?.setScrollFactor(bgPlacement.scrollFactorX, bgPlacement.scrollFactorY)
+    // 爬塔段背景 = 生图柱墙 tileSprite（2026-07-10 换装，替代 bg11 云海——
+    // 原版此段是云纹雕柱塔身）；bg11 仍是 sl12/13 与其他关卡的 bgBase 底。
+    const isClimb = stage.mode === 'climb'
+    if (isClimb) {
+      if (!this.pillarBg && this.textures.exists('pillar_wall')) {
+        this.pillarBg = this.add
+          .tileSprite(-80, -2380, 1300, 3080, 'pillar_wall')
+          .setOrigin(0, 0)
+          .setDepth(-40)
+        this.pillarBg.setTileScale(1300 / 864 / 1.5, 1300 / 864 / 1.5)
+      }
+      this.pillarBg?.setVisible(true)
+      this.bgBase?.setVisible(false)
+    } else {
+      this.pillarBg?.setVisible(false)
+      this.bgBase?.setVisible(true)
+      this.bgBase?.setTexture(stage.background.base, '__BASE').setScale(1).setPosition(bgPlacement.x, bgPlacement.y)
+      this.bgBase?.setScrollFactor(bgPlacement.scrollFactorX, bgPlacement.scrollFactorY)
+    }
     this.bg12Layer?.setVisible(stage.id === 'sl12')
     this.bg13Layer?.setVisible(stage.id === 'sl13')
     this.bg12Layer?.setScale(1).setPosition(0, 0).setScrollFactor(1, 0)
@@ -1789,7 +1818,7 @@ export class BattleScene extends Phaser.Scene {
 
   /** Build a monsterSim config for a species from its own action-table durations
    * (hurt/hit1/dead) and the level pack's stats. */
-  private monsterConfigFor(species: string, stats: MonsterStats): MonsterConfig {
+  private monsterConfigFor(species: string, stats: MonsterStats, isBoss: boolean): MonsterConfig {
     const data = MONSTER_DATA[species] ?? MONSTER_DATA.monster30
     const dur = (a: string, fallback: number): number =>
       data.actions[a] ? actionDurationMs(data.actions[a] as ActionSpec, TICK_MS) : fallback
@@ -1819,6 +1848,7 @@ export class BattleScene extends Phaser.Scene {
         species === 'monster30' && this.climbActive
           ? { enabled: true, speed: stats.speed, arriveThreshold: 20 }
           : undefined,
+      isBoss,
     }
   }
 
@@ -1837,7 +1867,7 @@ export class BattleScene extends Phaser.Scene {
    * altitude instead of on the flat arena line. */
   private spawnEntity(species: string, stats: MonsterStats, x: number, isBoss: boolean, y: number = GROUND_Y): MonsterEntity {
     const data = MONSTER_DATA[species] ?? MONSTER_DATA.monster30
-    const config = this.monsterConfigFor(species, stats)
+    const config = this.monsterConfigFor(species, stats, isBoss)
     const state = initMonster(config, x, y)
     const tex = this.textures.exists(species) ? species : 'monster30'
     // Every species sheet is a native SWF-pixel export in the same coordinate
@@ -2316,7 +2346,7 @@ export class BattleScene extends Phaser.Scene {
     this.coopSyncState = null
     for (const puppet of this.remoteHeroes.values()) {
       puppet.sprite.destroy()
-      puppet.label.destroy()
+      puppet.plate.destroy(true)
     }
     this.remoteHeroes.clear()
   }
@@ -2353,6 +2383,7 @@ export class BattleScene extends Phaser.Scene {
         y: this.heroState.vertical.y,
         facing: this.heroState.facing,
         action: this.heroState.action,
+        level: this.identity.progression.level,
         animState: this.hero.anims.currentAnim?.key ?? this.heroState.action,
         hp: this.identity.combat.hp,
         maxHp: this.identity.combat.maxHp,
@@ -2380,18 +2411,45 @@ export class BattleScene extends Phaser.Scene {
       const px = pos.x + off.x * HERO_SCALE
       const py = pos.y + off.y * HERO_SCALE
       puppet.sprite.setPosition(px, py)
-      puppet.label.setPosition(px, py - 118)
+      puppet.plate.setPosition(px, py - 118)
+      const snap = view.snapshot as { hp: number; maxHp: number; level?: number }
+      const hpKey = `${snap.hp}/${snap.maxHp}/${snap.level ?? ''}`
+      if (puppet.lastHpKey !== hpKey) {
+        puppet.lastHpKey = hpKey
+        const frac = snap.maxHp > 0 ? Math.max(0, Math.min(1, snap.hp / snap.maxHp)) : 0
+        puppet.hpFill.clear()
+        puppet.hpFill.fillStyle(0x2f8fe8, 1).fillRoundedRect(-26, -3.5, Math.max(2, 52 * frac), 7, 2)
+        puppet.levelText.setText(snap.level !== undefined ? String(snap.level) : '')
+      }
     }
   }
 
   private createRemoteHeroPuppet(userId: string): RemoteHeroPuppet {
     const peer = this.coopSession?.peers.find((candidate) => candidate.userId === userId)
     const sprite = this.add.sprite(0, 0, HERO_TEX).setScale(HERO_SCALE).setDepth(9)
-    const label = this.add
-      .text(0, 0, peer?.username ?? userId, { fontSize: '14px', color: '#9fd8ff', fontStyle: 'bold' })
+    // 王者荣耀式名牌：上=名字（白字粗描边，清晰可读——旧版淡蓝小字被用户
+    // 点名看不清），下=等级金圈 + 蓝血条。
+    const name = this.add
+      .text(0, -16, peer?.username ?? userId, {
+        fontSize: '13px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#10233a',
+        strokeThickness: 4,
+      })
       .setOrigin(0.5)
-      .setDepth(20)
-    const puppet = { sprite, label }
+    const barBg = this.add.graphics()
+    barBg.fillStyle(0x0c1622, 0.9).fillRoundedRect(-28, -5.5, 56, 11, 3)
+    barBg.lineStyle(1.5, 0xd9b45a, 0.9).strokeRoundedRect(-28, -5.5, 56, 11, 3)
+    const hpFill = this.add.graphics()
+    const levelRing = this.add.graphics()
+    levelRing.fillStyle(0x0c1622, 1).fillCircle(-36, 0, 10)
+    levelRing.lineStyle(2, 0xd9b45a, 1).strokeCircle(-36, 0, 10)
+    const levelText = this.add
+      .text(-36, 0, '', { fontSize: '11px', color: '#ffd23a', fontStyle: 'bold' })
+      .setOrigin(0.5)
+    const plate = this.add.container(0, 0, [barBg, hpFill, levelRing, levelText, name]).setDepth(20)
+    const puppet: RemoteHeroPuppet = { sprite, plate, hpFill, levelText, lastHpKey: '' }
     this.remoteHeroes.set(userId, puppet)
     return puppet
   }
@@ -2565,10 +2623,22 @@ export class BattleScene extends Phaser.Scene {
 
   /** Push one swing's combo damage into every alive monster its box overlaps
    * (monsterSim dedups by attackId, so a monster is hit at most once per swing).
-   * onHit procs + sfx fire once per swing, on the first monster struck. */
+   * onHit procs + sfx fire once per swing, on the first monster struck.
+   *
+   * combat-triage pen (2026-07-10): was gated on `s.combo.stage === 0`, but
+   * `combo.stage` legitimately stays nonzero through the ENTIRE post-swing
+   * grace window (up to graceMs, see combo.ts's header) as pure chain
+   * memory -- the swing itself is long over by then. That left this melee
+   * box "live" (recomputed fresh every frame at the hero's then-current
+   * position) for up to graceMs after every swing, silently damaging
+   * anything that wandered in with no visible swing happening -- the root
+   * cause of "乌鸦还没被打就死了" for the climb section's fast/fragile
+   * (hp=1) Monster30 swarm. `s.attacking` (heroSim.ts) is the correct
+   * "genuinely mid-swing" signal (false during the grace window even though
+   * `combo.stage` is still nonzero there) -- see its own doc comment. */
   private resolveHeroHits(): void {
     const s = this.heroState
-    if (s.combo.stage === 0) return
+    if (!s.attacking) return
     const heroCenter = this.heroVisualCenter()
     const box = heroAttackBox(heroCenter.x, heroCenter.y, s.facing)
     const hitKey = COMBO_STAGE_HIT[s.combo.stage] ?? 'hit1'
@@ -2582,14 +2652,116 @@ export class BattleScene extends Phaser.Scene {
       if (e.state.resolvedAttackIds.includes(s.attackId)) continue
       if (e.hitQueue.some((h) => h.attackId === s.attackId)) continue
       if (!this.queueOrSendHeroHit(e, s.attackId, damage)) continue
-      this.floatText(e.state.x, e.state.y - 90, `-${damage}`, 'damage')
+      const mc = this.monsterVisualCenter(e)
+      this.floatText(mc.x, mc.y - 70, `-${damage}`, 'damage')
       if (!firstHit) firstHit = e
     }
     if (firstHit && !this.playedHitIds.has(s.attackId)) {
       this.playedHitIds.add(s.attackId)
       this.playSfx(this.hitSfxKey(s.combo.stage), 0.5)
       this.rollHitProcs(firstHit)
+      const fc = this.monsterVisualCenter(firstHit)
+      this.onLocalHitFx(fc.x, fc.y, s.facing)
     }
+  }
+
+  // ---------- 打击感（2026-07-10 用户拍板：攻击特效 + N连击横幅） ----------
+
+  /** 每次本地攻击真实命中调用：命中点刀光特效 + 连击计数（1.5s 窗口，与
+   * combo.ts 的 AS3 链击窗口同源）。 */
+  private comboFxCount = 0
+  private comboFxLastMs = 0
+  private comboFxBanner?: Phaser.GameObjects.Container
+  private comboFxFadeTimer?: Phaser.Time.TimerEvent
+
+  private onLocalHitFx(x: number, y: number, facing: number): void {
+    this.spawnSlashFx(x, y, facing)
+    this.comboFxCount = this.simClockMs - this.comboFxLastMs <= 1500 ? this.comboFxCount + 1 : 1
+    this.comboFxLastMs = this.simClockMs
+    if (this.comboFxCount >= 2) this.showComboBanner(this.comboFxCount)
+  }
+
+  /** 原版式连击横幅（参照用户截图：金色大数字 + 墨色底横条，右上区域），
+   * 弹跳入场，静默 0.9s 后淡出。 */
+  private showComboBanner(count: number): void {
+    this.comboFxBanner?.destroy(true)
+    this.comboFxFadeTimer?.remove(false)
+    const g = this.add.graphics()
+    g.fillStyle(0x14100b, 0.82).fillRoundedRect(-86, -22, 196, 44, 8)
+    g.lineStyle(2, 0xd9b45a, 0.7).strokeRoundedRect(-86, -22, 196, 44, 8)
+    const num = this.add
+      .text(-46, 0, `${count}`, {
+        fontSize: '40px',
+        fontStyle: 'bold',
+        color: '#ffd23a',
+        stroke: '#4a2404',
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5)
+    const label = this.add
+      .text(14, 2, '连击!!', {
+        fontSize: '24px',
+        fontStyle: 'bold',
+        color: '#ffe9a8',
+        stroke: '#3a2410',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+    const banner = this.add
+      .container(730, 150, [g, num, label])
+      .setScrollFactor(0)
+      .setDepth(60)
+      .setAngle(-4)
+      .setScale(0.5)
+    this.tweens.add({ targets: banner, scale: 1, duration: 150, ease: 'Back.easeOut' })
+    this.comboFxBanner = banner
+    this.comboFxFadeTimer = this.time.delayedCall(900, () => {
+      this.tweens.add({
+        targets: banner,
+        alpha: 0,
+        y: 138,
+        duration: 260,
+        ease: 'Cubic.easeIn',
+        onComplete: () => {
+          if (this.comboFxBanner === banner) this.comboFxBanner = undefined
+          banner.destroy(true)
+        },
+      })
+    })
+  }
+
+  /** 挥击刀光（参照用户截图40：红橙色弧光扫过命中点），additive 叠加、
+   * 快速拉伸淡出；随 facing 翻转。 */
+  private spawnSlashFx(x: number, y: number, facing: number): void {
+    const g = this.add.graphics().setDepth(15).setBlendMode(Phaser.BlendModes.ADD)
+    g.setPosition(x, y)
+    const dir = facing >= 0 ? 1 : -1
+    g.lineStyle(7, 0xff4a26, 0.85)
+    g.beginPath()
+    g.arc(0, 0, 44, -0.95, 0.95)
+    g.strokePath()
+    g.lineStyle(3, 0xffc9a0, 0.95)
+    g.beginPath()
+    g.arc(0, 0, 36, -0.8, 0.8)
+    g.strokePath()
+    // 溅射短线
+    g.lineStyle(2, 0xffe0b0, 0.9)
+    for (const ang of [-0.5, 0.1, 0.6]) {
+      g.beginPath()
+      g.moveTo(Math.cos(ang) * 48, Math.sin(ang) * 48)
+      g.lineTo(Math.cos(ang) * 62, Math.sin(ang) * 62)
+      g.strokePath()
+    }
+    g.setScale(dir * 0.6, 0.6)
+    this.tweens.add({
+      targets: g,
+      scaleX: dir * 1.25,
+      scaleY: 1.25,
+      alpha: 0,
+      duration: 170,
+      ease: 'Cubic.easeOut',
+      onComplete: () => g.destroy(),
+    })
   }
 
   private rollHitProcs(target: MonsterEntity): void {
@@ -2900,13 +3072,13 @@ export class BattleScene extends Phaser.Scene {
     const events = damageHero(this.identity, hit, this.simClockMs)
     for (const e of events) {
       if (e.type === 'hurt') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'crit')
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'hurt')
         this.hero.setTint(0xff9a9a)
         this.time.delayedCall(120, () => {
           if (!isHeroDead(this.identity)) this.hero.clearTint()
         })
       } else if (e.type === 'death') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'crit')
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'hurt')
         this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
       }
     }
@@ -2981,13 +3153,13 @@ export class BattleScene extends Phaser.Scene {
     const events = damageHero(this.identity, heroHit, this.simClockMs)
     for (const e of events) {
       if (e.type === 'hurt') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'crit')
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'hurt')
         this.hero.setTint(0xff9a9a)
         this.time.delayedCall(120, () => {
           if (!isHeroDead(this.identity)) this.hero.clearTint()
         })
       } else if (e.type === 'death') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'crit')
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'hurt')
         this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
       }
     }
@@ -3049,31 +3221,20 @@ export class BattleScene extends Phaser.Scene {
       const shine = this.add.circle(-1.5, -1.5, 1.6, 0xf4e8ff, 0.9)
       return this.add.container(drop.x, drop.y, [halo, orb, shine]).setDepth(8)
     }
+    // 2026-07-10 用户拍板：掉落物不加文字标签，只留物本体（药珠/图标）。
     if (drop.kind === 'consumable') {
       const spec = CONSUMABLE_SPECS[drop.consumableId]
       const fill = spec.resource === 'hp' ? 0xe85454 : 0x4d9dff
       const stroke = spec.resource === 'hp' ? 0xffd0c8 : 0xc6e4ff
       const orb = this.add.circle(0, 0, drop.consumableId === 'bigHp' ? 12 : 10, fill, 0.92).setStrokeStyle(2, stroke, 0.95)
       const shine = this.add.circle(-3, -3, 3, 0xffffff, 0.75)
-      const label = this.add
-        .text(0, 16, spec.sourceName, {
-          fontSize: '12px',
-          color: spec.resource === 'hp' ? '#ffd8d2' : '#d6ebff',
-        })
-        .setOrigin(0.5, 0)
-      return this.add.container(drop.x, drop.y, [orb, shine, label]).setDepth(8)
+      return this.add.container(drop.x, drop.y, [orb, shine]).setDepth(8)
     }
     const visual = dropItemVisualSpec(drop.item.rarity)
     const iconKey = this.textures.exists('icon_' + drop.item.id) ? 'icon_' + drop.item.id : ICON_FALLBACK_KEY
     const icon = this.add.image(0, 0, iconKey)
     icon.setScale(Math.min(1, visual.iconMaxSize / Math.max(icon.width, icon.height)))
-    const label = this.add
-      .text(0, visual.labelY, `${drop.item.name}${drop.qty > 1 ? ' ×' + drop.qty : ''}`, {
-        fontSize: '12px',
-        color: visual.nameColor,
-      })
-      .setOrigin(0.5, 0)
-    return this.add.container(drop.x, drop.y, [icon, label]).setDepth(8)
+    return this.add.container(drop.x, drop.y, [icon]).setDepth(8)
   }
 
   private stepDropsAndPickup(): void {
@@ -3216,7 +3377,9 @@ export class BattleScene extends Phaser.Scene {
     // above a small imp's -- anchor off the species' own real visual top edge
     // instead (center - half its own scaled cell height - a small gap).
     const headroom = (e.data.sheet.cellH / 2) * e.scale + 10
-    e.hpBar?.update(e.state.hp, e.config.stats.hp, e.state.x, this.monsterVisualCenter(e).y - headroom)
+    // 2026-07-10 用户反馈"血条不在怪正上方"：x 此前用逻辑坐标 e.state.x，
+    // 而精灵渲染在 visualCenter（含 species offset）——横向就offset出去了。
+    e.hpBar?.update(e.state.hp, e.config.stats.hp, this.monsterVisualCenter(e).x, this.monsterVisualCenter(e).y - headroom)
   }
 
   private updateParallax(): void {

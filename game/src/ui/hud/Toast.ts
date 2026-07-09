@@ -140,8 +140,11 @@ export function spawnFloatingText(
   kind: FloatKind = 'damage',
 ): Phaser.GameObjects.Text {
   const s = FLOAT_STYLES[kind]
+  // 打击感三件套（2026-07-10）：出生弹跳缩放 + 水平微抖 + 先飘后隐（透明度
+  // 后半程才开始掉，数字停留可读时间更长）。
+  const jx = x + (Math.random() * 14 - 7)
   const t = scene.add
-    .text(x, y, text, {
+    .text(jx, y, text, {
       fontSize: `${s.fontSize}px`,
       color: s.color,
       fontStyle: s.fontStyle,
@@ -150,12 +153,15 @@ export function spawnFloatingText(
     })
     .setOrigin(0.5)
     .setDepth(30)
+    .setScale(0.4)
+  scene.tweens.add({ targets: t, scale: 1, duration: 130, ease: 'Back.easeOut' })
+  scene.tweens.add({ targets: t, y: y - s.risePx, duration: s.durationMs, ease: 'Cubic.easeOut' })
   scene.tweens.add({
     targets: t,
-    y: y - s.risePx,
     alpha: 0,
-    duration: s.durationMs,
-    ease: 'Cubic.easeOut',
+    delay: Math.round(s.durationMs * 0.45),
+    duration: Math.round(s.durationMs * 0.55),
+    ease: 'Cubic.easeIn',
     onComplete: () => t.destroy(),
   })
   return t
