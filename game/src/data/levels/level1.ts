@@ -3,10 +3,10 @@
 // This REPLACES the project's original hand-made level 1: the placeholder
 // LEVEL_1 in systems/level.ts uses monster30/2/4/7/8 with INVENTED small stats
 // (that port's own tuning, e.g. monster30 hp 150) because it predates the
-// asset-pipeline. This pack carries the REAL recovered numbers so level 1 stops
-// being the campaign's only non-original level once the wiring pen swaps it in
-// as the LEVELS chain head. Same data-layer shape as level2/3/4.ts; level.ts is
-// not touched.
+// asset-pipeline. This pack carries the REAL recovered numbers and now models
+// L1 as the original sl11 -> sl12 -> sl13 substage chain instead of one flat
+// arena. sl12/sl13 still reuse level.ts's existing WaveSpec runtime internally;
+// sl11 uses the new continuous-spawner mode.
 //
 // Provenance: 1.swf's three sub-stages (StageListener11/12/13 in 打开我开始玩.swf):
 //   - Stage 11 is a vertical climb: a swarm of Monster30 (真·hp 1, speed 8 —
@@ -16,10 +16,11 @@
 //     `isBoss=true` on `gc.curStage==1 && gc.curLevel==1`).
 //   - Stage 12 roster: grunts Monster8/7 + mini-bosses 千里眼(M4)/顺风耳(M2).
 //   - Stage 13 roster: grunts Monster8/7, Monster30 swarm + 巨灵神(M5).
-// Compressed into level.ts's single-level LevelDef with a clean tier split so
-// boss-grade monsters never spawn as trash: pure escalating grunt/swarm waves
-// first, then each mini-boss as its OWN solo stop point (千里眼→顺风耳→巨灵神),
-// then 巫鹰 as the arena boss. No sub-boss shares a roster with grunts.
+// sl12/sl13 combat placement is approximated as stop-point waves because the
+// AS3 StageListener12 gate logic has no createMonster calls and StageListener13
+// only preloads assets; static timeline placement is still pending geometry/
+// scene mining. Boss-grade monsters stay separated from grunt rosters where
+// the original data makes that clear.
 //
 // STATS ARE REAL, recovered verbatim from each export.monster.MonsterN
 // constructor, branch-selected for the level-1 context (`gc.curStage==1 &&
@@ -48,7 +49,8 @@
 // 千里眼 0.6, grunts 0.15.
 
 import type { MonsterStats } from '../../systems/monsterSim'
-import type { LevelDef, MonsterSpawnSpec, WaveSpec } from '../../systems/level'
+import type { LevelDef, MonsterSpawnSpec, SubStageChainDef, WaveSpec } from '../../systems/level'
+import type { Wall } from '../../systems/platformSim'
 
 /** Real recovered per-species stats for level 1 (see file header). */
 export const LEVEL1_MONSTER_STATS: Record<string, MonsterStats> = {
@@ -80,38 +82,124 @@ function wave(...species: string[]): WaveSpec {
   return { roster: species.map(unit) }
 }
 
-// Layout constants mirror BattleScene's single-screen world (same values
-// level.ts hard-codes as SHARED_DOOR / SHARED_ARENA_BOUNDS placeholders).
-const WORLD_MIN_X = 90
-const WORLD_MAX_X = 1460
-const WORLD_GROUND_Y = 400
-const SHARED_DOOR = { x: WORLD_MAX_X - 100, y: WORLD_GROUND_Y - 140, width: 100, height: 140 }
-const SHARED_ARENA_BOUNDS = {
-  left: WORLD_MIN_X,
-  right: WORLD_MAX_X,
-  top: WORLD_GROUND_Y - 360,
-  bottom: WORLD_GROUND_Y + 40,
+const SL11_BOUNDS = { left: 0, right: 1132, top: -2150, bottom: 430 }
+const SL_HORIZONTAL_BOUNDS = { left: 0, right: 4890, top: 0, bottom: 540 }
+
+// Adapted fallback geometry used only when game/src/data/levels/level1-geometry.json
+// has not landed from the parallel mining task yet. Coordinates stay in the
+// same identity AS3 scene-coordinate space as the real contract.
+const SL11_FALLBACK_WALLS: Wall[] = [
+  { type: 'solid', x: 360, y: 400, width: 360, height: 40 },
+  { type: 'through', x: 640, y: 250, width: 180, height: 18 },
+  { type: 'through', x: 420, y: 80, width: 180, height: 18 },
+  { type: 'throughUpButDown', x: 650, y: -120, width: 180, height: 18 },
+  { type: 'through', x: 400, y: -340, width: 190, height: 18 },
+  { type: 'through', x: 660, y: -590, width: 190, height: 18 },
+  { type: 'throughUpButDown', x: 390, y: -850, width: 210, height: 18 },
+  { type: 'through', x: 650, y: -1120, width: 210, height: 18 },
+  { type: 'through', x: 370, y: -1400, width: 230, height: 18 },
+  { type: 'through', x: 650, y: -1680, width: 230, height: 18 },
+  { type: 'through', x: 440, y: -1950, width: 320, height: 24 },
+]
+
+const SL12_WALLS: Wall[] = [{ type: 'solid', x: 0, y: 400, width: 4890, height: 60 }]
+const SL13_WALLS: Wall[] = [{ type: 'solid', x: 0, y: 400, width: 4890, height: 60 }]
+
+const SL_DOOR = { x: 4700, y: 300, width: 120, height: 160 }
+const HORIZONTAL_ARENA_BOUNDS = {
+  left: SL_HORIZONTAL_BOUNDS.left,
+  right: SL_HORIZONTAL_BOUNDS.right,
+  top: SL_HORIZONTAL_BOUNDS.top,
+  bottom: SL_HORIZONTAL_BOUNDS.bottom,
 }
 
-export const LEVEL_1_WUYING: LevelDef = {
-  id: 'level-1',
-  name: '巫鹰关',
+const SL12_WAVES: WaveSpec[] = [
+  wave('monster8', 'monster7', 'monster8'),
+  wave('monster4'), // 千里眼
+  wave('monster2'), // 顺风耳
+]
+
+const SL13_WAVES: WaveSpec[] = [
+  wave('monster8', 'monster7', 'monster30', 'monster30'),
+  wave('monster5'), // 巨灵神
+]
+
+export const LEVEL_1_SL12: LevelDef = {
+  id: 'level-1-sl12',
+  name: '九重天 · 天门前庭',
   spawnIntervalMs: 6000,
-  stopPoints: [
-    // ── grunt waves (escalating), no boss-tier monster mixed in ──
-    wave('monster8', 'monster8', 'monster30'), // weak intro + a swarm imp
-    wave('monster30', 'monster30', 'monster30', 'monster8'), // the climb swarm
-    wave('monster7', 'monster7', 'monster8'), // heavier grunts
-    // ── mini-bosses, each its own solo appearance (escalating hp) ──
-    wave('monster4'), // 千里眼 (1500)
-    wave('monster2'), // 顺风耳 (2000)
-    wave('monster5'), // 巨灵神 (4000, heaviest mini-boss)
+  stopPoints: SL12_WAVES,
+  // Not used as an arena boss in the L1 substage flow; kept to reuse LevelDef's
+  // existing stop-point runtime without mutating that contract.
+  boss: { species: 'monster4', stats: LEVEL1_MONSTER_STATS.monster4, label: LEVEL1_MONSTER_NAMES.monster4 },
+  door: SL_DOOR,
+  arenaBounds: HORIZONTAL_ARENA_BOUNDS,
+}
+
+export const LEVEL_1_SL13: LevelDef = {
+  id: 'level-1-sl13',
+  name: '九重天 · 南天门',
+  spawnIntervalMs: 6000,
+  stopPoints: SL13_WAVES,
+  // Not used as an arena boss in the L1 substage flow; see LEVEL_1_SL12.
+  boss: { species: 'monster5', stats: LEVEL1_MONSTER_STATS.monster5, label: LEVEL1_MONSTER_NAMES.monster5 },
+  door: SL_DOOR,
+  arenaBounds: HORIZONTAL_ARENA_BOUNDS,
+}
+
+export const LEVEL_1_WUYING: SubStageChainDef = {
+  id: 'level-1',
+  name: '九重天',
+  subStages: [
+    {
+      id: 'sl11',
+      name: '九重天 · 爬塔',
+      mode: 'climb',
+      bounds: SL11_BOUNDS,
+      door: { x: 1000, y: -2110, width: 90, height: 180 },
+      heroStart: { x: 480, y: 400 },
+      background: { base: 'bg11' },
+      fallbackWalls: SL11_FALLBACK_WALLS,
+      continuousSpawner: {
+        initialDelayMs: 3000, // StageListener11: 72 frames / Config.frameClips(24)
+        intervalMs: 6000, // StageListener11: frameClips * 6 = 144 frames / 24fps
+        count: 2,
+        roster: [unit('monster30')],
+        offsetX: { min: -150, max: 150 },
+        offsetY: { min: -300, max: -100 },
+        heightTrigger: {
+          thresholdY: -1900,
+          boss: {
+            species: 'monster3',
+            stats: LEVEL1_MONSTER_STATS.monster3,
+            label: LEVEL1_MONSTER_NAMES.monster3,
+            x: 750,
+            y: -2050,
+          },
+        },
+      },
+    },
+    {
+      id: 'sl12',
+      name: '九重天 · 天门前庭',
+      mode: 'horizontal',
+      bounds: SL_HORIZONTAL_BOUNDS,
+      door: SL_DOOR,
+      heroStart: { x: 180, y: 400 },
+      background: { base: 'bg12', floor: 'online_floor12' },
+      fallbackWalls: SL12_WALLS,
+      waveLevel: LEVEL_1_SL12,
+    },
+    {
+      id: 'sl13',
+      name: '九重天 · 南天门',
+      mode: 'horizontal',
+      bounds: SL_HORIZONTAL_BOUNDS,
+      door: SL_DOOR,
+      heroStart: { x: 180, y: 400 },
+      background: { base: 'bg13', floor: 'online_floor13' },
+      fallbackWalls: SL13_WALLS,
+      waveLevel: LEVEL_1_SL13,
+    },
   ],
-  boss: {
-    species: 'monster3',
-    stats: LEVEL1_MONSTER_STATS.monster3,
-    label: LEVEL1_MONSTER_NAMES.monster3, // 巫鹰
-  },
-  door: SHARED_DOOR,
-  arenaBounds: SHARED_ARENA_BOUNDS,
 }

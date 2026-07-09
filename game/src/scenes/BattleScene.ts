@@ -69,16 +69,31 @@ import {
   LevelDef,
   LevelState,
   MonsterSpawnSpec,
+  SubStageChainDef,
+  SubStageChainState,
+  SubStageDef,
+  ContinuousSpawnerState,
+  areStopPointsCleared,
+  createContinuousSpawnerState,
   createLevelState,
+  createSubStageChainState,
+  currentSubStage,
+  currentSubStageDoor,
   updateLevelSpawn,
+  updateContinuousSpawner,
   getActiveWaveRoster,
   isBossZoneTriggered,
   markBossTriggered,
+  markCurrentSubStageCleared,
   isBossDead,
   revealTransferDoor,
   tryClearArena,
+  tryAdvanceSubStage,
+  isSubStageChainCleared,
 } from '../systems/level'
 import { LEVEL_1_WUYING, LEVEL1_MONSTER_NAMES, LEVEL1_MONSTER_STATS } from '../data/levels/level1'
+import { resolveHorizontalMotion, resolveVerticalMotion, type Wall } from '../systems/platformSim'
+import { wallsForLevel1SubStage } from '../systems/level1Geometry'
 import { LEVEL_2_TIANWANG, LEVEL2_MONSTER_NAMES } from '../data/levels/level2'
 import { LEVEL_3_ERLANGSHEN, LEVEL3_MONSTER_NAMES } from '../data/levels/level3'
 import { LEVEL_4_XIENIAN, LEVEL4_MONSTER_NAMES } from '../data/levels/level4'
@@ -287,24 +302,6 @@ const MONSTER_SKILL_GATES: Record<string, MonsterSkillGate> = {
 const HERO_HURTBOX_W = 90
 const HERO_HURTBOX_H = 150
 
-// behavior-wiring pen: L1 climb-intro swarm (prefab-compiler-report.md §5.4's
-// documented gap -- the original StageListener11 spams
-// `createMonster(30, randHero.x+rand, randHero.y-rand)` throughout the climb;
-// this remake deferred all of stop point 0's monsters to the post-climb
-// ground phase instead). Real spawn rate/cap were never decompiled -- both
-// below are project-chosen for playability (monster30 is a 1-hp "one-shot
-// swarm imp", so even a small live cap reads as a real harassment threat
-// without becoming unplayable spam), TODO-verify against a real capture if
-// one ever surfaces.
-const CLIMB_SWARM_INTERVAL_MS = 1500
-const CLIMB_SWARM_MAX_ALIVE = 4
-// TODO-verify: Monster30's real AS3 vertical flight speed was never
-// decompiled (see monsterSim.ts's VerticalFollowConfig doc comment) -- this
-// starting value came from a rough in-browser calibration pass (fast enough
-// to close in during the climb, not so fast it teleports onto the hero's
-// face); tune here if a future hands-on pass wants it adjusted.
-const CLIMB_VERTICAL_FOLLOW_SPEED = 7
-
 const HERO_TEX = 'role1_0'
 // Weapon overlay sheet: same 200×200 grid + same action frames as role1_0, with
 // ZERO offset (art-verified: the grip lands in the fist). Only 8 weapon skins
@@ -334,36 +331,6 @@ const FLOOR_TOP_Y = 356
 const MIN_X = 90
 const MAX_X = 1460
 const WORLD_W = 1560
-
-// --- Level 1 climb intro (S1 巫鹰关, tools/prefab-compiler target C1) ---
-// StageListener11.as (the level's real AS3 sub-stage 1 controller) is a pure
-// vertical climb through open sky: monsters spawn near the player while they
-// repeatedly double-jump upward (base.BaseHero.jump(), the same jumpCount<2 /
-// gravity model already ported verbatim in systems/jump.ts) until
-// hero.y<=-1900 triggers the boss and the camera tweens on. There is NO
-// platform/floor collider anywhere in that climb -- verified by a full-text
-// search of 1.swf's swf2xml (zero named PlaceObjects in the whole level
-// pack) and of StageListener11.as itself. The prior flat single-screen L1
-// arena (this file's original MIN_X/MAX_X/GROUND_Y-only design) dropped this
-// climb entirely, which is what the user's morning report meant by "现第一
-// 关是横版平地" -- Adapted rather than fabricated per CLAUDE.md's移植协议:
-// this climb intro restores the real STRUCTURE (a genuine double-jump
-// traversal challenge, real bg11.png art panned via camera, no invented
-// platforms) using bg11's own compiled bounds
-// (tools/prefab-compiler, 1132x3051, local origin (0.052,0.777) near the
-// bottom -- tasks/prefab-compiler-report.md) for the background, while
-// keeping the arena's own monster-wave simulation (systems/level.ts,
-// systems/monsterSim.ts) completely untouched: monsterSim has no vertical
-// axis, so making Monster30 actually swarm mid-air would require a systems/
-// change outside this task's boundary ("不动 systems/ 战斗与存档逻辑") --
-// documented gap, see tasks/prefab-compiler-report.md. The SAME Monster30
-// swarm (LEVEL_1_WUYING's stop point 0, unmodified) now spawns immediately
-// after the climb instead of on the flat arena's very first frame.
-const CLIMB_TOP_Y = 80 // world y the hero must reach to finish the climb
-const CLIMB_BOUNDS_TOP = CLIMB_TOP_Y - 40
-const CLIMB_BOUNDS_HEIGHT = GROUND_Y + 140 - CLIMB_BOUNDS_TOP
-const CLIMB_MIN_X = HERO_START_X - 140
-const CLIMB_MAX_X = HERO_START_X + 140
 
 // --- Level 1 ground segment (session5 battle-fidelity, tasks/battle-fidelity-brief.md) ---
 // The team-lead's diagnosis against docs/reference/user-flow-refs/battle-original.png
@@ -507,9 +474,15 @@ function npcKindToGameKind(k: NpcItem['kind'] | 'equip'): Item['kind'] {
 
 type CraftedGameItem = Item & { effects?: CraftEffect[] }
 
-/** The campaign level chain L1 -> L2 -> L3 -> L4. L1 keeps its small invented
- * numbers (level.ts LEVEL_1); L2-L4 are the real-scale ports in data/levels/. */
-const CAMPAIGN: LevelDef[] = [LEVEL_1_WUYING, LEVEL_2_TIANWANG, LEVEL_3_ERLANGSHEN, LEVEL_4_XIENIAN]
+type CampaignEntry = SubStageChainDef | LevelDef
+
+function isSubStageCampaign(def: CampaignEntry): def is SubStageChainDef {
+  return 'subStages' in def
+}
+
+/** The campaign level chain L1 -> L2 -> L3 -> L4. L1 is a three-substage AS3
+ * chain; L2-L4 stay on the existing LevelDef wave/boss model. */
+const CAMPAIGN: CampaignEntry[] = [LEVEL_1_WUYING, LEVEL_2_TIANWANG, LEVEL_3_ERLANGSHEN, LEVEL_4_XIENIAN]
 
 /** One live monster: its sim state + config, its sprite, and the render/combat
  * facts (data table, per-monster elemental status, attack power). */
@@ -556,19 +529,10 @@ export class BattleScene extends Phaser.Scene {
   private campaignIndex = 0
   private levelState!: LevelState
   private monsters: MonsterEntity[] = []
-  // Level 1 climb intro (see CLIMB_TOP_Y header comment). climbFloorY is a
-  // one-way ratchet: systems/jump.ts's stepVertical() always lands the hero
-  // back at heroConfig.jump.groundY, so plain double-jumping from a fixed
-  // floor can only ever bounce ~180-200px up and fall right back -- this
-  // raises that floor to the hero's own best (lowest) y each time they climb
-  // past it, so a landed double-jump never loses progress, without touching
-  // jump.ts itself (groundY is a plain per-scene config field).
+  private level1Chain?: SubStageChainState
+  private level1Spawner?: ContinuousSpawnerState
+  private currentWalls: Wall[] = []
   private climbActive = false
-  private climbFloorY = GROUND_Y
-  // behavior-wiring pen: accumulator for the climb-intro Monster30 swarm (see
-  // CLIMB_SWARM_INTERVAL_MS / updateClimbSwarm) -- the real StageListener11
-  // gap this closes, see prefab-compiler-report.md §5.4.
-  private climbSwarmAccMs = 0
   private bossEntity: MonsterEntity | null = null
   // l1-truth pen: the currently-active miniboss (千里眼/顺风耳/巨灵神/增长
   // 天王/广目天王, see MINIBOSS_SPECIES) borrows the top BossHpBar while
@@ -589,8 +553,8 @@ export class BattleScene extends Phaser.Scene {
   private bgTiles: { img: Phaser.GameObjects.TileSprite; factor: number }[] = []
   // L1-only prefab-built ground layers (bg12 莲池华表 / bg13 南天门长廊, see the
   // GROUND_BG1{2,3}_* constants above). Built once in buildBackground(),
-  // shown/hidden per level + climb state in swapBackground()/startClimb()/
-  // finishClimb(). bgTiles above stays the renderer for L2-L4's bgN2/bgN3.
+  // shown/hidden per level/substage. bgTiles above stays the renderer for
+  // L2-L4's bgN2/bgN3.
   private bg12Layer?: Phaser.GameObjects.Container
   private bg13Layer?: Phaser.GameObjects.Container
   private drops: DropEntity[] = []
@@ -1318,12 +1282,25 @@ export class BattleScene extends Phaser.Scene {
 
   // ---------- level / monster manager ----------
 
-  /** (Re)start a campaign level: reset the wave/boss machine, clear monsters,
-   * swap the background art, and flash a name banner. */
-  private startLevel(index: number): void {
-    this.campaignIndex = Math.min(Math.max(0, index), CAMPAIGN.length - 1)
-    const def = CAMPAIGN[this.campaignIndex]
-    this.levelState = createLevelState(def)
+  private currentCampaignName(): string {
+    if (this.level1Chain) return currentSubStage(this.level1Chain).name
+    return CAMPAIGN[this.campaignIndex].name
+  }
+
+  private activeDoor(): { x: number; y: number; width: number; height: number; visible: boolean } {
+    if (this.level1Chain) return currentSubStageDoor(this.level1Chain)
+    return this.levelState.arena.door
+  }
+
+  private currentHeroBounds(): { minX: number; maxX: number } {
+    if (this.level1Chain) {
+      const bounds = currentSubStage(this.level1Chain).bounds
+      return { minX: bounds.left, maxX: bounds.right }
+    }
+    return { minX: MIN_X, maxX: MAX_X }
+  }
+
+  private resetLiveLevelObjects(): void {
     for (const e of this.monsters) {
       e.hpBar?.destroy()
       e.sprite.destroy()
@@ -1333,124 +1310,129 @@ export class BattleScene extends Phaser.Scene {
     this.activeMiniBoss = null
     this.portal?.setVisible(false)
     this.bossBar?.setVisible(false)
-    // Close any open scene UI so the previous level's overlays (老君 dialogue,
-    // backpack, boss bar) never bleed over the next level's banner.
     this.dialogue?.close()
     this.backpack?.close()
     this.furnacePanel?.close()
     this.resultBanner?.hide()
     this.bannerTimer?.remove(false)
+  }
+
+  private levelDefForSubStage(stage: SubStageDef): LevelDef {
+    if (stage.waveLevel) return stage.waveLevel
+    const boss = stage.continuousSpawner?.heightTrigger?.boss ?? {
+      species: 'monster3',
+      stats: LEVEL1_MONSTER_STATS.monster3,
+      label: LEVEL1_MONSTER_NAMES.monster3,
+      x: 750,
+      y: -2050,
+    }
+    return {
+      id: `level-1-${stage.id}`,
+      name: stage.name,
+      spawnIntervalMs: 6000,
+      stopPoints: [],
+      boss,
+      door: stage.door,
+      arenaBounds: stage.bounds,
+    }
+  }
+
+  /** (Re)start a campaign level: reset the wave/boss machine, clear monsters,
+   * swap the background art, and flash a name banner. */
+  private startLevel(index: number): void {
+    this.campaignIndex = Math.min(Math.max(0, index), CAMPAIGN.length - 1)
+    const def = CAMPAIGN[this.campaignIndex]
+    this.resetLiveLevelObjects()
+    if (isSubStageCampaign(def)) {
+      this.level1Chain = createSubStageChainState(def)
+      this.enterLevel1SubStage()
+      return
+    }
+    this.level1Chain = undefined
+    this.level1Spawner = undefined
+    this.levelState = createLevelState(def)
     this.swapBackground(this.campaignIndex)
     this.showLevelBanner(def.name)
-    if (this.campaignIndex === 0) this.startClimb()
-    else this.resetClimbState()
+    this.resetClimbState()
   }
 
-  /** Start L1's vertical climb intro (see CLIMB_TOP_Y header comment):
-   * narrows the hero to a corridor, opens up vertical camera bounds, pans
-   * bg11 with the camera instead of pinning it, and holds off
-   * updateLevel()'s wave spawner (skipped in update() while climbActive)
-   * until the hero reaches the top. */
-  private startClimb(): void {
-    this.climbActive = true
-    this.climbFloorY = GROUND_Y
-    this.climbSwarmAccMs = 0
-    this.heroConfig.jump.groundY = GROUND_Y
-    this.heroConfig.minX = CLIMB_MIN_X
-    this.heroConfig.maxX = CLIMB_MAX_X
-    this.heroState.x = HERO_START_X
-    this.heroState.vertical.y = GROUND_Y
+  private enterLevel1SubStage(): void {
+    if (!this.level1Chain) return
+    const stage = currentSubStage(this.level1Chain)
+    this.resetLiveLevelObjects()
+    this.levelState = createLevelState(this.levelDefForSubStage(stage))
+    this.currentWalls = wallsForLevel1SubStage(stage)
+    this.climbActive = stage.mode === 'climb'
+    this.level1Spawner = stage.continuousSpawner ? createContinuousSpawnerState(stage.continuousSpawner) : undefined
+
+    this.heroConfig.jump.groundY = stage.heroStart.y
+    this.heroConfig.jump.platformResolver = (q) => resolveVerticalMotion(this.currentWalls, q)
+    this.heroConfig.resolveHorizontal = (q) => resolveHorizontalMotion(this.currentWalls, q).x
+    this.heroConfig.minX = stage.bounds.left
+    this.heroConfig.maxX = stage.bounds.right
+    this.heroState.x = stage.heroStart.x
+    this.heroState.vertical.y = stage.heroStart.y
     this.heroState.vertical.vy = 0
     this.heroState.vertical.grounded = true
     this.heroState.vertical.jumpCount = 0
     this.heroState.vertical.airAction = null
-    this.cameras.main.setBounds(0, CLIMB_BOUNDS_TOP, WORLD_W, CLIMB_BOUNDS_HEIGHT)
-    // bg11 is normally pinned (scrollFactor(0.12, 0), see buildBackground) so
-    // only its top ~540px crop -- the summit -- ever shows. Following the
-    // camera vertically (scrollFactor y=1) instead reveals the climb through
-    // clouds as the hero rises, using the same real bitmap, no new asset.
-    this.bgBase?.setScrollFactor(0.12, 1)
-    // Ground mode swapped bgBase to floorBg1@GROUND_BG_SCALE (session5
-    // battle-fidelity); the climb itself is untouched from before that task
-    // and still needs bg11 at its original scale 1 for the vertical pan
-    // math (CLIMB_TOP_Y etc. were tuned against that). bg12/bg13's ground
-    // layers have no role mid-climb, so they're hidden for the duration.
-    this.bgBase?.setTexture('bg11', '__BASE').setScale(1).setPosition(0, 0)
-    this.bg12Layer?.setVisible(false)
-    this.bg13Layer?.setVisible(false)
-    this.showLevelBanner('双跳向上攀爬，登顶引出巫鹰')
-  }
 
-  /** Per-frame climb bookkeeping, called from update() while climbActive.
-   * Must run AFTER advanceHero() has applied this frame's jump/gravity. */
-  private updateClimb(): void {
-    if (this.heroState.vertical.y < this.climbFloorY) {
-      this.climbFloorY = this.heroState.vertical.y
-      this.heroConfig.jump.groundY = this.climbFloorY
+    this.cameras.main.setBounds(
+      stage.bounds.left,
+      stage.bounds.top,
+      stage.bounds.right - stage.bounds.left,
+      stage.bounds.bottom - stage.bounds.top,
+    )
+    this.bgBase?.setTexture(stage.background.base, '__BASE').setScale(1).setPosition(stage.bounds.left, stage.bounds.top)
+    this.bgBase?.setScrollFactor(stage.mode === 'climb' ? 0.12 : 0.35, stage.mode === 'climb' ? 1 : 0)
+    this.bg12Layer?.setVisible(stage.id === 'sl12')
+    this.bg13Layer?.setVisible(stage.id === 'sl13')
+    this.bg12Layer?.setScale(1).setPosition(0, 0).setScrollFactor(1, 0)
+    this.bg13Layer?.setScale(1).setPosition(0, 0).setScrollFactor(1, 0)
+    if (stage.background.floor && this.floorImg && this.textures.exists(stage.background.floor)) {
+      this.floorImg.setVisible(true).setTexture(stage.background.floor).setPosition(0, GROUND_Y - 5).setScale(1)
+    } else {
+      this.floorImg?.setVisible(false)
     }
-    if (this.heroState.vertical.y <= CLIMB_TOP_Y) this.finishClimb()
+    for (const { img } of this.bgTiles) img.setVisible(false)
+    this.showLevelBanner(stage.name)
   }
 
-  /** L1 climb-intro Monster30 swarm (prefab-compiler-report.md §5.4's
-   * documented no-threat gap): while climbActive, updateLevel() (the normal
-   * wave/boss machine, including its own per-entity advanceEntity loop) is
-   * skipped entirely, so without this the climb has zero monsters. Spawns a
-   * capped trickle of monster30 near the hero's current altitude (mirroring
-   * the original's `createMonster(30, randHero.x+rand, randHero.y-rand)`,
-   * rate/cap project-chosen, see CLIMB_SWARM_INTERVAL_MS/_MAX_ALIVE) and
-   * drives the SAME advanceEntity/reapMonsters this.monsters already uses for
-   * every other level -- monsterConfigFor gives monster30 a live
-   * verticalFollow config for exactly this call path (species==='monster30'
-   * && this.climbActive). */
-  private updateClimbSwarm(delta: number): void {
+  private updateLevel1(delta: number): void {
+    if (!this.level1Chain) return
+    const stage = currentSubStage(this.level1Chain)
     const heroAlive = !isHeroDead(this.identity)
-    this.climbSwarmAccMs += delta
-    const aliveSwarm = this.monsters.filter(
-      (e) => e.species === 'monster30' && e.state.mode !== 'dead' && e.state.mode !== 'gone',
-    ).length
-    if (this.climbSwarmAccMs >= CLIMB_SWARM_INTERVAL_MS && aliveSwarm < CLIMB_SWARM_MAX_ALIVE && heroAlive) {
-      this.climbSwarmAccMs = 0
-      const hx = this.heroState.x + (Math.random() * 2 - 1) * 100
-      const hy = this.heroState.vertical.y - (100 + Math.random() * 100) // above the hero, like the original's y-rand
-      this.spawnEntity('monster30', LEVEL1_MONSTER_STATS.monster30, hx, false, hy)
+
+    if (stage.mode === 'climb' && this.level1Spawner) {
+      const update = updateContinuousSpawner(
+        this.level1Spawner,
+        { x: this.heroState.x, y: this.heroState.vertical.y, alive: heroAlive },
+        delta,
+        Math.random,
+      )
+      for (const spawn of update.spawns) this.spawnEntity(spawn.species, spawn.stats, spawn.x, false, spawn.y)
+      if (update.bossSpawn && !this.bossEntity) {
+        const boss = this.spawnEntity(update.bossSpawn.species, update.bossSpawn.stats, update.bossSpawn.x, true, update.bossSpawn.y)
+        this.bossEntity = boss
+        this.levelState.arena.state = 'active'
+        this.levelState.arena.boss = boss.state
+        this.showToast(`BOSS · ${update.bossSpawn.label}`, '#ff9a5a')
+      }
+    } else if (stage.waveLevel) {
+      if (updateLevelSpawn(this.levelState, this.aliveGruntCount())) this.spawnActiveWave()
     }
+
     for (const e of this.monsters) this.advanceEntity(e, delta, heroAlive)
     this.reapMonsters()
-  }
 
-  /** Climb complete: hand back to the normal flat arena exactly as it was
-   * before this task (same GROUND_Y/MIN_X/MAX_X, same first updateLevel()
-   * call spawning LEVEL_1_WUYING's unmodified stop point 0). */
-  private finishClimb(): void {
-    this.climbActive = false
-    this.resetClimbState()
-    // Clear any climb-swarm survivors so the ground phase's own scripted
-    // stop point 0 (LEVEL_1_WUYING's own monster30 wave) starts clean rather
-    // than carrying over stragglers from the climb -- the climb swarm is a
-    // self-contained pre-arena harassment mechanic, not part of the wave
-    // sequence's own accounting (aliveGruntCount/updateLevelSpawn).
-    for (const e of this.monsters) {
-      e.hpBar?.destroy()
-      e.sprite.destroy()
+    const door = currentSubStageDoor(this.level1Chain)
+    const climbBossDead = stage.mode === 'climb' && this.bossEntity && isBossDead(this.bossEntity.state)
+    const wavesCleared = stage.mode === 'horizontal' && areStopPointsCleared(this.levelState) && this.aliveGruntCount() === 0
+    if ((climbBossDead || wavesCleared) && !door.visible) {
+      markCurrentSubStageCleared(this.level1Chain)
+      if (stage.id === 'sl13') this.showResultBanner()
+      else this.showPortal()
     }
-    this.monsters = []
-    this.heroState.x = HERO_START_X
-    this.heroState.vertical.y = GROUND_Y
-    this.heroState.vertical.vy = 0
-    this.heroState.vertical.grounded = true
-    this.heroState.vertical.jumpCount = 0
-    this.heroState.vertical.airAction = null
-    this.cameras.main.scrollY = 0
-    // Restore the ground-mode backdrop (floorBg1@GROUND_BG_SCALE) and bring
-    // bg12/bg13's ground layers back now that the climb is over.
-    this.bgBase?.setTexture('floorBg1', '__BASE').setScale(GROUND_BG_SCALE).setPosition(GROUND_BG_X, GROUND_BG_Y)
-    this.bg12Layer?.setVisible(true).setScale(GROUND_BG12_SCALE).setPosition(0, GROUND_BG12_Y).setScrollFactor(0.55, 0)
-    this.bg13Layer
-      ?.setVisible(true)
-      .setScale(GROUND_BG13_SCALE)
-      .setPosition(GROUND_BG13_X, GROUND_BG13_Y)
-      .setScrollFactor(0.4, 0)
-    this.showLevelBanner('登顶！巫鹰关')
   }
 
   /** Restores the pre-climb config/camera. Called both when finishing the
@@ -1459,6 +1441,9 @@ export class BattleScene extends Phaser.Scene {
    * narrowed corridor or the tall camera bounds. */
   private resetClimbState(): void {
     this.climbActive = false
+    this.currentWalls = []
+    this.heroConfig.jump.platformResolver = undefined
+    this.heroConfig.resolveHorizontal = undefined
     this.heroConfig.jump.groundY = GROUND_Y
     this.heroConfig.minX = MIN_X
     this.heroConfig.maxX = MAX_X
@@ -1490,10 +1475,11 @@ export class BattleScene extends Phaser.Scene {
     const dur = (a: string, fallback: number): number =>
       data.actions[a] ? actionDurationMs(data.actions[a] as ActionSpec, TICK_MS) : fallback
     const timing = MONSTER_ATTACK_TIMING[species]
+    const bounds = this.level1Chain ? currentSubStage(this.level1Chain).bounds : { left: MIN_X, right: MAX_X }
     return {
       stats,
-      patrolMin: MIN_X + 80,
-      patrolMax: MAX_X - 80,
+      patrolMin: bounds.left + 80,
+      patrolMax: bounds.right - 80,
       hurtDurationMs: dur('hurt', 260),
       attackDurationMs: dur('hit1', 400),
       deadDurationMs: dur('dead', 600),
@@ -1506,15 +1492,12 @@ export class BattleScene extends Phaser.Scene {
       // defaults for species not yet decompiled (L2+, TODO-verify).
       attackHitFraction: timing?.fraction,
       meleeReach: timing?.reach,
-      // behavior-wiring pen: monster30 is only ever spawned mid-climb while
-      // this.climbActive is true (updateClimbSwarm) -- everywhere else
-      // (post-climb ground waves, L2+) it spawns with climbActive already
-      // false, so this stays undefined (byte-identical to before) for every
-      // other spawn. See monsterSim.ts's VerticalFollowConfig doc comment for
-      // the speed TODO-verify.
+      // StageListener11: Monster30 is a flying, gravity-free climb threat.
+      // Keep vertical pursuit opt-in so ground waves and L2-L4 remain on the
+      // previous x-only monsterSim path.
       verticalFollow:
         species === 'monster30' && this.climbActive
-          ? { enabled: true, speed: CLIMB_VERTICAL_FOLLOW_SPEED, arriveThreshold: 20 }
+          ? { enabled: true, speed: stats.speed, arriveThreshold: 20 }
           : undefined,
     }
   }
@@ -1529,10 +1512,9 @@ export class BattleScene extends Phaser.Scene {
     return { power: Math.min(60, 8 + stats.def * 1.5), kind: 'physics' }
   }
 
-  /** `y` defaults to GROUND_Y for every existing caller (ground waves/boss);
-   * the L1 climb swarm (updateClimbSwarm) is the only caller that passes a
-   * real value, spawning monster30 near the hero's current altitude instead
-   * of the ground. */
+  /** `y` defaults to GROUND_Y for existing ground callers; sl11's continuous
+   * spawner passes raw AS3 scene y values so Monster30 and 巫鹰 live at climb
+   * altitude instead of on the flat arena line. */
   private spawnEntity(species: string, stats: MonsterStats, x: number, isBoss: boolean, y: number = GROUND_Y): MonsterEntity {
     const data = MONSTER_DATA[species] ?? MONSTER_DATA.monster30
     const config = this.monsterConfigFor(species, stats)
@@ -1578,8 +1560,9 @@ export class BattleScene extends Phaser.Scene {
 
   private spawnActiveWave(): void {
     const roster = getActiveWaveRoster(this.levelState)
+    const bounds = this.level1Chain ? currentSubStage(this.level1Chain).bounds : { left: MIN_X, right: MAX_X }
     roster.forEach((spec: MonsterSpawnSpec, i) => {
-      const x = Math.min(MAX_X - 120, Math.max(MIN_X + 120, 720 + i * 190))
+      const x = Math.min(bounds.right - 120, Math.max(bounds.left + 120, 720 + i * 190))
       const entity = this.spawnEntity(spec.species, spec.stats, x, false)
       // l1-truth pen: level1/2.ts always give a miniboss its own solo wave
       // (never mixed with grunts or another miniboss), so at most one of
@@ -1605,7 +1588,7 @@ export class BattleScene extends Phaser.Scene {
     if (b && b.state.mode !== 'gone') {
       this.bossBar.setVisible(true)
       this.bossBar.update({
-        name: CAMPAIGN[this.campaignIndex].boss.label,
+        name: MONSTER_NAMES[b.species] ?? b.species,
         hp: b.state.hp,
         maxHp: b.config.stats.hp,
       })
@@ -1630,9 +1613,9 @@ export class BattleScene extends Phaser.Scene {
   // ---------- portal / level advance ----------
 
   private showPortal(): void {
-    const door = this.levelState.arena.door
+    const door = this.activeDoor()
     const cx = door.x + door.width / 2
-    const cy = GROUND_Y - 40
+    const cy = door.y + door.height / 2
     if (!this.portal) {
       // l1-truth pen: real AS3 TransferWind swirl (10-frame loop) replaces
       // the old rectangle+star placeholder -- see registerTransferWind()'s
@@ -1649,9 +1632,14 @@ export class BattleScene extends Phaser.Scene {
     // repo per CLAUDE.md's scope cut but have no map entry, so there really
     // is no next level to walk into) -- the portal still just returns to the
     // world map either way, only the toast's claim about what's next changes.
+    const isL1SubStageDoor = this.level1Chain && !isSubStageChainCleared(this.level1Chain)
     const isFinalActiveLevel = this.campaignIndex + 1 >= ACTIVE_CAMPAIGN_LENGTH
     this.showToast(
-      isFinalActiveLevel ? '妖王已除！走进传送门 (↑) 返回世界地图' : '妖王已除！走进传送门 (↑) 进入下一关',
+      isL1SubStageDoor
+        ? '前路已开！走进传送门 (↑)'
+        : isFinalActiveLevel
+          ? '妖王已除！走进传送门 (↑) 返回世界地图'
+          : '妖王已除！走进传送门 (↑) 进入下一关',
       '#9fd8ff',
     )
   }
@@ -1659,8 +1647,16 @@ export class BattleScene extends Phaser.Scene {
   /** If the portal is open and the hero stands in it, clear the arena and go to
    * the next level. Returns true if it consumed the interact press. */
   private tryUsePortal(): boolean {
+    if (this.level1Chain) {
+      const door = currentSubStageDoor(this.level1Chain)
+      if (!door.visible) return false
+      if (!tryAdvanceSubStage(this.level1Chain, this.heroState.x, this.heroState.vertical.y, true)) return false
+      if (isSubStageChainCleared(this.level1Chain)) this.onAdvanceLevel()
+      else this.enterLevel1SubStage()
+      return true
+    }
     if (!this.levelState.arena.door.visible) return false
-    if (!tryClearArena(this.levelState, this.heroState.x, GROUND_Y, true)) return false
+    if (!tryClearArena(this.levelState, this.heroState.x, this.heroState.vertical.y, true)) return false
     this.onAdvanceLevel()
     return true
   }
@@ -1981,33 +1977,22 @@ export class BattleScene extends Phaser.Scene {
     const jumped = edges.pressJump && this.heroState.vertical.grounded
     advanceHero(this.heroState, edges, delta, this.heroConfig)
     if (jumped) this.playSfx('heroJump', 0.4)
-    if (this.climbActive) {
-      this.updateClimb()
-      // Re-check: updateClimb() may have just called finishClimb() this same
-      // frame (reached CLIMB_TOP_Y), which clears this.monsters -- skip the
-      // swarm tick on that exact transition frame so it can't spawn a stray
-      // monster30 a moment before updateLevel() spawns the ground phase's own
-      // stop point 0 roster below.
-      if (this.climbActive) this.updateClimbSwarm(delta)
-    }
 
     // Hero melee: push combo damage into every monster the swing overlaps.
     this.resolveHeroHits()
-    // Level machine: spawn waves, advance every monster + the boss, reveal the
-    // portal on boss death, and hand off to the next level when used. Held
-    // off during the L1 climb intro (see CLIMB_TOP_Y header comment) so
-    // LEVEL_1_WUYING's stop point 0 (Monster30 swarm) spawns once the hero
-    // reaches the top, not on the climb's very first frame.
-    if (!this.climbActive) this.updateLevel(delta)
+    // Level machine: L1 routes through its substage adapter; L2-L4 keep the
+    // existing LevelDef wave/boss/door path.
+    if (this.level1Chain) this.updateLevel1(delta)
+    else this.updateLevel(delta)
     // Hero combat upkeep: hurt->ready, i-frame expiry, knockback integration,
     // and auto-respawn (in place near the level start, clear of the monster).
     const combatEvents = updateHeroIdentity(
       this.identity,
       this.heroState,
-      { minX: MIN_X, maxX: MAX_X },
+      this.currentHeroBounds(),
       this.simClockMs,
       delta,
-      HERO_START_X,
+      this.level1Chain ? currentSubStage(this.level1Chain).heroStart.x : HERO_START_X,
     )
     for (const e of combatEvents) {
       if (e.type === 'respawn') this.onHeroRespawn()
@@ -2128,7 +2113,7 @@ export class BattleScene extends Phaser.Scene {
     const bossName = this.bossEntity ? MONSTER_NAMES[this.bossEntity.species] ?? '妖王' : '妖王'
     this.resultBanner.showSuccess({
       stats: [
-        CAMPAIGN[this.campaignIndex].name,
+        this.currentCampaignName(),
         `${bossName}已除`,
         `境界 Lv${this.identity.progression.level}`,
       ],
@@ -2256,7 +2241,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private spawnBoss(): void {
-    const def = CAMPAIGN[this.campaignIndex]
+    const def = CAMPAIGN[this.campaignIndex] as LevelDef
     const boss = this.spawnEntity(def.boss.species, def.boss.stats, MON_START_X, true)
     this.bossEntity = boss
     this.levelState.arena.state = 'active'
@@ -2543,7 +2528,7 @@ export class BattleScene extends Phaser.Scene {
     if (this.debugVisible) {
       const s = this.heroState
       this.hud.setText(
-        `Lv${this.campaignIndex + 1} ${CAMPAIGN[this.campaignIndex].name}  怪:${this.aliveMonsters().length}` +
+        `Lv${this.campaignIndex + 1} ${this.currentCampaignName()}  怪:${this.aliveMonsters().length}` +
           `\naction:${s.action} combo:${s.combo.stage} x:${s.x.toFixed(0)}  NPC:${this.npcStatusLabel()}`,
       )
     }
@@ -2730,12 +2715,13 @@ export class BattleScene extends Phaser.Scene {
       return {
         level: this.identity.progression.level,
         campaignIndex: this.campaignIndex,
-        levelName: CAMPAIGN[this.campaignIndex].name,
+        levelName: this.currentCampaignName(),
+        subStage: this.level1Chain ? currentSubStage(this.level1Chain).id : null,
         aliveMonsters: this.aliveMonsters().length,
         boss: this.bossEntity
           ? { species: this.bossEntity.species, hp: Math.round(this.bossEntity.state.hp), maxHp: this.bossEntity.config.stats.hp, mode: this.bossEntity.state.mode }
           : null,
-        portalOpen: this.levelState.arena.door.visible,
+        portalOpen: this.activeDoor().visible,
         // Back-compat: report the nearest monster under the old `monster` key.
         monster: nm ? { species: nm.species, x: Math.round(nm.state.x), hp: Math.round(nm.state.hp), mode: nm.state.mode } : null,
         drops: this.drops.map((d) => ({ id: d.item.id, x: Math.round(d.x), grounded: d.grounded })),
@@ -2939,12 +2925,13 @@ export class BattleScene extends Phaser.Scene {
     // Level-chain acceptance hooks.
     w.__levelState = () => ({
       campaignIndex: this.campaignIndex,
-      name: CAMPAIGN[this.campaignIndex].name,
+      name: this.currentCampaignName(),
+      subStage: this.level1Chain ? currentSubStage(this.level1Chain).id : null,
       aliveMonsters: this.aliveMonsters().map((e) => ({ species: e.species, hp: Math.round(e.state.hp), isBoss: e.isBoss })),
       boss: this.bossEntity
         ? { species: this.bossEntity.species, hp: Math.round(this.bossEntity.state.hp), maxHp: this.bossEntity.config.stats.hp, dead: isBossDead(this.bossEntity.state) }
         : null,
-      portalOpen: this.levelState.arena.door.visible,
+      portalOpen: this.activeDoor().visible,
       bossTriggered: this.levelState.bossTriggered,
     })
     // Queue a lethal hit into every live grunt (drives the wave machine forward).
@@ -2970,8 +2957,9 @@ export class BattleScene extends Phaser.Scene {
     // Dismiss the clear banner first if it's still up (boss just died).
     w.__usePortal = () => {
       if (this.resultBanner.isOpen) this.dismissResultBanner()
-      const d = this.levelState.arena.door
+      const d = this.activeDoor()
       this.heroState.x = d.x + d.width / 2
+      this.heroState.vertical.y = d.y + d.height / 2
       return this.tryUsePortal()
     }
     w.__toggleDebug = () => {

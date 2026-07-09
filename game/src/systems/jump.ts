@@ -19,6 +19,11 @@ export interface JumpConfig {
   jumpPower: number
   groundY: number
   maxJumps: number
+  /** Optional platform resolver. Absent preserves the original single-groundY behavior. */
+  platformResolver?: (query: { x: number; fromY: number; toY: number; vy: number }) => {
+    kind: 'land' | 'head'
+    y: number
+  } | null
 }
 
 export const DEFAULT_JUMP_CONFIG: JumpConfig = {
@@ -54,10 +59,26 @@ export function requestJump(state: VerticalState, cfg: JumpConfig): void {
 }
 
 /** Advance vertical physics by exactly one tick. */
-export function stepVertical(state: VerticalState, cfg: JumpConfig): void {
+export function stepVertical(state: VerticalState, cfg: JumpConfig, x: number = 0): void {
   if (state.grounded) return
+  const fromY = state.y
   state.vy += cfg.gravity
   state.y += state.vy
+  const platformHit = cfg.platformResolver?.({ x, fromY, toY: state.y, vy: state.vy }) ?? null
+  if (platformHit?.kind === 'head') {
+    state.y = platformHit.y
+    state.vy = 0
+    if (state.airAction === 'jump1') state.airAction = 'jump3'
+    return
+  }
+  if (platformHit?.kind === 'land') {
+    state.y = platformHit.y
+    state.vy = 0
+    state.grounded = true
+    state.jumpCount = 0
+    state.airAction = null
+    return
+  }
   if (state.y >= cfg.groundY) {
     // Landed.
     state.y = cfg.groundY
