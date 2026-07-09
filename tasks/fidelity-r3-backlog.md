@@ -2,13 +2,14 @@
 
 真源状态前提：数值待 canon-numbers-research 裁决；物品/装备/怪掉落三表已落库（game/src/data/original/）。
 
-## A 棒：机制与数值（依赖 canon-numbers 裁决 + original/*.json）
-1. 反刷经验门接线：英雄等级≥10 后 Monster30 exp 清零（AS3 已考据，招认漏接）
-2. 掉落改原版单掷模型：总掉率一掷（Boss×1.5）→ fallList 取一件；逐怪 probability 用 original/monster-drops.json
+## A 棒：机制与数值（canon-numbers 已裁决：用户怀疑三处均为原版忠实值，保持不改）
+1. 反刷经验门接线：英雄等级≥10 后 Monster30 exp 清零（SWF 真源写 10；攻略口径 8，按 SWF）
+2. 掉落改原版单掷模型：总掷 probability（Boss×1.5）→ fallList 取一件；逐怪数值用 original/monster-drops.json（乌鸦 prob=0 不掉、杂兵 0.15、巫鹰首关 prob=1 掉新手装 ptd*）
 3. L1 掉落/物品表按真源重写（废除自建"妖怪残魂/大还丹"系；桃子=export.cure 即时回血拾取物，恢复本职）
 4. 乌鸦聚而不啄根因排查（疑攻击命中 y 重叠恒不成立/攻击门与悬停高度组合）
-5. 数值魔改项按裁决修正（乌鸦 hp/经验曲线等）
-6. 技能激活经济：灵魂逐个激活 + 技能书升级（等研究报告给机制细节）；废除默认白送 5 技能的演示态
+5. **击杀掉魂接线（二次更正后新增）**：死亡刷 auraRed 灵魂球 power=gxp×2 → 拾取加 lhValue（链路已逐字亲验：BaseMonster:901→AuraEvent→RoleInfo:520）。需补提取逐怪 gxp（econ-extract 追加或小脚本）；白球 auraWhile=回血回蓝球同链路顺带
+6. 技能激活经济（机制已考据到手）：灵魂逐级喂 `150·level²·√level`（SkillControl.as:106/314 逐字）+ 主动技能限装 5 + 技能书=商城/活动/任务的单技能强化线（赛内可缓）+ 孟婆药剂重置（赛内可缓）；废除默认白送 5 技能演示态
+7. 千里眼/顺风耳/巨灵神的 stage 双分支建模注意（s3l3/s8 复用为 20000 血杂兵，isBoss 翻转）——L2 之后适用，先记档
 
 ## B 棒：战斗场景表现层
 7. bg11 世界坐标对位 + 阶梯可视化（几何 JSON 已落地，接入渲染）
