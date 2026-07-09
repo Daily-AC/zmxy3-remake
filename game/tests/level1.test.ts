@@ -1,125 +1,92 @@
 import { describe, it, expect } from 'vitest'
 import {
+  areStopPointsCleared,
   createLevelState,
-  updateLevelSpawn,
+  createSubStageChainState,
+  currentSubStage,
   getActiveWaveRoster,
-  isBossZoneTriggered,
-  markBossTriggered,
-  activateBossArena,
-  isBossDead,
-  revealTransferDoor,
-  tryClearArena,
-  isLevelCleared,
+  markCurrentSubStageCleared,
+  tryAdvanceSubStage,
+  updateLevelSpawn,
 } from '../src/systems/level'
-import { advanceMonster, initMonster, MonsterConfig, MonsterState } from '../src/systems/monsterSim'
-import { TICK_MS } from '../src/systems/tick'
-import { LEVEL_1_WUYING, LEVEL1_MONSTER_STATS } from '../src/data/levels/level1'
+import { LEVEL_1_SL12, LEVEL_1_SL13, LEVEL_1_WUYING, LEVEL1_MONSTER_STATS } from '../src/data/levels/level1'
 
-function cfgFor(stats: MonsterConfig['stats'], rng: () => number = () => 1): MonsterConfig {
-  return {
-    stats,
-    patrolMin: 90,
-    patrolMax: 1460,
-    hurtDurationMs: 500,
-    attackDurationMs: 333,
-    deadDurationMs: 466,
-    attackCooldownMs: 1000,
-    decisionIntervalMs: 1000,
-    tickMs: TICK_MS,
-    rng,
+function clearAllWaves(def: typeof LEVEL_1_SL12) {
+  const state = createLevelState(def)
+  for (let guard = 0; guard < 100 && !areStopPointsCleared(state); guard++) {
+    if (!updateLevelSpawn(state, 0)) continue
+    const roster = getActiveWaveRoster(state)
+    expect(roster.length).toBeGreaterThan(0)
+    updateLevelSpawn(state, roster.length)
+    updateLevelSpawn(state, 0)
   }
+  return state
 }
 
-const HERO_X = 700
-function lethal(hp: number) {
-  return { attackId: 1, damage: hp + 9999 }
-}
+describe('Level 1 九重天 — AS3 three-substage structure', () => {
+  it('models sl11 as the vertical climb with StageListener11 swarm and height-triggered 巫鹰', () => {
+    const sl11 = LEVEL_1_WUYING.subStages[0]
 
-function killAndRemove(m: MonsterState, cfg: MonsterConfig) {
-  advanceMonster(m, { heroX: HERO_X, heroAlive: true, incomingHit: lethal(cfg.stats.hp) }, TICK_MS, cfg)
-  for (let i = 0; i < 60 && m.mode !== 'gone'; i++) {
-    advanceMonster(m, { heroX: HERO_X, heroAlive: true, incomingHit: null }, TICK_MS, cfg)
-  }
-}
-
-describe('Level 1 巫鹰关 — real 1.swf wave/boss port', () => {
-  it('clears every stop point by really spawning and killing each wave, then advances to the boss', () => {
-    const state = createLevelState(LEVEL_1_WUYING)
-    let spawnedWaves = 0
-
-    for (let guard = 0; guard < 100 && !isBossZoneTriggered(state); guard++) {
-      if (updateLevelSpawn(state, 0)) {
-        spawnedWaves++
-        const roster = getActiveWaveRoster(state)
-        expect(roster.length).toBeGreaterThan(0)
-        const mobs = roster.map((r) => initMonster(cfgFor(r.stats), HERO_X + 200, 400))
-        expect(updateLevelSpawn(state, mobs.length)).toBe(false)
-        mobs.forEach((m, i) => killAndRemove(m, cfgFor(roster[i].stats)))
-        updateLevelSpawn(state, 0)
-      }
-    }
-
-    expect(spawnedWaves).toBe(LEVEL_1_WUYING.stopPoints.length)
-    expect(state.stopPoints.every((sp) => sp.cleared)).toBe(true)
-    expect(isBossZoneTriggered(state)).toBe(true)
+    expect(sl11.id).toBe('sl11')
+    expect(sl11.mode).toBe('climb')
+    expect(sl11.continuousSpawner).toMatchObject({
+      initialDelayMs: 3000,
+      intervalMs: 6000,
+      count: 2,
+      offsetX: { min: -150, max: 150 },
+      offsetY: { min: -300, max: -100 },
+    })
+    expect(sl11.continuousSpawner!.roster.map((s) => s.species)).toEqual(['monster30'])
+    expect(sl11.continuousSpawner!.heightTrigger!.thresholdY).toBe(-1900)
+    expect(sl11.continuousSpawner!.heightTrigger!.boss).toMatchObject({
+      species: 'monster3',
+      x: 750,
+      y: -2050,
+      label: '巫鹰',
+    })
   })
 
-  it('spawns 巫鹰 (300 hp), kills it, opens the door, clears the level', () => {
-    const state = createLevelState(LEVEL_1_WUYING)
-    for (let guard = 0; guard < 100 && !isBossZoneTriggered(state); guard++) {
-      if (updateLevelSpawn(state, 0)) {
-        updateLevelSpawn(state, 2)
-        updateLevelSpawn(state, 0)
-      }
-    }
-    markBossTriggered(state)
+  it('models sl12 and sl13 as horizontal combat substages backed by existing WaveSpec stop-point runtime', () => {
+    expect(LEVEL_1_WUYING.subStages.map((s) => s.id)).toEqual(['sl11', 'sl12', 'sl13'])
+    expect(LEVEL_1_WUYING.subStages[1].waveLevel).toBe(LEVEL_1_SL12)
+    expect(LEVEL_1_WUYING.subStages[2].waveLevel).toBe(LEVEL_1_SL13)
 
-    const bossCfg = cfgFor(LEVEL_1_WUYING.boss.stats)
-    const boss = activateBossArena(state, bossCfg, HERO_X, 300)
-    expect(boss.hp).toBe(300) // 巫鹰, 5*60 recovered from Monster3
-    expect(LEVEL_1_WUYING.boss.label).toBe('巫鹰')
+    expect(areStopPointsCleared(clearAllWaves(LEVEL_1_SL12))).toBe(true)
+    expect(areStopPointsCleared(clearAllWaves(LEVEL_1_SL13))).toBe(true)
+  })
 
-    killAndRemove(boss, bossCfg)
-    expect(isBossDead(boss)).toBe(true)
+  it('substage chain advances by transferDoor from sl11 to sl12 to sl13', () => {
+    const chain = createSubStageChainState(LEVEL_1_WUYING)
 
-    revealTransferDoor(state)
-    const door = LEVEL_1_WUYING.door
-    expect(tryClearArena(state, door.x + 10, door.y + 10, true)).toBe(true)
-    expect(isLevelCleared(state)).toBe(true)
+    expect(currentSubStage(chain).id).toBe('sl11')
+    markCurrentSubStageCleared(chain)
+    expect(tryAdvanceSubStage(chain, 1010, -2050, true)).toBe(true)
+    expect(currentSubStage(chain).id).toBe('sl12')
+
+    markCurrentSubStageCleared(chain)
+    expect(tryAdvanceSubStage(chain, 4710, 400, true)).toBe(true)
+    expect(currentSubStage(chain).id).toBe('sl13')
   })
 
   it('uses REAL recovered magnitudes — Monster30 is the 1-hp swarm imp, not the placeholder 150', () => {
     const s = LEVEL1_MONSTER_STATS
-    expect(s.monster30.hp).toBe(1) // real; the old invented LEVEL_1 used 150
-    expect(s.monster30.speed).toBe(8) // fast/fragile
+    expect(s.monster30.hp).toBe(1)
+    expect(s.monster30.speed).toBe(8)
     expect(s.monster8.hp).toBe(80)
     expect(s.monster7.hp).toBe(150)
-    // mini-boss escalation is monotonic by hp
     expect(s.monster4.hp).toBeLessThan(s.monster2.hp) // 千里眼 1500 < 顺风耳 2000
     expect(s.monster2.hp).toBeLessThan(s.monster5.hp) // 顺风耳 2000 < 巨灵神 4000
     expect(s.monster3.hp).toBe(300) // 巫鹰 boss, verbatim
   })
 
-  it('tier separation: grunt waves are pure, each mini-boss appears solo, 巫鹰 only in the arena', () => {
-    // 千里眼/顺风耳/巨灵神 are boss-grade — they must never spawn inside a grunt roster.
-    const SUBBOSS = new Set(['monster4', 'monster2', 'monster5'])
-    const waves = LEVEL_1_WUYING.stopPoints.map((sp) => sp.roster.map((r) => r.species))
+  it('tier separation: mini-bosses live in sl12/sl13 waves, 巫鹰 only in sl11 height trigger', () => {
+    const sl12Waves = LEVEL_1_SL12.stopPoints.map((sp) => sp.roster.map((r) => r.species))
+    const sl13Waves = LEVEL_1_SL13.stopPoints.map((sp) => sp.roster.map((r) => r.species))
 
-    // (1) any wave containing a sub-boss is that sub-boss ALONE
-    for (const w of waves) {
-      if (w.some((s) => SUBBOSS.has(s))) {
-        expect(w).toHaveLength(1)
-        expect(SUBBOSS.has(w[0])).toBe(true)
-      }
-    }
-    // (2) every mini-boss gets exactly one solo wave
-    for (const sb of SUBBOSS) {
-      expect(waves.filter((w) => w.length === 1 && w[0] === sb)).toHaveLength(1)
-    }
-    // (3) all grunt waves precede all sub-boss waves (小兵波 → sub-boss → boss)
-    const hasBoss = waves.map((w) => w.some((s) => SUBBOSS.has(s)))
-    expect(hasBoss.indexOf(true)).toBeGreaterThan(hasBoss.lastIndexOf(false))
-    // (4) the arena boss 巫鹰 never appears in a wave
-    expect(waves.flat()).not.toContain(LEVEL_1_WUYING.boss.species)
+    expect(sl12Waves).toContainEqual(['monster4'])
+    expect(sl12Waves).toContainEqual(['monster2'])
+    expect(sl13Waves).toContainEqual(['monster5'])
+    expect([...sl12Waves.flat(), ...sl13Waves.flat()]).not.toContain('monster3')
+    expect(LEVEL_1_WUYING.subStages[0].continuousSpawner!.heightTrigger!.boss.species).toBe('monster3')
   })
 })

@@ -53,6 +53,7 @@
 
 import type { MonsterStats, MonsterConfig, MonsterState } from './monsterSim'
 import { MONSTER30_STATS, initMonster } from './monsterSim'
+import type { Wall } from './platformSim'
 
 /**
  * Species ids are open strings: level packs (data/levels/) introduce new
@@ -144,6 +145,78 @@ export interface LevelDef {
   arenaBounds: { left: number; right: number; top: number; bottom: number }
 }
 
+export interface ContinuousSpawnerSpec {
+  /** StageListener11: 72 frames / 24fps = 3000ms. */
+  initialDelayMs: number
+  /** StageListener11: frameClips(24) * 6 frames = 6000ms. */
+  intervalMs: number
+  /** Single-player StageListener11 spawns 2 Monster30 per timer fire. */
+  count: number
+  roster: MonsterSpawnSpec[]
+  /** Hero-relative x offset window. */
+  offsetX: { min: number; max: number }
+  /** Hero-relative y offset window. Negative values spawn above the hero. */
+  offsetY: { min: number; max: number }
+  heightTrigger?: {
+    thresholdY: number
+    boss: BossSpec & { x: number; y: number }
+  }
+}
+
+export interface ContinuousSpawnerState {
+  spec: ContinuousSpawnerSpec
+  timeUntilNextMs: number
+  heightTriggered: boolean
+}
+
+export interface ContinuousSpawnRequest extends MonsterSpawnSpec {
+  x: number
+  y: number
+}
+
+export interface ContinuousSpawnerUpdate {
+  spawns: ContinuousSpawnRequest[]
+  bossSpawn: (BossSpec & { x: number; y: number }) | null
+}
+
+export interface ContinuousSpawnerHero {
+  x: number
+  y: number
+  alive: boolean
+}
+
+export type SubStageMode = 'climb' | 'horizontal'
+
+export interface SubStageDef {
+  id: string
+  name: string
+  mode: SubStageMode
+  bounds: { left: number; right: number; top: number; bottom: number }
+  door: Omit<TransferDoor, 'visible'>
+  heroStart: { x: number; y: number }
+  background: {
+    base: string
+    floor?: string
+  }
+  fallbackWalls: Wall[]
+  continuousSpawner?: ContinuousSpawnerSpec
+  waveLevel?: LevelDef
+}
+
+export interface SubStageChainDef {
+  id: string
+  name: string
+  subStages: SubStageDef[]
+}
+
+export interface SubStageChainState<T extends SubStageChainDef = SubStageChainDef> {
+  def: T
+  currentIndex: number
+  cleared: boolean[]
+  doors: TransferDoor[]
+  levelCleared: boolean
+}
+
 export interface StopPointRuntime {
   wave: WaveSpec
   cleared: boolean
@@ -184,6 +257,97 @@ export function createLevelState(def: LevelDef): LevelState {
       door: { ...def.door, visible: false },
     },
   }
+}
+
+export function createContinuousSpawnerState(spec: ContinuousSpawnerSpec): ContinuousSpawnerState {
+  return { spec, timeUntilNextMs: spec.initialDelayMs, heightTriggered: false }
+}
+
+function between(range: { min: number; max: number }, random: () => number): number {
+  return range.min + (range.max - range.min) * random()
+}
+
+export function updateContinuousSpawner(
+  state: ContinuousSpawnerState,
+  hero: ContinuousSpawnerHero,
+  deltaMs: number,
+  random: () => number = Math.random,
+): ContinuousSpawnerUpdate {
+  const spawns: ContinuousSpawnRequest[] = []
+  let bossSpawn: ContinuousSpawnerUpdate['bossSpawn'] = null
+
+  const trigger = state.spec.heightTrigger
+  if (hero.alive && trigger && !state.heightTriggered && hero.y <= trigger.thresholdY) {
+    state.heightTriggered = true
+    bossSpawn = { ...trigger.boss }
+  }
+
+  if (!hero.alive) return { spawns, bossSpawn }
+
+  state.timeUntilNextMs -= Math.max(0, deltaMs)
+  while (state.timeUntilNextMs <= 0) {
+    for (let i = 0; i < state.spec.count; i++) {
+      const spec = state.spec.roster[i % state.spec.roster.length]
+      spawns.push({
+        ...spec,
+        x: hero.x + between(state.spec.offsetX, random),
+        y: hero.y + between(state.spec.offsetY, random),
+      })
+    }
+    state.timeUntilNextMs += state.spec.intervalMs
+  }
+
+  return { spawns, bossSpawn }
+}
+
+export function createSubStageChainState<T extends SubStageChainDef>(def: T): SubStageChainState<T> {
+  return {
+    def,
+    currentIndex: 0,
+    cleared: def.subStages.map(() => false),
+    doors: def.subStages.map((stage) => ({ ...stage.door, visible: false })),
+    levelCleared: false,
+  }
+}
+
+export function currentSubStage<T extends SubStageChainDef>(state: SubStageChainState<T>): T['subStages'][number] {
+  return state.def.subStages[state.currentIndex]
+}
+
+export function currentSubStageDoor(state: SubStageChainState): TransferDoor {
+  return state.doors[state.currentIndex]
+}
+
+export function markCurrentSubStageCleared(state: SubStageChainState): void {
+  state.cleared[state.currentIndex] = true
+  state.doors[state.currentIndex].visible = true
+}
+
+export function tryAdvanceSubStage(
+  state: SubStageChainState,
+  playerX: number,
+  playerY: number,
+  interactPressed: boolean,
+): boolean {
+  if (state.levelCleared) return false
+  if (!interactPressed) return false
+  if (!state.cleared[state.currentIndex]) return false
+  const door = state.doors[state.currentIndex]
+  if (!door.visible) return false
+  const inDoorX = playerX >= door.x && playerX <= door.x + door.width
+  const inDoorY = playerY >= door.y && playerY <= door.y + door.height
+  if (!inDoorX || !inDoorY) return false
+
+  if (state.currentIndex >= state.def.subStages.length - 1) {
+    state.levelCleared = true
+  } else {
+    state.currentIndex += 1
+  }
+  return true
+}
+
+export function isSubStageChainCleared(state: SubStageChainState): boolean {
+  return state.levelCleared
 }
 
 function findNextStopIndex(stopPoints: StopPointRuntime[]): number {
@@ -242,6 +406,10 @@ export function updateLevelSpawn(
 export function getActiveWaveRoster(state: LevelState): MonsterSpawnSpec[] {
   if (state.activeStopIndex < 0) return []
   return state.stopPoints[state.activeStopIndex].wave.roster
+}
+
+export function areStopPointsCleared(state: LevelState): boolean {
+  return state.stopPoints.every((sp) => sp.cleared)
 }
 
 /** A spawn point near the hero, clamped to the level's horizontal bounds.

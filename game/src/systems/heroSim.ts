@@ -37,6 +37,8 @@ export interface HeroConfig {
   minX: number
   maxX: number
   tickMs: number
+  /** Optional horizontal wall resolver. Absent preserves minX/maxX-only movement. */
+  resolveHorizontal?: (query: { fromX: number; toX: number; y: number }) => number
 }
 
 export interface HeroState {
@@ -131,14 +133,16 @@ function tick(state: HeroState, edges: HeroEdges, cfg: HeroConfig): void {
 
   // Horizontal movement, suppressed while a combo occupies the character.
   if (!comboRes.attacking) {
-    state.x += moveVelocity(state.move, cfg.move)
+    const fromX = state.x
+    const toX = state.x + moveVelocity(state.move, cfg.move)
+    state.x = cfg.resolveHorizontal?.({ fromX, toX, y: state.vertical.y }) ?? toX
     if (state.x < cfg.minX) state.x = cfg.minX
     if (state.x > cfg.maxX) state.x = cfg.maxX
     const dir = currentDir(state.move)
     if (dir !== 0) state.facing = dir === -1 ? -1 : 1
   }
 
-  stepVertical(state.vertical, cfg.jump)
+  stepVertical(state.vertical, cfg.jump, state.x)
 
   state.action = selectAction(state, comboRes.attacking, comboRes.action)
 }
