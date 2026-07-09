@@ -25,11 +25,14 @@ export const HUD_COLORS = {
 // Calibrated to the 造梦 series look (docs/reference/zmxy-online-screens/
 // combat-damage.png): normal hits are yellow, crits are RED and noticeably
 // larger.
+// 2026-07-10 打击感拍板（用户参照原版截图）：打怪伤害=橙色、自己掉血=紫色、
+// 回血=绿色，全部上飘渐隐 + 出生弹跳缩放（spawnFloatingText 里做）。
 export const FLOAT_STYLES = {
-  damage: { color: '#ffe37a', fontSize: 18, fontStyle: 'bold', risePx: 34, durationMs: 700, stroke: '#3a2410', strokeThickness: 3 },
-  crit: { color: '#ff2d2d', fontSize: 34, fontStyle: 'bold', risePx: 52, durationMs: 900, stroke: '#4a0808', strokeThickness: 5 },
-  heal: { color: '#6ef07a', fontSize: 18, fontStyle: 'bold', risePx: 34, durationMs: 700, stroke: '#123a16', strokeThickness: 3 },
-  burn: { color: '#ff7a4d', fontSize: 17, fontStyle: 'bold', risePx: 30, durationMs: 650, stroke: '#3a1408', strokeThickness: 3 },
+  damage: { color: '#ff9c1a', fontSize: 23, fontStyle: 'bold', risePx: 46, durationMs: 780, stroke: '#4a2404', strokeThickness: 4 },
+  crit: { color: '#ff2d2d', fontSize: 34, fontStyle: 'bold', risePx: 56, durationMs: 900, stroke: '#4a0808', strokeThickness: 5 },
+  hurt: { color: '#c07dff', fontSize: 20, fontStyle: 'bold', risePx: 40, durationMs: 750, stroke: '#2c0a4a', strokeThickness: 4 },
+  heal: { color: '#5ef07a', fontSize: 19, fontStyle: 'bold', risePx: 40, durationMs: 750, stroke: '#0e3a14', strokeThickness: 4 },
+  burn: { color: '#ff7a4d', fontSize: 17, fontStyle: 'bold', risePx: 32, durationMs: 650, stroke: '#3a1408', strokeThickness: 3 },
   exp: { color: '#c8b0ff', fontSize: 16, fontStyle: 'bold', risePx: 30, durationMs: 700, stroke: '#241a3a', strokeThickness: 3 },
 } as const
 

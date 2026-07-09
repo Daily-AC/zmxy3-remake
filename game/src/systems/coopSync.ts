@@ -26,6 +26,8 @@ export interface HeroStateSnapshot {
   hp: number
   maxHp: number
   alive: boolean
+  /** 2026-07-10 名牌新增（可选，旧端快照无此字段照常工作）。 */
+  level?: number
 }
 
 export interface MonsterStateSnapshot {
