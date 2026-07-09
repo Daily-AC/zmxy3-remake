@@ -38,7 +38,7 @@
 
 双层大脑：反射层（引擎内 FSM，毫秒级）+ 认知层（agent，秒级异步，工具 = observe_world/say/give_item/set_goal）。
 第一档：对话层 NPC（有记忆、感知世界事件、动态发任务）。
-第二档（跑通后）：炼器 NPC——coding agent（opencode serve）现场生成装备/技能脚本，沙箱校验热加载。
+第二档（2026-07-09 用户翻案重定义）：**炼丹炉按原版配方复刻；agent = 游戏规则内的代理操作层**——玩家背包够料时可让老君代为配方合成、批量打造、批量强化，agent 不生成规则外内容。此前"预算-clamp 自由生成装备"链路（furnace.ts + agent-server craft）降级为技术储备，不再是产品面。前置依赖：原版配方表 + 装备全表考古（见 docs/design/systems-map.md 补洞排序）。
 
 ## 上游资源（调研结论见 docs/research/upstream-survey.md）
 
