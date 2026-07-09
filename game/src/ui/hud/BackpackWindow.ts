@@ -579,7 +579,9 @@ export class BackpackWindow {
         this.buildCell(x, y, items[i])
       }
     }
-    this.nowpageText.setText(`${this.page} / ${this.totalPages()}`)
+    // No spaces around the slash: the 30px NOWPAGE box wraps "1 / 1" onto two
+    // lines (fidelity-C follow-up verdict -- single line beats wrapped).
+    this.nowpageText.setText(`${this.page}/${this.totalPages()}`)
   }
 
   private buildCell(x: number, y: number, stack: BackpackStack | undefined): void {
