@@ -1666,6 +1666,17 @@ export class BattleScene extends Phaser.Scene {
       this.climbClouds.push(img)
       i++
     }
+    // 塔底云海带：起跳地面(GROUND_Y=400)本身没有任何地面美术，悟空开局
+    // 站在纯色雾里——沿塔底铺一排大云读作云海地面。
+    for (let gx = -60; gx <= 1200; gx += 260) {
+      const img = this.add
+        .image(gx, GROUND_Y + 92, gx % 520 === 0 ? 'cloud_puff1' : 'cloud_puff2')
+        .setDepth(3)
+        .setAlpha(0.95)
+      img.displayWidth = 340
+      img.displayHeight = 120
+      this.climbClouds.push(img)
+    }
     // 氛围漂云：低视差、慢漂移，填 bg11 下段的空旷区。
     const drift = [
       { x: 200, y: 240, s: 0.55, w: 300 },
