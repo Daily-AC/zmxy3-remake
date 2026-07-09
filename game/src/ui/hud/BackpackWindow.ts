@@ -4,6 +4,7 @@ import type { EquipSlot, Equipment } from '../../systems/equipment'
 import { HUD_COLORS, ICON_FALLBACK_KEY } from './hudTheme'
 import { rarityCss, rarityName } from './rarity'
 import { withinRect, type Rect } from '../screenHit'
+import { getSharedSocialClient, resolveSocialServerBaseUrl } from '../../net/socialClient'
 
 // 个人资料/背包 window — S4 rebuild on the ORIGINAL layout, dual-source per
 // docs/playbooks/ui-port-dual-source.md:
@@ -95,29 +96,56 @@ const BG_X = (960 - BG_W) / 2 // 102.5
 const BG_Y = (540 - BG_H) / 2 // 21.5
 
 const CLOSE = { x: 699.2, y: 6.6, w: 40, h: 42 }
-// Value-text anchors below are CENTERS (see makeValueText), not left edges.
-// Source: out_res/backpack1.swf's own DefineEditText tags for each named
-// field (txt_name/txt_zdl/txt_hp/... chid388/418/391/...), extracted via
-// `ffdec -format text:formatted -selectid <chids> -export text`. Every one of
-// them reports `align center` except txt_lh (灵魂) which is `align left` --
-// that's the real ground truth for "居中/居左": the report's box-left-edge
-// x's (still valid for POSITION) plus each field's own (xmin+xmax)/2 offset
-// (in the DefineEditText's local twips, applied unscaled since these
+// Value-text x anchors below are CENTERS (see makeCenteredText), not left
+// edges. Source: out_res/backpack1.swf's own DefineEditText tags for each
+// named field (txt_name/txt_zdl/txt_hp/... chid388/418/391/...), extracted
+// via `ffdec -format text:formatted -selectid <chids> -export text`. Every
+// one of them reports `align center` except txt_lh (灵魂), which is `align
+// left` in the SWF but rendered centered here anyway per an explicit
+// 2026-07-09 brief override (see SOUL_VALUE comment). The report's box-left-
+// edge x's (still valid for POSITION) plus each field's own (xmin+xmax)/2
+// offset (in the DefineEditText's local twips, applied unscaled since these
 // PlaceObjects carry no matrix scale) give the true center x used below.
-const NAME_VALUE = { x: 179.4, y: 67.3, w: 109 } // txt_name center = 127.1 + 52.3
-const ZDL_VALUE = { x: 176.4, y: 93.1, w: 109 } // txt_zdl center = 124.1 + 52.3
+// x is each field's box CENTER (unchanged, sourced from the DefineEditText
+// report -- see the header comment). y is each groove's *vertical* center,
+// re-measured (2026-07-09 polish pass) by flood-filling the baked groove's
+// dark interior in backpack_bg.png from a seed inside it and taking the
+// resulting bbox's y-midpoint -- e.g. txt_name's groove flood-fills to
+// y:[65,81] -> center 73. The previous y's (67.3/93.1/...) were each
+// groove's approximate TOP edge, which is what makeCenteredText's old
+// origin-(0.5,0) treated as a start-of-text y; switched to origin(0.5,0.5)
+// below, these must be true centers instead of tops.
+const NAME_VALUE = { x: 179.4, y: 73, w: 109 }
+const ZDL_VALUE = { x: 176.4, y: 99, w: 109 }
 const LEVEL_BADGE = { x: 268.6, y: 52.6, w: 83, h: 59 }
-// headSit mount point, out_res/backpack1.swf sprite444 PlaceObject `name="headSit"`
-// local (tx,ty) = (280.25,235.85) twips/20 -> crop-space (169.9,182.6) via the
-// report's shared affine offset (-110.3,-53.3). The previous build used the
-// RAW un-transformed local (280,235) directly as a crop coordinate -- that's
-// the actual "武器栏里蹲了一只悟空" bug: it shifted the portrait ~110px right,
-// straight on top of the weapon/accessory equip-slot cluster (x 251.7-372.7).
-// Fixed to the real headSit x; size trimmed from 150->110 so it sits cleanly
-// in the gap between the title/fashion placeholders (right edge ~108) and the
-// equip-slot cluster (left edge 251.7), matching the reference screenshot's
-// layout (立绘 stands alone in that gap, not overlapping either icon column).
-const PORTRAIT = { x: 169.9, y: 182.6, fit: 110 }
+// Spotlight cone in backpack_bg.png (the beam+ground-pool graphic the 悟空
+// portrait should stand inside): bbox measured by flood-filling from a seed
+// in the ground pool (179,235) across all "brighter than dark panel bg"
+// pixels -- resolves to x:[118,241] y:[113,238], i.e. a 123x125 box. cx is
+// its horizontal center; groundY is its bottom (the pool's front edge,
+// where a standing character's feet/shadow should land).
+const SPOTLIGHT = { cx: 179.5, groundY: 238, h: 125 }
+// role1_0.png frame (0,0) (the 'wait' idle pose used for this portrait) is a
+// 200x200 spritesheet cell, but the drawn Wukong silhouette only occupies a
+// sub-rect of it (measured via PIL Image.crop((0,0,200,200)).getbbox()):
+// left 70 top 72 right 128 bottom 172 -> 58x100. The previous build scaled
+// against the full 200x200 CELL (`fit / Math.max(portrait.width, portrait
+// .height)`, i.e. dividing by 200) instead of the actual ~100px-tall
+// silhouette -- that's the real "立绘太小" bug: it rendered the character at
+// roughly half the size a "fit to spotlight height" scale implies, because
+// half of every frame is transparent padding invisible to the eye but very
+// much counted by width/height. Fixed below by scaling against this
+// measured content box instead, and by anchoring origin at the silhouette's
+// own center/feet fractions (not 0.5/1.0, which would still assume the
+// content fills the full cell).
+const PORTRAIT_CELL = 200
+const PORTRAIT_CONTENT = { left: 70, top: 72, right: 128, bottom: 172 }
+const PORTRAIT = {
+  x: SPOTLIGHT.cx,
+  y: SPOTLIGHT.groundY,
+  // ~85% of the spotlight's height, per the brief ("按框高等比放大约框高85%").
+  targetContentH: SPOTLIGHT.h * 0.85,
+}
 
 interface SlotSpec {
   x: number
@@ -164,26 +192,28 @@ const FASHION_PLACEHOLDER: SlotSpec = { x: 57.7, y: 113.4, w: 50, h: 50 } // zbs
 const FASHION_TOGGLE_PLACEHOLDER: SlotSpec = { x: 57.7, y: 165.6, w: 49, h: 18 } // showszmc
 
 // Left panel 10-stat table, 2 columns x 5 rows. Labels are baked into
-// backpack_bg; only the value text is drawn. x below is each field's CENTER
+// backpack_bg; only the value text is drawn. x is each field's box CENTER
 // (box-left-edge x from the report + that DefineEditText's own
 // (xmin+xmax)/2 offset -- see NAME_VALUE comment above); every one of these
-// ten fields is `align center` in the real SWF.
+// ten fields is `align center` in the real SWF. y is each groove's true
+// vertical center (flood-fill measured -- see NAME_VALUE comment above); all
+// five rows land on the same two y's since the L/R columns share row height.
 const STAT_L = [
-  { key: 'hp', x: 156.5, y: 260.3, w: 109 },
-  { key: 'atk', x: 157.1, y: 293.7, w: 108 },
-  { key: 'luck', x: 155.4, y: 327.7, w: 108 },
-  { key: 'crit', x: 157.5, y: 360.8, w: 113 },
-  { key: 'hpRegen', x: 157.8, y: 394.2, w: 110 },
+  { key: 'hp', x: 156.5, y: 268, w: 109 },
+  { key: 'atk', x: 157.1, y: 302, w: 108 },
+  { key: 'luck', x: 155.4, y: 335, w: 108 },
+  { key: 'crit', x: 157.5, y: 369, w: 113 },
+  { key: 'hpRegen', x: 157.8, y: 402, w: 110 },
 ] as const
 const STAT_R = [
-  { key: 'mp', x: 319.9, y: 260.3, w: 108 },
-  { key: 'def', x: 321.6, y: 293.7, w: 111 },
-  { key: 'magicDef', x: 320.9, y: 327.7, w: 111 },
-  { key: 'dodge', x: 319.3, y: 361.3, w: 111 },
-  { key: 'mpRegen', x: 318.9, y: 393.8, w: 108 },
+  { key: 'mp', x: 319.9, y: 268, w: 108 },
+  { key: 'def', x: 321.6, y: 302, w: 111 },
+  { key: 'magicDef', x: 320.9, y: 335, w: 111 },
+  { key: 'dodge', x: 319.3, y: 369, w: 111 },
+  { key: 'mpRegen', x: 318.9, y: 402, w: 108 },
 ] as const
 
-const EXP_VALUE = { x: 195.1, y: 428.8, w: 140 } // txt_exp center = 127.1 + 68.0, also align center
+const EXP_VALUE = { x: 195.1, y: 436, w: 140 } // txt_exp center x = 127.1 + 68.0; y = EXP_FILL's vertical center (flood-fill measured)
 // Pixel-scanned from backpack_bg.png: the baked black rounded EXP track sits
 // at x=95..308, y=426..445. The fill texture is 214x20 with matching rounded
 // alpha corners, so it aligns to the track's outer bbox and renders under txt_exp.
@@ -197,16 +227,46 @@ const GRID_COLS = 5
 const GRID_ROWS = 5
 const PAGE_SIZE = GRID_COLS * GRID_ROWS
 
-// txt_lh (灵魂) is the one field the real SWF marks `align left` -- kept as
-// the box's left edge (matches the existing makeValueText left-origin path).
-const SOUL_VALUE = { x: 552.4, y: 397.2, w: 74 }
+// txt_lh (灵魂) is `align left` in the real SWF, but the brief explicitly
+// asks for it centered both ways in its value sub-box (2026-07-09 polish
+// pass) -- overriding SWF fidelity here per that direct request. 552.4 was
+// already the value sub-box's left edge (right after the baked "灵魂" label,
+// confirmed by flood-filling the groove: it spans the WHOLE labeled box
+// x:[504,627], and 552.4+74=626.4 lines up with that box's right edge, so
+// the original w:74 is exactly the value sub-box's width); x below is
+// recentered to that sub-box's midpoint, y to its flood-filled vertical
+// center (box y:[393,408] -> 400.5).
+const SOUL_VALUE = { x: 552.4 + 74 / 2, y: 400.5, w: 74 }
 const SELL_BTN = { x: 637.2, y: 392.2, w: 62, h: 28 }
 const PREV_BTN = { x: 498.7, y: 419.2, w: 86, h: 34 }
 const NEXT_BTN = { x: 616.9, y: 419.2, w: 86, h: 34 }
-const NOWPAGE = { x: 600.8, y: 425.6, w: 30 } // centered in the 32.2px gap between prePage and nextPage
+// x centered in the 32.2px gap between prePage/nextPage; y at the buttons'
+// own vertical center (PREV_BTN.y + h/2) -- the old y (425.6) sat well above
+// that, off-center relative to both buttons.
+const NOWPAGE = { x: 600.8, y: PREV_BTN.y + PREV_BTN.h / 2, w: 30 }
 
 const PORTRAIT_TEX = 'role1_0'
 const PORTRAIT_FRAME = 0
+// Same 200x200 cell grid / frame indexing as PORTRAIT_TEX, zero positional
+// offset (BattleScene's weapon overlay mirrors the hero sprite frame-for-
+// frame with no offset -- see BattleScene.ts's WEAPON_TEX/weaponSprite
+// comments), so frame 0 here lines up on top of PORTRAIT_TEX frame 0 using
+// the exact same transform (position/origin/scale) with no extra math.
+const WEAPON_TEX = 'role1_equip0'
+
+// equipment.json `items` where type === 'zbwq' (武器), across all 4 heroes;
+// Item.id === fillName at runtime (see furnaceRecipe.ts's `id: source.
+// fillName`). None of these 31 ids has its own icon in extracted/icons/, so
+// they'd otherwise all fall back to the generic crate icon; `star_blade` is
+// the one weapon-flavored sprite in that set (see hudTheme's HUD_ICON_IDS)
+// and stands in for all of them until the art pipeline draws per-weapon
+// icons (see backpack-polish-report.md for the full id list this covers).
+const WEAPON_ITEM_IDS: ReadonlySet<string> = new Set([
+  'ptdxzg', 'ptdcz', 'ptddp', 'ptdyyc', 'kyg', 'kyz', 'xhc', 'whg', 'jmc', 'qybd',
+  'hylc', 'hylz', 'wtp', 'zjksf', 'zjbtg', 'smz', 'ydjg', 'xlth', 'xltc', 'xltz',
+  'xlts', 'zjxmc', 'qlg', 'plz', 'ylf', 'jlg', 'jlc', 'ryjgb', 'lhz', 'jcdp', 'mdflc',
+])
+const WEAPON_FALLBACK_ICON = 'icon_star_blade'
 
 const DEFAULT_STATS: BackpackHeroStats = {
   name: '', level: 1, combatPower: 0, hp: 0, maxHp: 1, mp: 0, maxMp: 1, atk: 0, def: 0,
@@ -227,6 +287,7 @@ export class BackpackWindow {
   private readonly expFill: Phaser.GameObjects.Image | null
   private readonly soulText: Phaser.GameObjects.Text
   private readonly nowpageText: Phaser.GameObjects.Text
+  private readonly weaponOverlay: Phaser.GameObjects.Image | null
   private readonly equipLayer: Phaser.GameObjects.Container
   private readonly tabHighlight: Phaser.GameObjects.Rectangle
   private readonly gridLayer: Phaser.GameObjects.Container
@@ -264,7 +325,20 @@ export class BackpackWindow {
     // to ride on setInteractive() here, but that's the same broken pattern
     // this whole window is being moved off of; nothing else in this scene is
     // mouse-clickable while battling, so there's nothing left to block).
-    add(scene.add.rectangle(480, 270, 960, 540, 0x000000, 0.55))
+    // Coordinates are LOCAL to this.container (added at BG_X,BG_Y below), not
+    // canvas-absolute: a GameObject's x/y become container-local once handed
+    // into `scene.add.container(x, y, children)` -- Phaser does not
+    // re-normalize them to preserve world position. The previous (480,270)
+    // was leftover canvas-center math from before this window had its own
+    // container: nested at (BG_X,BG_Y) it actually rendered centered on world
+    // (480+BG_X, 270+BG_Y) = (582.5, 291.5), an 960x540 rect covering world
+    // x:[102.5,1062.5] y:[21.5,561.5] -- i.e. a BG_X-wide vertical strip at
+    // the canvas's LEFT edge (and a BG_Y-tall strip at the top) was never
+    // covered by the dim mask, left showing the full-brightness battlefield
+    // through a visible "帘缝" while the corresponding strip past the right/
+    // bottom canvas edge was harmlessly clipped. Subtracting the container
+    // offset makes this rect cover the true canvas (0,0)-(960,540).
+    add(scene.add.rectangle(480 - BG_X, 270 - BG_Y, 960, 540, 0x000000, 0.55))
 
     if (scene.textures.exists('backpack_bg')) {
       add(scene.add.image(0, 0, 'backpack_bg').setOrigin(0, 0))
@@ -285,17 +359,37 @@ export class BackpackWindow {
 
     // Portrait (adapted: original composites a fully-dressed dynamic render
     // into the headSit mount point; this project has no equivalent costume-
-    // compositing pipeline, so the idle battle sprite stands in). Positioned
-    // at headSit's real coordinate (see PORTRAIT comment above) and sized to
-    // fit the gap between the title/fashion placeholders and the equip-slot
-    // cluster without overlapping either -- the previous build's wrong
-    // coordinate is what put a full-size Wukong on top of the weapon slot.
+    // compositing pipeline, so the idle battle sprite stands in). Scaled and
+    // anchored against the *measured content box* within the frame (see
+    // PORTRAIT/PORTRAIT_CONTENT comments above), not the full 200x200 cell --
+    // origin fractions below are that content box's own center-x/bottom-y
+    // divided by the cell size, so the visible silhouette (not the cell's
+    // padding) ends up horizontally centered on the spotlight and feet-down
+    // on its ground pool.
+    const portraitOriginX = (PORTRAIT_CONTENT.left + PORTRAIT_CONTENT.right) / 2 / PORTRAIT_CELL
+    const portraitOriginY = PORTRAIT_CONTENT.bottom / PORTRAIT_CELL
+    const portraitContentH = PORTRAIT_CONTENT.bottom - PORTRAIT_CONTENT.top
+    const portraitScale = PORTRAIT.targetContentH / portraitContentH
     if (scene.textures.exists(PORTRAIT_TEX)) {
-      const portrait = scene.add.image(PORTRAIT.x, PORTRAIT.y, PORTRAIT_TEX, PORTRAIT_FRAME).setOrigin(0.5, 0.85)
-      const fit = PORTRAIT.fit / Math.max(portrait.width, portrait.height)
-      portrait.setScale(fit)
+      const portrait = scene.add
+        .image(PORTRAIT.x, PORTRAIT.y, PORTRAIT_TEX, PORTRAIT_FRAME)
+        .setOrigin(portraitOriginX, portraitOriginY)
+        .setScale(portraitScale)
       add(portrait)
     }
+    // Weapon-in-hand overlay: same cell grid/frame/transform as the portrait
+    // above (see WEAPON_TEX comment) so it lands directly on the idle pose's
+    // fist with no extra alignment math. Hidden by default; redrawEquip()
+    // toggles it with the weapon slot's fill state.
+    this.weaponOverlay = scene.textures.exists(WEAPON_TEX)
+      ? add(
+          scene.add
+            .image(PORTRAIT.x, PORTRAIT.y, WEAPON_TEX, PORTRAIT_FRAME)
+            .setOrigin(portraitOriginX, portraitOriginY)
+            .setScale(portraitScale)
+            .setVisible(false),
+        )
+      : null
 
     this.equipLayer = add(scene.add.container(0, 0))
     this.buildPlaceholderSlot(TITLE_PLACEHOLDER, children)
@@ -329,7 +423,7 @@ export class BackpackWindow {
 
     this.gridLayer = add(scene.add.container(0, 0))
 
-    this.soulText = add(this.makeValueText(SOUL_VALUE.x, SOUL_VALUE.y, SOUL_VALUE.w))
+    this.soulText = add(this.makeCenteredText(SOUL_VALUE.x, SOUL_VALUE.y, SOUL_VALUE.w))
     // Sell/prev/next hotspots: resolveHit() tests SELL_BTN/PREV_BTN/NEXT_BTN
     // directly, no hotspot GameObjects needed.
     this.nowpageText = add(this.makeCenteredText(NOWPAGE.x, NOWPAGE.y, NOWPAGE.w, 12))
@@ -457,21 +551,19 @@ export class BackpackWindow {
 
   // ---------- internals ----------
 
-  /** Left-anchored value text -- only txt_lh (灵魂, `align left` in the real SWF) uses this. */
-  private makeValueText(x: number, y: number, wrapWidth: number, size = 14): Phaser.GameObjects.Text {
-    return this.scene.add
-      .text(x, y, '', { fontSize: `${size}px`, fontStyle: 'bold', color: HUD_COLORS.text, wordWrap: { width: wrapWidth }, align: 'left' })
-      .setOrigin(0, 0)
-  }
-
-  /** Center-anchored value text -- every other stat/name/exp/nowpage field:
-   * every one of their DefineEditText tags in out_res/backpack1.swf reports
-   * `align center` (verified per-field, see the constants' comments above).
-   * `x` is the field's box CENTER, not its left edge. */
+  /** Center-anchored value text -- every value field in this window,
+   * including txt_lh (灵魂): the real SWF marks that one `align left`, but
+   * the brief explicitly asks it centered like the rest (2026-07-09 polish
+   * pass, see SOUL_VALUE comment). Every field's DefineEditText tag in
+   * out_res/backpack1.swf otherwise reports `align center` (verified per-
+   * field, see the constants' comments above). `x`/`y` are each field's box
+   * CENTER (not left edge / top edge) -- origin(0.5,0.5) centers the text on
+   * both axes within its groove regardless of the font's own line-height
+   * padding, which a top-anchored origin(0.5,0) could not do consistently. */
   private makeCenteredText(x: number, y: number, boxWidth: number, size = 14): Phaser.GameObjects.Text {
     return this.scene.add
       .text(x, y, '', { fontSize: `${size}px`, fontStyle: 'bold', color: HUD_COLORS.text, wordWrap: { width: boxWidth }, align: 'center' })
-      .setOrigin(0.5, 0)
+      .setOrigin(0.5, 0.5)
   }
 
   private buildPlaceholderSlot(spec: SlotSpec, children: Phaser.GameObjects.GameObject[]): void {
@@ -510,7 +602,7 @@ export class BackpackWindow {
 
   private redrawStats(): void {
     const s = this.stats
-    this.nameText.setText(s.name)
+    this.nameText.setText(this.resolveDisplayName(s.name))
     this.zdlText.setText(String(Math.round(s.combatPower)))
     this.statTexts.hp.setText(`${Math.max(0, Math.round(s.hp))} / ${Math.round(s.maxHp)}`)
     this.statTexts.mp.setText(`${Math.max(0, Math.round(s.mp))} / ${Math.round(s.maxMp)}`)
@@ -531,6 +623,44 @@ export class BackpackWindow {
     this.redrawLevelBadge(Math.max(1, Math.floor(s.level)))
   }
 
+  /** 昵称 should show the logged-in social account's username, not the
+   * static hero name -- same client-resolution path as LobbyScene's
+   * runtimeSocialClient() (getSharedSocialClient + resolveSocialServerBaseUrl
+   * off window.location.search / VITE_SOCIAL_SERVER_URL), just inlined here
+   * since this window has no scene-level client of its own to borrow. Reads
+   * the session live on every redraw (cheap: getSharedSocialClient caches a
+   * singleton, getSession() is a plain field read) so a login that happens
+   * while the game is running is picked up without recreating the window.
+   * `window` doesn't exist in this project's node-based vitest environment
+   * (see tests/save.test.ts's note on the same gap) -- guarded so
+   * construction/redraw never throws there; falls back to the hero name
+   * (heroName) whenever there's no window, no session, or the request throws. */
+  private resolveDisplayName(heroName: string): string {
+    if (typeof window === 'undefined') return heroName
+    try {
+      const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+      const baseUrl = resolveSocialServerBaseUrl(window.location.search, env?.VITE_SOCIAL_SERVER_URL)
+      const username = getSharedSocialClient(baseUrl).getSession()?.user.username
+      return username && username.length > 0 ? username : heroName
+    } catch {
+      return heroName
+    }
+  }
+
+  /** Wraps the caller-supplied iconKeyFor with a weapon-id override: none of
+   * the 31 zbwq ids in WEAPON_ITEM_IDS has its own icon yet, so the caller's
+   * lookup always falls through to the generic crate fallback for them --
+   * swap in WEAPON_FALLBACK_ICON (star_blade) instead when that happens, see
+   * WEAPON_ITEM_IDS' comment. Leaves non-weapon items and any item that
+   * already resolves to a real icon untouched. */
+  private resolveIconKey(item: Item): string {
+    const key = this.opts.iconKeyFor(item)
+    if (key === ICON_FALLBACK_KEY && WEAPON_ITEM_IDS.has(item.id) && this.scene.textures.exists(WEAPON_FALLBACK_ICON)) {
+      return WEAPON_FALLBACK_ICON
+    }
+    return key
+  }
+
   /** Ports BackPack.as leveImage(): single digit centered, multi-digit spliced
    * left-to-right at a 26px pitch, both local to the level badge. */
   private redrawLevelBadge(level: number): void {
@@ -548,6 +678,7 @@ export class BackpackWindow {
   private redrawEquip(): void {
     this.equipLayer.removeAll(true)
     this.equipHits = []
+    this.weaponOverlay?.setVisible(!!this.equipment?.weapon)
     if (!this.equipment) return
     ;(Object.keys(EQUIP_SLOTS) as EquipSlot[]).forEach((slot) => {
       const item = this.equipment![slot]
@@ -555,7 +686,7 @@ export class BackpackWindow {
       const spec = EQUIP_SLOTS[slot]
       const cx = spec.x + spec.w / 2
       const cy = spec.y + spec.h / 2
-      const key = this.opts.iconKeyFor(item)
+      const key = this.resolveIconKey(item)
       if (this.scene.textures.exists(key)) {
         const icon = this.scene.add.image(cx, cy, key)
         icon.setScale(Math.min(1, (spec.w - 6) / Math.max(icon.width, icon.height)))
@@ -597,7 +728,7 @@ export class BackpackWindow {
     const cx = x + CELL.w / 2
     const cy = y + CELL.h / 2
 
-    const iconKey = this.opts.iconKeyFor(stack.item)
+    const iconKey = this.resolveIconKey(stack.item)
     if (this.scene.textures.exists(iconKey)) {
       const icon = this.scene.add.image(cx, cy, iconKey)
       icon.setScale(Math.min(1, (CELL.w - 10) / Math.max(icon.width, icon.height)))

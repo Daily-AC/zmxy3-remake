@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BackpackHeroStats, BackpackWindow as BackpackWindowType } from '../src/ui/hud/BackpackWindow'
+import { createEquipment } from '../src/systems/equipment'
+import type { Item } from '../src/systems/items'
 
 vi.mock('phaser', () => ({
   default: {
@@ -9,6 +11,18 @@ vi.mock('phaser', () => ({
       },
     },
   },
+}))
+
+// Controllable stand-in for the social login session (2026-07-09 昵称 fix):
+// the mock factory can't close over a `let` declared later in this module
+// (vi.mock is hoisted above imports), so the mutable state lives on this
+// vi.hoisted() object instead and tests reach into it directly.
+const socialMock = vi.hoisted(() => ({
+  session: null as null | { token: string; user: { id: string; username: string } },
+}))
+vi.mock('../src/net/socialClient', () => ({
+  resolveSocialServerBaseUrl: () => 'https://social.test',
+  getSharedSocialClient: () => ({ getSession: () => socialMock.session }),
 }))
 
 class FakeGameObject {
@@ -134,6 +148,9 @@ class FakeGraphics extends FakeGameObject {
 const TEXTURE_SIZES: Record<string, { w: number; h: number }> = {
   backpack_bg: { w: 755, h: 497 },
   backpack_exp_fill: { w: 214, h: 20 },
+  role1_0: { w: 200, h: 200 },
+  role1_equip0: { w: 200, h: 200 },
+  icon_star_blade: { w: 64, h: 64 },
 }
 
 function makeScene() {
@@ -188,6 +205,18 @@ const BASE_STATS: BackpackHeroStats = {
   soul: 0,
 }
 
+afterEach(() => {
+  socialMock.session = null
+  vi.unstubAllGlobals()
+})
+
+function mockWeaponItem(): Item {
+  // 'ptdxzg' (普通的行者棍) is one of the 31 zbwq ids in BackpackWindow's
+  // WEAPON_ITEM_IDS -- see equipment.json / furnaceRecipe.ts's `id: source.
+  // fillName`.
+  return { id: 'ptdxzg', name: '普通的行者棍', kind: 'equip', rarity: 1 }
+}
+
 describe('BackpackWindow layout invariants', () => {
   it('places the EXP fill on the baked progress track', async () => {
     const backpack = await makeBackpack()
@@ -212,5 +241,102 @@ describe('BackpackWindow layout invariants', () => {
 
     expect(pageLeft).toBeGreaterThanOrEqual(prevRight)
     expect(pageRight).toBeLessThanOrEqual(nextLeft)
+  })
+
+  it('centers value text on both axes instead of top-anchoring it (2026-07-09 polish)', async () => {
+    const backpack = await makeBackpack()
+    const b = backpack as unknown as {
+      nameText: FakeText
+      zdlText: FakeText
+      soulText: FakeText
+      nowpageText: FakeText
+      statTexts: Record<string, FakeText>
+    }
+
+    // origin(0.5,0.5) everywhere a value renders -- the old origin(0.5,0)
+    // top-anchor is exactly the bug the brief reported ("值文本...偏上/偏下").
+    for (const t of [b.nameText, b.zdlText, b.soulText, b.nowpageText, b.statTexts.hp, b.statTexts.mp]) {
+      expect(t.originX).toBe(0.5)
+      expect(t.originY).toBe(0.5)
+    }
+
+    // y's are each groove's measured vertical MIDPOINT (see BackpackWindow's
+    // NAME_VALUE/STAT_L comments), not its top edge.
+    expect(b.nameText.y).toBe(73)
+    expect(b.statTexts.hp.y).toBe(268)
+    expect(b.statTexts.mp.y).toBe(268)
+    // nowpage sits at the prev/next buttons' own vertical center.
+    expect(b.nowpageText.y).toBe(419.2 + 34 / 2)
+  })
+
+  it('recenters 灵魂 in its value sub-box (was left-aligned, off-box after the prior fix)', async () => {
+    const backpack = await makeBackpack()
+    const soulText = (backpack as unknown as { soulText: FakeText }).soulText
+    // Value sub-box is x:[552.4, 552.4+74] (see SOUL_VALUE's comment) -- the
+    // text's centered x must sit at that box's own midpoint, not its left edge.
+    expect(soulText.x).toBeCloseTo(552.4 + 37, 5)
+    expect(soulText.originX).toBe(0.5)
+  })
+
+  it('covers the true 0..960 x 0..540 canvas with the dim backdrop (was container-local-offset, see report)', async () => {
+    const backpack = await makeBackpack()
+    const container = (backpack as unknown as { container: FakeContainer }).container
+    const dimRect = container.children[0]
+    // Local-to-container coordinates that, once the container is placed at
+    // (BG_X,BG_Y), put this rect's center back on true canvas center (480,270).
+    expect(dimRect.x).toBeCloseTo(480 - (960 - 755) / 2, 5)
+    expect(dimRect.y).toBeCloseTo(270 - (540 - 497) / 2, 5)
+    expect(dimRect.width).toBe(960)
+    expect(dimRect.height).toBe(540)
+  })
+
+  it('shows the weapon overlay only while the weapon slot is filled', async () => {
+    const backpack = await makeBackpack()
+    const weaponOverlay = (backpack as unknown as { weaponOverlay: FakeImage | null }).weaponOverlay
+    expect(weaponOverlay).not.toBeNull()
+    expect(weaponOverlay!.visible).toBe(false)
+
+    const eq = createEquipment()
+    eq.weapon = mockWeaponItem()
+    backpack.setEquipment(eq)
+    expect(weaponOverlay!.visible).toBe(true)
+
+    backpack.setEquipment(createEquipment())
+    expect(weaponOverlay!.visible).toBe(false)
+  })
+
+  it('maps a weapon-slot item with no dedicated icon to icon_star_blade instead of the generic fallback', async () => {
+    const backpack = await makeBackpack()
+    const eq = createEquipment()
+    eq.weapon = mockWeaponItem()
+    backpack.setEquipment(eq)
+
+    const equipLayer = (backpack as unknown as { equipLayer: FakeContainer }).equipLayer
+    const icon = equipLayer.children.find((c): c is FakeImage => c instanceof FakeImage)
+    expect(icon?.key).toBe('icon_star_blade')
+  })
+
+  it('shows the logged-in social username instead of the hero name, falling back when logged out', async () => {
+    vi.stubGlobal('window', { location: { search: '' } })
+    const backpack = await makeBackpack()
+    const nameText = (backpack as unknown as { nameText: FakeText }).nameText
+
+    backpack.setHeroStats(BASE_STATS)
+    expect(nameText.text).toBe('孙悟空') // no session yet -> falls back to hero name
+
+    socialMock.session = { token: 't', user: { id: 'u1', username: 'YilinTester' } }
+    backpack.setHeroStats(BASE_STATS)
+    expect(nameText.text).toBe('YilinTester')
+
+    socialMock.session = null
+    backpack.setHeroStats(BASE_STATS)
+    expect(nameText.text).toBe('孙悟空')
+  })
+
+  it('falls back to the hero name without throwing when window is unavailable (node/vitest env)', async () => {
+    const backpack = await makeBackpack()
+    const nameText = (backpack as unknown as { nameText: FakeText }).nameText
+    expect(() => backpack.setHeroStats(BASE_STATS)).not.toThrow()
+    expect(nameText.text).toBe('孙悟空')
   })
 })
