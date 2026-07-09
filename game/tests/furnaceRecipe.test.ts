@@ -1,0 +1,170 @@
+import { describe, expect, it } from 'vitest'
+import originalEquipment from '../src/data/original/equipment.json'
+import { addItem, countItem, createInventory, listStacks } from '../src/systems/inventory'
+import {
+  RECIPE_MATERIALS,
+  canCraft,
+  craft,
+  equipmentItemByFillName,
+  findRecipe,
+  listRecipes,
+} from '../src/systems/furnaceRecipe'
+
+function mustItem(fillName: string) {
+  const item = equipmentItemByFillName(fillName)
+  if (!item) throw new Error(`missing test item ${fillName}`)
+  return item
+}
+
+function stackSnapshot(inv: ReturnType<typeof createInventory>): { id: string; qty: number }[] {
+  return listStacks(inv).map((s) => ({ id: s.item.id, qty: s.qty }))
+}
+
+function give(inv: ReturnType<typeof createInventory>, fillName: string, qty: number): void {
+  const result = addItem(inv, mustItem(fillName), qty)
+  if (!result.ok) throw new Error(`failed to seed ${fillName} x${qty}`)
+}
+
+describe('furnace recipe catalog', () => {
+  it('lists all 39 制作书 recipes and keeps the material table in sync with equipment.json', () => {
+    const recipes = listRecipes()
+    const bookFillNames = (originalEquipment as { items: { fillName: string; ename: string }[] }).items
+      .filter((item) => item.ename.endsWith('制作书'))
+      .map((item) => item.fillName)
+      .sort()
+
+    expect(recipes).toHaveLength(39)
+    expect(Object.keys(RECIPE_MATERIALS).sort()).toEqual(bookFillNames)
+    expect(recipes.map((r) => r.bookFillName).sort()).toEqual(bookFillNames)
+  })
+
+  it('derives the 尾火棍 recipe shape from equipment.json plus the material table', () => {
+    expect(findRecipe('whgzzs')).toMatchObject({
+      bookFillName: 'whgzzs',
+      bookName: '尾火棍制作书',
+      productFillName: 'whg',
+      productName: '尾火棍',
+      role: '悟空',
+      quality: '优 秀',
+      materials: [{ fillName: 'wptm', name: '檀木', qty: 20 }],
+      soulCost: 200,
+    })
+  })
+
+  it('falls back to 1600 soul for at least one 邪灵/魂器 recipe', () => {
+    expect(findRecipe('xleyzzs')).toMatchObject({ quality: '邪 灵', soulCost: 1600 })
+    expect(findRecipe('qlgzzs')).toMatchObject({ quality: '魂 器', soulCost: 1600 })
+  })
+})
+
+describe('canCraft', () => {
+  it('reports a missing book before checking materials or soul', () => {
+    const inv = createInventory(4)
+    give(inv, 'wptm', 20)
+
+    expect(canCraft(inv, 200, 'whgzzs')).toEqual({ ok: false, reason: 'missing_book' })
+  })
+
+  it('reports missing materials with needed and owned quantities', () => {
+    const inv = createInventory(4)
+    give(inv, 'whgzzs', 1)
+    give(inv, 'wptm', 12)
+
+    expect(canCraft(inv, 200, 'whgzzs')).toEqual({
+      ok: false,
+      reason: 'missing_materials',
+      missing: [{ fillName: 'wptm', name: '檀木', needed: 20, have: 12 }],
+    })
+  })
+
+  it('reports insufficient soul after book and materials are present', () => {
+    const inv = createInventory(4)
+    give(inv, 'whgzzs', 1)
+    give(inv, 'wptm', 20)
+
+    expect(canCraft(inv, 199, 'whgzzs')).toEqual({
+      ok: false,
+      reason: 'insufficient_soul',
+      needed: 200,
+      have: 199,
+    })
+  })
+
+  it('accepts when book, materials, and soul are all present', () => {
+    const inv = createInventory(4)
+    give(inv, 'whgzzs', 1)
+    give(inv, 'wptm', 20)
+
+    expect(canCraft(inv, 200, 'whgzzs')).toEqual({ ok: true })
+  })
+})
+
+describe('craft', () => {
+  it('crafts 尾火棍 transactionally with the minimum random stat roll', () => {
+    const inv = createInventory(4)
+    give(inv, 'whgzzs', 1)
+    give(inv, 'wptm', 20)
+
+    const result = craft(inv, 200, 'whgzzs', () => 0)
+
+    expect(result).toMatchObject({ ok: true, soulSpent: 200, newSoul: 0 })
+    if (!result.ok) return
+    expect(countItem(inv, 'whgzzs')).toBe(0)
+    expect(countItem(inv, 'wptm')).toBe(0)
+    expect(countItem(inv, 'whg')).toBe(1)
+    expect(result.item).toMatchObject({
+      id: 'whg',
+      name: '尾火棍',
+      kind: 'equip',
+      rarity: 2,
+      effects: [{ type: 'stat', stat: 'atk', value: 10 }],
+    })
+  })
+
+  it('crafts 尾火棍 with an inclusive maximum random stat roll', () => {
+    const inv = createInventory(4)
+    give(inv, 'whgzzs', 1)
+    give(inv, 'wptm', 20)
+
+    const result = craft(inv, 200, 'whgzzs', () => 0.999)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.item.effects).toEqual([{ type: 'stat', stat: 'atk', value: 15 }])
+  })
+
+  it('rejects an unknown recipe without mutating the inventory', () => {
+    const inv = createInventory(4)
+    give(inv, 'whgzzs', 1)
+    give(inv, 'wptm', 20)
+    const before = stackSnapshot(inv)
+
+    expect(craft(inv, 200, 'not-a-real-recipe', () => 0)).toEqual({
+      ok: false,
+      reason: 'unknown_recipe',
+    })
+    expect(stackSnapshot(inv)).toEqual(before)
+  })
+
+  it('does not partially deduct anything when materials are insufficient', () => {
+    const inv = createInventory(4)
+    give(inv, 'whgzzs', 1)
+    give(inv, 'wptm', 19)
+    const before = stackSnapshot(inv)
+
+    const result = craft(inv, 200, 'whgzzs', () => 0)
+
+    expect(result).toMatchObject({ ok: false, reason: 'missing_materials' })
+    expect(stackSnapshot(inv)).toEqual(before)
+  })
+
+  it('rolls back book and materials if the produced item cannot fit', () => {
+    const inv = createInventory(2)
+    give(inv, 'whgzzs', 2)
+    give(inv, 'wptm', 21)
+    const before = stackSnapshot(inv)
+
+    expect(craft(inv, 200, 'whgzzs', () => 0)).toEqual({ ok: false, reason: 'bag_full' })
+    expect(stackSnapshot(inv)).toEqual(before)
+  })
+})
