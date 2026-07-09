@@ -375,6 +375,11 @@ const BG11_SYMBOL_BOUNDS = { left: -59, top: -2370, right: 1073, bottom: 681 } a
 const LEVEL1_CLOUD_PLATFORM_TOP_Y = -1800
 const LEVEL1_CLOUD_PLATFORM_BOTTOM_Y = -300
 const LEVEL1_CLIMB_GROUND_STRIP_PX = 32
+// 悟空精灵格(200px)下半留白：逻辑站立线(wall.y/GROUND_Y)与视觉脚底差
+// ≈84px（frame(0,0) 内容 bbox 底 172/200，offset.y=-15，×HERO_SCALE 1.5）。
+// 平台梁/地面梁/掉落物的"可视地面"统一下沉这个量，脚底贴梁顶（2026-07-10
+// 用户三提"空间位置"的最终修正）。
+const STAND_SINK = 84
 
 export function computeBg11ClimbPlacement(): { x: number; y: number; scrollFactorX: number; scrollFactorY: number } {
   return {
@@ -1313,7 +1318,7 @@ export class BattleScene extends Phaser.Scene {
         if (e.state.resolvedAttackIds.includes(attackId)) continue
         if (this.queueOrSendHeroHit(e, attackId, dmg)) {
           const mcs = this.monsterVisualCenter(e)
-          this.floatText(mcs.x, mcs.y - 70, `-${dmg}`, 'damage')
+          this.floatText(mcs.x, mcs.y - 70, `${dmg}`, 'damage')
           this.onLocalHitFx(mcs.x, mcs.y, facing)
         }
       }
@@ -1702,7 +1707,7 @@ export class BattleScene extends Phaser.Scene {
         if (wall.width > 600) continue // 全场穿透膜（1100 宽），非平台
         const h = Math.min(46, Math.max(32, wall.width * 0.16))
         const beam = this.add
-          .tileSprite(wall.x, wall.y, wall.width, h, 'platform_beam')
+          .tileSprite(wall.x, wall.y + STAND_SINK, wall.width, h, 'platform_beam')
           .setOrigin(0, 0)
           .setDepth(3)
         const sc = h / beamSrcH
@@ -1712,7 +1717,7 @@ export class BattleScene extends Phaser.Scene {
       // 塔底地面：同款梁加厚一档，铺满可行走区（GROUND_Y 是隐式地面，没有
       // 对应 wall，原先悟空开局站在纯色雾里）。
       const floorH = 78
-      const floor = this.add.tileSprite(-80, GROUND_Y, 1320, floorH, 'platform_beam').setOrigin(0, 0).setDepth(3)
+      const floor = this.add.tileSprite(-80, GROUND_Y + STAND_SINK, 1320, floorH, 'platform_beam').setOrigin(0, 0).setDepth(3)
       floor.setTileScale(floorH / beamSrcH / 1.6, floorH / beamSrcH)
       this.climbClouds.push(floor)
     }
@@ -2043,7 +2048,9 @@ export class BattleScene extends Phaser.Scene {
     // top boss bar, bottom-left skill dock, backpack window (toggle B).
     this.roleInfoHud = new RoleInfoHud(this, 14, 12, { scale: 1.3 })
     this.roleInfoHud.container.setScrollFactor(0).setDepth(100)
-    this.bossBar = new BossHpBar(this)
+    // 2026-07-10 用户反馈：boss 名牌/血条默认居中(480)会压住左上角色属性
+    // 条——右移到 680，名牌左缘(≈397)让开 RoleInfo(≈350 宽)。
+    this.bossBar = new BossHpBar(this, 680)
     this.bossBar.setVisible(false)
     // Dock chrome (无双 + cluster + 5 slots) flush to the bottom-left corner.
     // Cluster icons wired to their real handlers where the milestone has one
@@ -2653,7 +2660,7 @@ export class BattleScene extends Phaser.Scene {
       if (e.hitQueue.some((h) => h.attackId === s.attackId)) continue
       if (!this.queueOrSendHeroHit(e, s.attackId, damage)) continue
       const mc = this.monsterVisualCenter(e)
-      this.floatText(mc.x, mc.y - 70, `-${damage}`, 'damage')
+      this.floatText(mc.x, mc.y - 70, `${damage}`, 'damage')
       if (!firstHit) firstHit = e
     }
     if (firstHit && !this.playedHitIds.has(s.attackId)) {
@@ -2681,46 +2688,82 @@ export class BattleScene extends Phaser.Scene {
     if (this.comboFxCount >= 2) this.showComboBanner(this.comboFxCount)
   }
 
-  /** 原版式连击横幅（参照用户截图：金色大数字 + 墨色底横条，右上区域），
-   * 弹跳入场，静默 0.9s 后淡出。 */
+  /** 连击横幅 v2（2026-07-10 用户打回"人机"版重做，酷优先）：斜切墨条 +
+   * 红热底衬 + 金橙渐变大数字（毛笔字"连击"），每次递增重锤入场（超冲缩放
+   * + 横向抖动 + 金火花迸射），静默 0.9s 后上滑淡出。 */
   private showComboBanner(count: number): void {
     this.comboFxBanner?.destroy(true)
     this.comboFxFadeTimer?.remove(false)
     const g = this.add.graphics()
-    g.fillStyle(0x14100b, 0.82).fillRoundedRect(-86, -22, 196, 44, 8)
-    g.lineStyle(2, 0xd9b45a, 0.7).strokeRoundedRect(-86, -22, 196, 44, 8)
+    g.fillStyle(0xff3a14, 0.85)
+    g.beginPath(); g.moveTo(-104, 26); g.lineTo(112, 26); g.lineTo(104, 32); g.lineTo(-112, 32); g.closePath(); g.fillPath()
+    g.fillStyle(0x14100b, 0.92)
+    g.beginPath(); g.moveTo(-96, -26); g.lineTo(120, -26); g.lineTo(104, 26); g.lineTo(-112, 26); g.closePath(); g.fillPath()
+    g.lineStyle(2, 0xffb43a, 0.9)
+    g.beginPath(); g.moveTo(-96, -26); g.lineTo(120, -26); g.lineTo(104, 26); g.lineTo(-112, 26); g.closePath(); g.strokePath()
     const num = this.add
-      .text(-46, 0, `${count}`, {
+      .text(-52, -2, `${count}`, {
+        fontSize: '58px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        stroke: '#3a1404',
+        strokeThickness: 8,
+      })
+      .setOrigin(0.5)
+    num.setTint(0xffe9a0, 0xffe9a0, 0xff8a1a, 0xff8a1a)
+    const label = this.add
+      .text(30, 2, '连击', {
+        fontSize: '34px',
+        fontFamily: activeArtFont().family,
+        color: '#ffd23a',
+        stroke: '#3a1404',
+        strokeThickness: 6,
+        padding: { top: 6, bottom: 6 },
+      })
+      .setOrigin(0, 0.5)
+    const bang = this.add
+      .text(96, -4, '!!', {
         fontSize: '40px',
         fontStyle: 'bold',
-        color: '#ffd23a',
-        stroke: '#4a2404',
-        strokeThickness: 6,
+        color: '#ff5a2a',
+        stroke: '#3a1404',
+        strokeThickness: 7,
       })
-      .setOrigin(0.5)
-    const label = this.add
-      .text(14, 2, '连击!!', {
-        fontSize: '24px',
-        fontStyle: 'bold',
-        color: '#ffe9a8',
-        stroke: '#3a2410',
-        strokeThickness: 5,
-      })
-      .setOrigin(0.5)
+      .setOrigin(0, 0.5)
     const banner = this.add
-      .container(730, 150, [g, num, label])
+      .container(724, 148, [g, num, label, bang])
       .setScrollFactor(0)
       .setDepth(60)
-      .setAngle(-4)
-      .setScale(0.5)
-    this.tweens.add({ targets: banner, scale: 1, duration: 150, ease: 'Back.easeOut' })
+      .setAngle(-6)
+      .setScale(1.7)
+      .setAlpha(0.4)
+    this.tweens.add({ targets: banner, scale: 1, alpha: 1, duration: 110, ease: 'Quart.easeIn' })
+    this.tweens.add({ targets: banner, x: { from: 732, to: 724 }, delay: 110, duration: 130, ease: 'Bounce.easeOut' })
+    for (let i = 0; i < 7; i++) {
+      const ang = Math.random() * Math.PI * 2
+      const dist = 46 + Math.random() * 42
+      const spark = this.add
+        .circle(684, 148, 2.2 + Math.random() * 1.8, i % 2 ? 0xffd23a : 0xff7a2a, 1)
+        .setScrollFactor(0)
+        .setDepth(59)
+      this.tweens.add({
+        targets: spark,
+        x: 684 + Math.cos(ang) * dist,
+        y: 148 + Math.sin(ang) * dist,
+        alpha: 0,
+        scale: 0.3,
+        duration: 320 + Math.random() * 140,
+        ease: 'Cubic.easeOut',
+        onComplete: () => spark.destroy(),
+      })
+    }
     this.comboFxBanner = banner
     this.comboFxFadeTimer = this.time.delayedCall(900, () => {
       this.tweens.add({
         targets: banner,
         alpha: 0,
-        y: 138,
-        duration: 260,
+        y: 132,
+        duration: 240,
         ease: 'Cubic.easeIn',
         onComplete: () => {
           if (this.comboFxBanner === banner) this.comboFxBanner = undefined
@@ -2730,38 +2773,44 @@ export class BattleScene extends Phaser.Scene {
     })
   }
 
-  /** 挥击刀光（参照用户截图40：红橙色弧光扫过命中点），additive 叠加、
-   * 快速拉伸淡出；随 facing 翻转。 */
+  /** 挥击刀光 v2（v1 用 additive 混合，叠在浅色柱墙上直接洗白不可见——
+   * 用户"攻击特效还没做"的真相）。正常混合：暗红外描边 + 饱和红橙主弧 +
+   * 亮芯 + 溅射线，命中同时镜头微震。 */
   private spawnSlashFx(x: number, y: number, facing: number): void {
-    const g = this.add.graphics().setDepth(15).setBlendMode(Phaser.BlendModes.ADD)
+    const g = this.add.graphics().setDepth(15)
     g.setPosition(x, y)
     const dir = facing >= 0 ? 1 : -1
-    g.lineStyle(7, 0xff4a26, 0.85)
+    g.lineStyle(13, 0x6a0f04, 0.9)
     g.beginPath()
-    g.arc(0, 0, 44, -0.95, 0.95)
+    g.arc(0, 0, 52, -1.05, 1.05)
     g.strokePath()
-    g.lineStyle(3, 0xffc9a0, 0.95)
+    g.lineStyle(8, 0xff3a14, 0.95)
     g.beginPath()
-    g.arc(0, 0, 36, -0.8, 0.8)
+    g.arc(0, 0, 52, -1.0, 1.0)
     g.strokePath()
-    // 溅射短线
-    g.lineStyle(2, 0xffe0b0, 0.9)
-    for (const ang of [-0.5, 0.1, 0.6]) {
+    g.lineStyle(3.5, 0xffd9a0, 1)
+    g.beginPath()
+    g.arc(0, 0, 46, -0.85, 0.85)
+    g.strokePath()
+    g.lineStyle(3, 0xffefd0, 0.95)
+    for (const ang of [-0.55, 0.05, 0.6]) {
       g.beginPath()
-      g.moveTo(Math.cos(ang) * 48, Math.sin(ang) * 48)
-      g.lineTo(Math.cos(ang) * 62, Math.sin(ang) * 62)
+      g.moveTo(Math.cos(ang) * 56, Math.sin(ang) * 56)
+      g.lineTo(Math.cos(ang) * 76, Math.sin(ang) * 76)
       g.strokePath()
     }
-    g.setScale(dir * 0.6, 0.6)
+    g.setScale(dir * 0.55, 0.55)
+    g.setAngle((Math.random() * 24 - 12) * dir)
     this.tweens.add({
       targets: g,
-      scaleX: dir * 1.25,
-      scaleY: 1.25,
+      scaleX: dir * 1.3,
+      scaleY: 1.3,
       alpha: 0,
-      duration: 170,
+      duration: 190,
       ease: 'Cubic.easeOut',
       onComplete: () => g.destroy(),
     })
+    this.cameras.main.shake(70, 0.0022)
   }
 
   private rollHitProcs(target: MonsterEntity): void {
@@ -2805,7 +2854,7 @@ export class BattleScene extends Phaser.Scene {
     if (target.state.resolvedAttackIds.includes(attackId)) return
     if (target.hitQueue.some((hit) => hit.attackId === attackId)) return
     target.hitQueue.push({ attackId, damage: intent.damage })
-    this.floatText(target.state.x, target.state.y - 90, `-${intent.damage}`, 'damage')
+    this.floatText(target.state.x, target.state.y - 90, `${intent.damage}`, 'damage')
   }
 
   private remoteAttackId(intent: HitIntentPayload): number {
@@ -2939,7 +2988,7 @@ export class BattleScene extends Phaser.Scene {
     // Burn tick -> queue as an incoming hit (monsterSim resolves it normally).
     if (e.state.mode !== 'dead' && e.burn && this.simClockMs >= e.burn.nextAtMs) {
       e.hitQueue.push({ attackId: ++this.burnAttackId, damage: e.burn.power })
-      this.floatText(e.state.x, e.state.y - 70, `烧 -${e.burn.power}`, 'burn')
+      this.floatText(e.state.x, e.state.y - 70, `${e.burn.power}`, 'burn')
       e.burn.ticksLeft -= 1
       e.burn.nextAtMs = this.simClockMs + BURN_INTERVAL_MS
       if (e.burn.ticksLeft <= 0) e.burn = null
@@ -3019,10 +3068,10 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // Kill reward: feed the exp through the identity host so a level-up grows the
-  // hero's stats. Show light feedback (float text + a level-up toast/flash).
-  private awardKillExp(x: number, y: number, species: string): void {
+  // hero's stats. 2026-07-10 拍板：不再飘 +EXP 数字（玩家看左上黄条），仅
+  // 升级时给 toast + LEVEL UP。
+  private awardKillExp(_x: number, _y: number, species: string): void {
     const result = gainHeroExp(this.identity, monsterExp(species, { heroLevel: this.identity.progression.level }))
-    this.floatText(x, y - 40, `+${result.appliedExp} EXP`, 'exp')
     if (result.levelsGained > 0) {
       this.showToast(`升级！ Lv.${result.levelAfter}`, '#ffe066')
       this.floatText(this.heroState.x, GROUND_Y - 110, 'LEVEL UP!', 'exp')
@@ -3072,13 +3121,13 @@ export class BattleScene extends Phaser.Scene {
     const events = damageHero(this.identity, hit, this.simClockMs)
     for (const e of events) {
       if (e.type === 'hurt') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'hurt')
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `${mitigated}`, 'hurt')
         this.hero.setTint(0xff9a9a)
         this.time.delayedCall(120, () => {
           if (!isHeroDead(this.identity)) this.hero.clearTint()
         })
       } else if (e.type === 'death') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'hurt')
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `${mitigated}`, 'hurt')
         this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
       }
     }
@@ -3153,13 +3202,13 @@ export class BattleScene extends Phaser.Scene {
     const events = damageHero(this.identity, heroHit, this.simClockMs)
     for (const e of events) {
       if (e.type === 'hurt') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'hurt')
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `${mitigated}`, 'hurt')
         this.hero.setTint(0xff9a9a)
         this.time.delayedCall(120, () => {
           if (!isHeroDead(this.identity)) this.hero.clearTint()
         })
       } else if (e.type === 'death') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'hurt')
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `${mitigated}`, 'hurt')
         this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
       }
     }
@@ -3247,12 +3296,12 @@ export class BattleScene extends Phaser.Scene {
       }
     }
     this.drops = remaining
-    for (const d of this.drops) this.dropSprites.get(d)?.setPosition(d.x, d.y)
+    // 掉落物贴可视地面（+STAND_SINK-半径余量），别悬在逻辑线上。
+    for (const d of this.drops) this.dropSprites.get(d)?.setPosition(d.x, d.y + (d.kind === 'soul' ? 0 : STAND_SINK - 14))
     if (picked.length > 0) {
       for (const pickedDrop of picked) {
         if (pickedDrop.kind === 'soul') {
           addSoul(this.soulPurse, pickedDrop.amount)
-          this.floatText(this.heroState.x, heroCenter.y - 55, `+${pickedDrop.amount} 灵魂`, 'exp')
           this.npcClient.worldEvent('soul_obtained', { amount: pickedDrop.amount })
         } else if (pickedDrop.kind === 'consumable') {
           const result = collectWorldPickup(
@@ -3604,6 +3653,12 @@ export class BattleScene extends Phaser.Scene {
     w.__scene = this
     w.__inject = (edge: keyof HeroEdges) => {
       this.injected[edge] = true
+    }
+    // 验收专用：刀光/连击横幅是 ~200ms 瞬时效果，盲截图逮不住帧——暴露演示钩子。
+    w.__fxDemo = (n: number) => {
+      const c = this.heroVisualCenter()
+      this.spawnSlashFx(c.x + 60, c.y, this.heroState.facing)
+      this.showComboBanner(n)
     }
     w.__heroState = () => ({
       action: this.heroState.action,

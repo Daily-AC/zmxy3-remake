@@ -27,13 +27,15 @@ export const HUD_COLORS = {
 // larger.
 // 2026-07-10 打击感拍板（用户参照原版截图）：打怪伤害=橙色、自己掉血=紫色、
 // 回血=绿色，全部上飘渐隐 + 出生弹跳缩放（spawnFloatingText 里做）。
+// 2026-07-10 二轮拍板：数字不带正负号（颜色即语义），再大一号再粗一档；
+// EXP/灵魂拾取不飘字（玩家看左上黄条/计数器）。
 export const FLOAT_STYLES = {
-  damage: { color: '#ff9c1a', fontSize: 23, fontStyle: 'bold', risePx: 46, durationMs: 780, stroke: '#4a2404', strokeThickness: 4 },
-  crit: { color: '#ff2d2d', fontSize: 34, fontStyle: 'bold', risePx: 56, durationMs: 900, stroke: '#4a0808', strokeThickness: 5 },
-  hurt: { color: '#c07dff', fontSize: 20, fontStyle: 'bold', risePx: 40, durationMs: 750, stroke: '#2c0a4a', strokeThickness: 4 },
-  heal: { color: '#5ef07a', fontSize: 19, fontStyle: 'bold', risePx: 40, durationMs: 750, stroke: '#0e3a14', strokeThickness: 4 },
-  burn: { color: '#ff7a4d', fontSize: 17, fontStyle: 'bold', risePx: 32, durationMs: 650, stroke: '#3a1408', strokeThickness: 3 },
-  exp: { color: '#c8b0ff', fontSize: 16, fontStyle: 'bold', risePx: 30, durationMs: 700, stroke: '#241a3a', strokeThickness: 3 },
+  damage: { color: '#ff9c1a', fontSize: 30, fontStyle: 'bold', risePx: 52, durationMs: 820, stroke: '#4a2404', strokeThickness: 6 },
+  crit: { color: '#ff2d2d', fontSize: 44, fontStyle: 'bold', risePx: 62, durationMs: 950, stroke: '#4a0808', strokeThickness: 7 },
+  hurt: { color: '#c07dff', fontSize: 26, fontStyle: 'bold', risePx: 46, durationMs: 800, stroke: '#2c0a4a', strokeThickness: 5 },
+  heal: { color: '#5ef07a', fontSize: 24, fontStyle: 'bold', risePx: 44, durationMs: 780, stroke: '#0e3a14', strokeThickness: 5 },
+  burn: { color: '#ff7a4d', fontSize: 22, fontStyle: 'bold', risePx: 36, durationMs: 680, stroke: '#3a1408', strokeThickness: 4 },
+  exp: { color: '#c8b0ff', fontSize: 18, fontStyle: 'bold', risePx: 32, durationMs: 700, stroke: '#241a3a', strokeThickness: 4 },
 } as const
 
 export type FloatKind = keyof typeof FLOAT_STYLES
