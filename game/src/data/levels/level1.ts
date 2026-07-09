@@ -43,10 +43,11 @@
 // damage/skill formulas are being switched to the original coord in parallel,
 // which is exactly what this pack is aligning level 1 to.
 //
-// normalAttackRate mapping (per playbook §4): Monster5/Monster30 expose a
-// literal `normalAttackRate` (0.8 / 0.25) — used directly. The others expose
-// `probability` (special-skill chance), reused as the rate: 巫鹰 1.0, 顺风耳/
-// 千里眼 0.6, grunts 0.15.
+// normalAttackRate mapping: BaseMonster.as:28 defaults to 0.3. A species uses
+// a different value only when its own constructor assigns a literal
+// `this.normalAttackRate = X`: Monster5.as:14 -> 0.8, Monster30.as:17 -> 0.25.
+// Monster2/3/4/7/8 do not override it; their `protectedParamsObject.probability`
+// is a separate special-skill chance, not the base hit1 roll.
 
 import type { MonsterStats } from '../../systems/monsterSim'
 import type { LevelDef, MonsterSpawnSpec, SubStageChainDef, WaveSpec } from '../../systems/level'
@@ -55,15 +56,15 @@ import type { Wall } from '../../systems/platformSim'
 /** Real recovered per-species stats for level 1 (see file header). */
 export const LEVEL1_MONSTER_STATS: Record<string, MonsterStats> = {
   // grunts / swarm (level-1 form)
-  monster8: { hp: 80, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.15, def: 2 },
-  monster7: { hp: 150, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.15, def: 4 },
+  monster8: { hp: 80, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 2 },
+  monster7: { hp: 150, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 4 },
   monster30: { hp: 1, speed: 8, attackRange: 250, alertRange: 1000, normalAttackRate: 0.25, def: 0 },
   // mini-bosses (else-branch, isBoss=true in level 1)
-  monster4: { hp: 1500, speed: 5, attackRange: 250, alertRange: 1000, normalAttackRate: 0.6, def: 8 }, // 千里眼
-  monster2: { hp: 2000, speed: 5, attackRange: 250, alertRange: 1000, normalAttackRate: 0.6, def: 10 }, // 顺风耳
+  monster4: { hp: 1500, speed: 5, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 8 }, // 千里眼
+  monster2: { hp: 2000, speed: 5, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 10 }, // 顺风耳
   monster5: { hp: 4000, speed: 5, attackRange: 250, alertRange: 1000, normalAttackRate: 0.8, def: 12 }, // 巨灵神
   // arena boss
-  monster3: { hp: 300, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 1, def: 6 }, // 巫鹰
+  monster3: { hp: 300, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 6 }, // 巫鹰
 }
 
 // Human-readable names, for HP-bar labels (recovered `monsterName`).

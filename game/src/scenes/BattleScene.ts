@@ -783,7 +783,13 @@ export class BattleScene extends Phaser.Scene {
     this.seedFromSave()
     this.startLevel(this.campaignIndex)
 
-    this.pickupCfg = { gravity: 2, groundY: GROUND_Y, pickupRadius: DEFAULT_PICKUP_RADIUS, tickMs: TICK_MS }
+    this.pickupCfg = {
+      gravity: 2,
+      groundY: GROUND_Y,
+      pickupRadius: DEFAULT_PICKUP_RADIUS,
+      tickMs: TICK_MS,
+      platformResolver: (q) => resolveVerticalMotion(this.currentWalls, q),
+    }
 
     this.buildHud()
     this.buildDialogue()
@@ -2382,7 +2388,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private stepDropsAndPickup(): void {
-    const { remaining, picked } = stepDrops(this.drops, this.heroState.x, GROUND_Y, this.pickupCfg)
+    const heroCenter = this.heroVisualCenter()
+    const { remaining, picked } = stepDrops(this.drops, this.heroState.x, heroCenter.y, this.pickupCfg)
     for (const d of this.drops) {
       if (!remaining.includes(d)) {
         this.dropSprites.get(d)?.destroy()

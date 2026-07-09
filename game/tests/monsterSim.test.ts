@@ -68,6 +68,30 @@ describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
     expect(m.x).toBeCloseTo(507, 5) // moved +speed(7) toward hero
   })
 
+  it('target acquisition uses full 2D distance against alertRange (BaseMonster.as:466); the attack-range gate stays x-only (BaseMonster.as:369)', () => {
+    const tooFarCfg = makeCfg(() => 0)
+    const tooFar = initMonster(tooFarCfg, 500, 400)
+    const tooFarEvents = run(
+      tooFar,
+      { heroX: 600, heroY: 1500, heroAlive: true, incomingHit: null },
+      1050,
+      tooFarCfg,
+    )
+    expect(tooFar.mode).toBe('patrol')
+    expect(tooFarEvents.some((e) => e.type === 'attack-start')).toBe(false)
+
+    const engagedCfg = makeCfg(() => 0)
+    const engaged = initMonster(engagedCfg, 500, 400)
+    const engagedEvents = run(
+      engaged,
+      { heroX: 600, heroY: 1100, heroAlive: true, incomingHit: null },
+      1050,
+      engagedCfg,
+    )
+    expect(engaged.mode).toBe('attack')
+    expect(engagedEvents.some((e) => e.type === 'attack-start')).toBe(true)
+  })
+
   it('melee-attacks (hit1) when the hero is inside attackRange on a decision tick', () => {
     const cfg = makeCfg(() => 0) // rng 0 < normalAttackRate 0.5 -> attack
     const m = initMonster(cfg, 500, 400)
