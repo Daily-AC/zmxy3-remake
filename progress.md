@@ -409,3 +409,32 @@
 12. [x] 老君聊天改 ChatGPT 式布局：用户右侧气泡、老君左侧平铺、可滚动看历史、一账号一 session 持久化——codex-chat
 
 清单 1~12 全部落地（2026-07-10 01:0x，线上 zaixu = 1514137）：塔柱背景/玉石梁平台/Scale.FIT+页面壳、combat 三连修（codex，tasks/combat-triage-report.md：霸体机制照 AS3 BaseMonster beattackedtimes/isYourFather 复刻、乌鸦=grace 窗口幽灵判定框、重力 2→1.5 真源）、打击感批（橙/紫/绿飘字+弹跳、连击横幅、挥击刀光、掉落去标签、血条对 visualCenter、王者式队友名牌+快照加 level）、老君聊天重做（codex，tasks/laojun-chat-report.md：CJK 折行、气泡布局、滚动历史、按账号持久化、弹层吞事件）。待亲玩复验：连击横幅/刀光观感、霸体 3s 手感、双人名牌。
+
+### === 会话交接 session7 → 下一棒（2026-07-10 02:2x，用户拍板：本会话停手，交接给 codex 执行）===
+
+**线上状态**：remote master=4416f2b 全推已部署（zaixu.qmledmq.cn:8443 同版本）。612 测试绿、tsc 干净。部署=push 后 `ssh home-wsl ~/deploy-zm-frontend.sh`（build 失败会在部署日志报 tsc 错，push 前必须本地 `npx tsc --noEmit` 过）。dev server: game/ 下 `npx vite --port 5201`。
+
+**本场已交付**（详见上文 session7 记录 + 清单 1~12）：选人/地图/大厅/暂停/背包/技能页/炼丹炉重做，L1 爬塔=生图柱墙+玉石梁平台（贴图画在碰撞矩形内，STAND_SINK=84 对齐悟空视觉脚底），Scale.FIT+页面壳，combat 三连修（霸体反击/幽灵判定框/重力1.5），打击感 v2（飘字配色/连击横幅/刀光+镜头震），老君聊天重做，coop 战斗内同步已入库（**双人终审仍欠**）。
+
+**用户 02:1x 新一批反馈（编号 13~24，未做，下一棒的活）**：
+13. 伤害数字从**作用目标实体头顶**往上飘：悟空被打的紫字要从悟空头顶（现在用 heroState 逻辑坐标偏低），打怪的橙字从怪头顶。数字在现有 30/44px 基础上**再大再粗**。位置=visualCenter.y - 内容半高（参照 backpack 报告的 bbox 实测法，别用整格 cellH）。
+14. 连击横幅第三版：**生图底图 + 组件 + 动效**（当前纯 Graphics 斜切条被嫌素）。生图一张火焰墨笔刷横幅底（参照 docs 视觉基调），数字/文字组件叠加，保留重锤入场+火花并加强。
+15. 图47：爬塔背景有一条贯穿的**细白线**（用户以为能踩）。嫌疑=pillar_wall.jpg 镜像拼接缝（game/public/assets/generated/pillar_wall.jpg，PIL 上下镜像堆叠处的亮边）。PIL 检查接缝行并修掉重导。
+16. 掉落物件缺真源图：蓝/红药珠仍是自绘圆球。正路=vendor SWF 提取原版掉落件（血瓶/蓝瓶 FallEquipObj 视觉），提不到就生图。连带背包报告 §6 的 31 武器图标（按棍/杖/耙/铲/弓/锤/斧/刀 8 形制生图）。
+17. 图49：**怪物与悟空视觉底线不一致**（巫鹰浮空站得比悟空高，跳上去无实物）。根因=STAND_SINK 只校准了悟空（84px 来自 role1 frame(0,0) bbox 底 172/200），各怪 species 精灵格留白不同。修法=per-species 视觉底校准：PIL 测各 Monster*.png 首帧 bbox 底，得出每族 sink，渲染时 sprite y 补偿（或统一把逻辑站立线渲染层对齐）。涉及 BattleScene monsterVisualCenter/精灵 setPosition 与 hpBar 锚点。
+18. 图49：柱墙素材里**两根柱子贴连**——生图重出一版柱距均匀的（喂当前 pillar_wall 当反例），或 PIL 裁重排。
+19. 图49：**最右侧一条空白竖带**（应为完整柱墙延续）。查 pillarBg tileSprite 覆盖宽度（现 -80..1220, tileScale 1300/864/1.5）与纹理右缘接缝；相机右界 1132。
+20. 巫鹰 boss 血条：**名牌+条整体居中**（用户点名"图省事右移"不合格）。方案=BossHpBar 整体 x=480 居中、y 下移（~64）躲开左上 RoleInfo（宽~350 高~90），或缩条宽。改 game/src/ui/hud/MonsterHpBar.ts BossHpBar 布局 + BattleScene 构造点。
+21. 图50：技能页**心法卡标题文字重叠**（"心法二/火系心法"两行叠字、与图标上字重叠）——SkillTreeScene 心法卡布局 bug（codex 重构版遗留）。
+22. 图51：**全游戏文字发糊**。根因嫌疑=Scale.FIT 放大 canvas 但 Phaser 渲染分辨率 1x 被 CSS 拉伸。修法=Phaser config 加 `resolution: window.devicePixelRatio`（Phaser 4 确认等价配置：Scale 下的 zoom/autoRound 或 Game config resolution）+ Text 默认 setResolution。全局性问题，优先级高。技能页用户要求**重构而非在旧版上改**。
+23. 图52：技能激活语义三修：**初始应零技能**（现在 createDefaultSkillTreeState 预激活升龙斩绑Y，用户拍板：进场无技能，攒灵魂逐个激活）。且用户现有 slot 存档里持久化了 legacy 五技能 learned 数据（decodeSkillTree 只迁移 skills:null，不清洗已写入的旧结构）——需一次性存档版本迁移清洗。**歧义待确认**：用户"攒够灵魂才激活"是指心法提升花灵魂（AS3 语义，激活本身免费）还是激活也要花灵魂——先按 AS3 做，UI 上把"心法等级不足"的引导做明显，落报告问用户。
+24. **攻击/技能动效硬需求**（用户多次催，程序绘弧不达标）：正路=vendor SWF 提取原版技能特效帧动画（Role1 的 hit/技能 effect 符号，参照 tools/ 既有 FFDec 提取管线 + docs/playbooks/ui-port-dual-source.md），YUIOL 五技能施放特效 + 普攻刀光全套接入。提不到的用生图序列帧。当前 v2 程序刀光（spawnSlashFx）+镜头震仅为过渡。验收钩子 window.__fxDemo(n) 可截帧。
+
+**纪律/坑（本场新增的血泪）**：
+- BattleScene 补丁必须用唯一锚点整段替换，别用 index 顺序拼接（我拼反过一次造成大段重复）；改完必 tsc+vitest 再 push（部署脚本会构建，坏 master=线上瘫）。
+- additive 混合叠浅色背景=隐形，特效一律正常混合+深色描边。
+- 多 agent 并行时：给 codex 的 brief 必须写死"不碰哪些文件"+"不 git commit"（沙箱 git 锁），主会话统一验收提交；同文件并行=灾难。
+- 共享 playwright 浏览器会被用户占用随时关闭，验收截图要一把梭做完；瞬时特效用 __fxDemo 钩子逮帧。
+- 生图素材入 game/public/assets/generated/ 并在消费处注释来源与手法；风格锚=用户给的原版截图。
+
+**在途/未销旧账**：coop 双人两 tab 终审；终包窗口（electron exe→home，tools/acceptance/，交付截止 2026-07-10 中午）；掉落物/武器图标素材线（=16）。
