@@ -1,0 +1,536 @@
+{
+  "meta": {
+    "source": "打开我开始玩.swf DefineSprite 195/209/211",
+    "units": "px (twips/20), original scene coords",
+    "tool": "tools/level1-geometry/extract_scene_geometry.py"
+  },
+  "subStages": [
+    {
+      "id": "sl11",
+      "walls": [
+        {
+          "type": "solid",
+          "x": -56.546,
+          "y": 498.55,
+          "width": 1099.991,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "solid",
+          "x": -78.894,
+          "y": -2379.442,
+          "width": 49.987,
+          "height": 2899.983,
+          "rotation": 90
+        },
+        {
+          "type": "solid",
+          "x": 1031.803,
+          "y": -2365.558,
+          "width": 23.295,
+          "height": 2900.015,
+          "rotation": 90
+        },
+        {
+          "type": "through",
+          "x": -98.551,
+          "y": 268,
+          "width": 300.002,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 668.151,
+          "y": 321.95,
+          "width": 239.998,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 311.901,
+          "y": 165.2,
+          "width": 239.998,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 442.399,
+          "y": -0.95,
+          "width": 455.001,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": -43.901,
+          "y": -229.85,
+          "width": 455.001,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 617.599,
+          "y": -927.1,
+          "width": 455.001,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": -77.251,
+          "y": -1254.8,
+          "width": 455.001,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 622.699,
+          "y": -1475.3,
+          "width": 455.001,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 311.901,
+          "y": -446.15,
+          "width": 239.998,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 769.101,
+          "y": -565.5,
+          "width": 239.998,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 54.501,
+          "y": -646.8,
+          "width": 239.998,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 236.901,
+          "y": -825.85,
+          "width": 239.998,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 411.101,
+          "y": -1119.7,
+          "width": 239.998,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 181.751,
+          "y": -1440.75,
+          "width": 239.998,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "through",
+          "x": 446.851,
+          "y": -1658.3,
+          "width": 239.998,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "throughUpButDown",
+          "x": -53.656,
+          "y": -1872.45,
+          "width": 1100.012,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "throughDownButUp",
+          "x": -44.556,
+          "y": -2379.35,
+          "width": 1100.012,
+          "height": 20,
+          "rotation": 0
+        }
+      ],
+      "transferDoors": [
+        {
+          "x": 716.85,
+          "y": -2037.45,
+          "width": 185.8,
+          "height": 165
+        }
+      ],
+      "markers": []
+    },
+    {
+      "id": "sl12",
+      "walls": [
+        {
+          "type": "solid",
+          "x": -180.629,
+          "y": 501.05,
+          "width": 5199.959,
+          "height": 20,
+          "rotation": 0
+        },
+        {
+          "type": "solid",
+          "x": 4859.875,
+          "y": -411,
+          "width": 115.349,
+          "height": 999.999,
+          "rotation": 0
+        },
+        {
+          "type": "solid",
+          "x": -195.997,
+          "y": -138.582,
+          "width": 23.295,
+          "height": 699.965,
+          "rotation": 90
+        },
+        {
+          "type": "throughDownButUp",
+          "x": -184.66,
+          "y": -138.5,
+          "width": 5200.019,
+          "height": 20,
+          "rotation": 0
+        }
+      ],
+      "transferDoors": [
+        {
+          "x": 4520.9,
+          "y": 341.65,
+          "width": 185.8,
+          "height": 165
+        }
+      ],
+      "markers": [
+        {
+          "name": "stophere",
+          "x": 1107.55,
+          "y": 176.7,
+          "width": 79.701,
+          "height": 77.1
+        },
+        {
+          "name": "stophere",
+          "x": 1775.15,
+          "y": 170,
+          "width": 69.1,
+          "height": 77.1
+        },
+        {
+          "name": "stophere",
+          "x": 3755.65,
+          "y": 219.8,
+          "width": 69.1,
+          "height": 77.1
+        },
+        {
+          "name": "stophere",
+          "x": 4627,
+          "y": 202.15,
+          "width": 69.1,
+          "height": 77.1
+        },
+        {
+          "name": "stophere",
+          "x": 2779.4,
+          "y": 150.8,
+          "width": 69.1,
+          "height": 77.1
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 3982.695,
+          "y": 310.7,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 320.495,
+          "y": 296.35,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 1239.595,
+          "y": 296.35,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 1494.295,
+          "y": 363.5,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 1921.695,
+          "y": 310.7,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 2918.145,
+          "y": 354.7,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 2861.845,
+          "y": 354.7,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 3532.195,
+          "y": 355.5,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 940.445,
+          "y": 290.7,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 1756.395,
+          "y": 300.5,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 2634.345,
+          "y": 310.7,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 3608.295,
+          "y": 355.5,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 4579.745,
+          "y": 318.7,
+          "width": 56.517,
+          "height": 73
+        }
+      ]
+    },
+    {
+      "id": "sl13",
+      "walls": [
+        {
+          "type": "solid",
+          "x": -3.65,
+          "y": 501,
+          "width": 5000,
+          "height": 39.999,
+          "rotation": 0
+        },
+        {
+          "type": "solid",
+          "x": 4746.975,
+          "y": -423,
+          "width": 115.349,
+          "height": 999.999,
+          "rotation": 0
+        },
+        {
+          "type": "solid",
+          "x": -24.997,
+          "y": -150.582,
+          "width": 23.295,
+          "height": 699.965,
+          "rotation": 90
+        },
+        {
+          "type": "throughDownButUp",
+          "x": -3.647,
+          "y": -150.6,
+          "width": 4999.994,
+          "height": 20,
+          "rotation": 0
+        }
+      ],
+      "transferDoors": [
+        {
+          "x": 4059.3,
+          "y": 342.45,
+          "width": 185.8,
+          "height": 165
+        }
+      ],
+      "markers": [
+        {
+          "name": "stophere",
+          "x": 1048.25,
+          "y": 157.5,
+          "width": 79.701,
+          "height": 77.1
+        },
+        {
+          "name": "stophere",
+          "x": 1799.8,
+          "y": 150.8,
+          "width": 69.1,
+          "height": 77.1
+        },
+        {
+          "name": "stophere",
+          "x": 3532.2,
+          "y": 200.6,
+          "width": 69.1,
+          "height": 77.1
+        },
+        {
+          "name": "stophere",
+          "x": 4275.9,
+          "y": 220.15,
+          "width": 69.1,
+          "height": 77.1
+        },
+        {
+          "name": "stophere",
+          "x": 2804.05,
+          "y": 131.6,
+          "width": 69.1,
+          "height": 77.1
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 145.545,
+          "y": 271.5,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 538.095,
+          "y": 253.95,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 906.645,
+          "y": 286,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 1138.945,
+          "y": 302,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 1707.795,
+          "y": 302,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 1900.145,
+          "y": 302,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 2657.195,
+          "y": 302,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 2268.645,
+          "y": 302,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 2899.645,
+          "y": 302,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 3464.445,
+          "y": 302,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 3200.095,
+          "y": 302,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 4121.545,
+          "y": 307.5,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 3814.895,
+          "y": 302,
+          "width": 56.517,
+          "height": 73
+        },
+        {
+          "name": "monsterDisapperaPoint",
+          "x": 4197.045,
+          "y": 303.5,
+          "width": 56.517,
+          "height": 73
+        }
+      ]
+    }
+  ]
+}
