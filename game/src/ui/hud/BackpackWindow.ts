@@ -184,7 +184,10 @@ const STAT_R = [
 ] as const
 
 const EXP_VALUE = { x: 195.1, y: 428.8, w: 140 } // txt_exp center = 127.1 + 68.0, also align center
-const EXP_FILL = { x: 215, y: 450, w: 214, h: 20 } // empirically located (see header)
+// Pixel-scanned from backpack_bg.png: the baked black rounded EXP track sits
+// at x=95..308, y=426..445. The fill texture is 214x20 with matching rounded
+// alpha corners, so it aligns to the track's outer bbox and renders under txt_exp.
+const EXP_FILL = { x: 95, y: 426, w: 214, h: 20 }
 
 // Right panel: 4 category tabs, baked labels, 73x27 each, 74px pitch.
 const TAB_ROW = { x: 405.9, y: 61.1, w: 73, h: 27, pitch: 74 }
@@ -200,7 +203,7 @@ const SOUL_VALUE = { x: 552.4, y: 397.2, w: 74 }
 const SELL_BTN = { x: 637.2, y: 392.2, w: 62, h: 28 }
 const PREV_BTN = { x: 498.7, y: 419.2, w: 86, h: 34 }
 const NEXT_BTN = { x: 616.9, y: 419.2, w: 86, h: 34 }
-const NOWPAGE = { x: 590.3, y: 425.6, w: 70 } // nowpage: align center, center = 580.3 + 10.0
+const NOWPAGE = { x: 600.8, y: 425.6, w: 30 } // centered in the 32.2px gap between prePage and nextPage
 
 const PORTRAIT_TEX = 'role1_0'
 const PORTRAIT_FRAME = 0
@@ -303,10 +306,10 @@ export class BackpackWindow {
     for (const s of STAT_L) this.statTexts[s.key] = add(this.makeCenteredText(s.x, s.y, s.w))
     for (const s of STAT_R) this.statTexts[s.key] = add(this.makeCenteredText(s.x, s.y, s.w))
 
-    this.expText = add(this.makeCenteredText(EXP_VALUE.x, EXP_VALUE.y, EXP_VALUE.w, 12))
     this.expFill = scene.textures.exists('backpack_exp_fill')
       ? add(scene.add.image(EXP_FILL.x, EXP_FILL.y, 'backpack_exp_fill').setOrigin(0, 0))
       : null
+    this.expText = add(this.makeCenteredText(EXP_VALUE.x, EXP_VALUE.y, EXP_VALUE.w, 12))
 
     // Right panel: category tabs.
     this.tabHighlight = add(
@@ -329,7 +332,7 @@ export class BackpackWindow {
     this.soulText = add(this.makeValueText(SOUL_VALUE.x, SOUL_VALUE.y, SOUL_VALUE.w))
     // Sell/prev/next hotspots: resolveHit() tests SELL_BTN/PREV_BTN/NEXT_BTN
     // directly, no hotspot GameObjects needed.
-    this.nowpageText = add(this.makeCenteredText(NOWPAGE.x, NOWPAGE.y, NOWPAGE.w, 13))
+    this.nowpageText = add(this.makeCenteredText(NOWPAGE.x, NOWPAGE.y, NOWPAGE.w, 12))
 
     this.container = scene.add
       .container(BG_X, BG_Y, children)
