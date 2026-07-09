@@ -215,7 +215,10 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ENTER', () => {
       if (this.isSelected) this.confirm()
     })
-    this.input.keyboard?.on('keydown-ESC', () => this.scene.start(SCENE.slotSelect))
+    // 2026-07-09: SlotSelectScene is bypassed in the hackathon flow (see
+    // LoginScene.enterGame) -- ESC now matches the "返回主菜单" button below
+    // rather than dead-ending into an unreachable slot picker.
+    this.input.keyboard?.on('keydown-ESC', () => this.scene.start(SCENE.mainMenu))
 
     this.exposeHooks()
   }
