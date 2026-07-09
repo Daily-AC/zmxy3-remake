@@ -63,6 +63,7 @@ export interface HitIntentPayload {
   attackerUserId: string
   targetMonsterId: string
   attackId: string
+  damage: number
   skillId?: string
   clientTimeMs: number
 }
@@ -78,11 +79,16 @@ export interface HitSettlementPayload {
   killed: boolean
 }
 
-export type CoopEventName = 'hit_intent' | 'hit_settlement'
+export interface LevelEventPayload {
+  kind: 'boss_defeated'
+}
+
+export type CoopEventName = 'hit_intent' | 'hit_settlement' | 'level_event'
 
 export type CoopEventMessage =
   | { type: 'event'; name: 'hit_intent'; payload: HitIntentPayload; fromUserId?: string }
   | { type: 'event'; name: 'hit_settlement'; payload: HitSettlementPayload; fromUserId?: string }
+  | { type: 'event'; name: 'level_event'; payload: LevelEventPayload; fromUserId?: string }
 
 export type CoopOutboundMessage = CoopStateMessage | CoopEventMessage
 export type CoopInboundMessage = CoopOutboundMessage
@@ -114,6 +120,8 @@ export type CoopSyncEffect =
   | { type: 'monster_state_ignored'; fromUserId: string; reason: 'non_host_sender' }
   | { type: 'hit_intent_ignored'; targetMonsterId: string; reason: 'not_host' | 'missing_monster' | 'dead_monster' | 'no_resolver' }
   | { type: 'hit_settlement_ignored'; fromUserId: string; reason: 'non_host_sender' }
+  | { type: 'level_event_received'; kind: LevelEventPayload['kind'] }
+  | { type: 'level_event_ignored'; fromUserId: string; reason: 'non_host_sender' }
   | {
       type: 'hit_settlement_created'
       targetMonsterId: string
@@ -189,6 +197,14 @@ export function encodeHitSettlement(settlement: HitSettlementPayload): CoopEvent
   }
 }
 
+export function encodeLevelEvent(payload: LevelEventPayload): CoopEventMessage {
+  return {
+    type: 'event',
+    name: 'level_event',
+    payload: { ...payload },
+  }
+}
+
 export function encodeCoopMessage(message: CoopOutboundMessage): string {
   return JSON.stringify(message)
 }
@@ -227,6 +243,16 @@ export function decodeCoopMessage(raw: unknown): CoopInboundMessage | null {
       return {
         type: 'event',
         name: 'hit_settlement',
+        payload,
+        ...(typeof obj.fromUserId === 'string' ? { fromUserId: obj.fromUserId } : {}),
+      }
+    }
+    if (obj.name === 'level_event') {
+      const payload = decodeLevelEvent(obj.payload)
+      if (!payload) return null
+      return {
+        type: 'event',
+        name: 'level_event',
         payload,
         ...(typeof obj.fromUserId === 'string' ? { fromUserId: obj.fromUserId } : {}),
       }
@@ -288,6 +314,7 @@ export function applyCoopMessage(
 ): CoopApplyResult {
   if (message.type === 'state') return applyStateMessage(state, message)
   if (message.name === 'hit_intent') return applyHitIntent(state, message.payload, options)
+  if (message.name === 'level_event') return applyLevelEvent(state, message)
   return applyHitSettlement(state, message)
 }
 
@@ -497,6 +524,23 @@ function applyHitSettlement(state: CoopSyncState, message: Extract<CoopEventMess
   }
 }
 
+function applyLevelEvent(state: CoopSyncState, message: Extract<CoopEventMessage, { name: 'level_event' }>): CoopApplyResult {
+  const fromUserId = message.fromUserId ?? state.hostUserId
+  if (fromUserId !== state.hostUserId) {
+    return {
+      state,
+      effects: [{ type: 'level_event_ignored', fromUserId, reason: 'non_host_sender' }],
+      outgoing: [],
+    }
+  }
+
+  return {
+    state,
+    effects: [{ type: 'level_event_received', kind: message.payload.kind }],
+    outgoing: [],
+  }
+}
+
 function stateSender(message: CoopStateMessage, state: CoopSyncState): string {
   if (message.fromUserId) return message.fromUserId
   if (message.payload.coopType === 'hero_state') return message.payload.hero.userId
@@ -530,6 +574,7 @@ function decodeHitIntent(value: unknown): HitIntentPayload | null {
     typeof value.attackerUserId !== 'string' ||
     typeof value.targetMonsterId !== 'string' ||
     typeof value.attackId !== 'string' ||
+    !isFiniteNumber(value.damage) ||
     !isFiniteNumber(value.clientTimeMs)
   ) {
     return null
@@ -539,6 +584,7 @@ function decodeHitIntent(value: unknown): HitIntentPayload | null {
     attackerUserId: value.attackerUserId,
     targetMonsterId: value.targetMonsterId,
     attackId: value.attackId,
+    damage: value.damage,
     ...(typeof value.skillId === 'string' ? { skillId: value.skillId } : {}),
     clientTimeMs: value.clientTimeMs,
   }
@@ -568,6 +614,11 @@ function decodeHitSettlement(value: unknown): HitSettlementPayload | null {
     monsterAlive: value.monsterAlive,
     killed: value.killed,
   }
+}
+
+function decodeLevelEvent(value: unknown): LevelEventPayload | null {
+  if (!isRecord(value) || value.kind !== 'boss_defeated') return null
+  return { kind: 'boss_defeated' }
 }
 
 function isHeroStateSnapshot(value: unknown): value is HeroStateSnapshot {

@@ -8,6 +8,7 @@ import {
   encodeHeroState,
   encodeHitIntent,
   encodeHitSettlement,
+  encodeLevelEvent,
   encodeMonsterState,
   interpolatePosition,
   isStaleSeq,
@@ -48,6 +49,7 @@ describe('coopSync wire codec', () => {
         attackerUserId: 'u-peer',
         targetMonsterId: 'm-1',
         attackId: 'combo-3',
+        damage: 35,
         skillId: 'hit3',
         clientTimeMs: 1_125,
       }),
@@ -61,6 +63,7 @@ describe('coopSync wire codec', () => {
         monsterAlive: true,
         killed: false,
       }),
+      encodeLevelEvent({ kind: 'boss_defeated' }),
     ]
 
     for (const message of messages) {
@@ -72,6 +75,20 @@ describe('coopSync wire codec', () => {
     expect(decodeCoopMessage('not json')).toBeNull()
     expect(decodeCoopMessage({ type: 'state', seq: 1, sentAt: 0, payload: { coopType: 'unknown' } })).toBeNull()
     expect(decodeCoopMessage({ type: 'event', name: 'hit_intent', payload: { targetMonsterId: 'm-1' } })).toBeNull()
+  })
+
+  it('accepts level events only from the host', () => {
+    const peerState = createCoopSyncState({ localUserId: 'u-peer', hostUserId: 'u-host' })
+
+    const accepted = applyCoopMessage(peerState, { ...encodeLevelEvent({ kind: 'boss_defeated' }), fromUserId: 'u-host' })
+    const rejected = applyCoopMessage(peerState, { ...encodeLevelEvent({ kind: 'boss_defeated' }), fromUserId: 'u-other' })
+
+    expect(accepted.effects).toContainEqual({ type: 'level_event_received', kind: 'boss_defeated' })
+    expect(rejected.effects).toContainEqual({
+      type: 'level_event_ignored',
+      fromUserId: 'u-other',
+      reason: 'non_host_sender',
+    })
   })
 })
 
@@ -166,6 +183,7 @@ describe('coopSync state machine', () => {
           attackerUserId: 'u-peer',
           targetMonsterId: 'm-1',
           attackId: 'combo-3',
+          damage: 35,
           skillId: 'hit3',
           clientTimeMs: 1_125,
         }),

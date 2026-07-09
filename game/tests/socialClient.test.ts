@@ -109,6 +109,20 @@ describe('social protocol codec', () => {
     expect(JSON.parse(encodeClient({ type: 'start' }))).toEqual({ type: 'start' })
   })
 
+  it('encodes combat-sync client message variants', () => {
+    expect(JSON.parse(encodeClient({ type: 'state', seq: 4, sentAt: 123, payload: { coopType: 'hero_state' } }))).toEqual({
+      type: 'state',
+      seq: 4,
+      sentAt: 123,
+      payload: { coopType: 'hero_state' },
+    })
+    expect(JSON.parse(encodeClient({ type: 'event', name: 'level_event', payload: { kind: 'boss_defeated' } }))).toEqual({
+      type: 'event',
+      name: 'level_event',
+      payload: { kind: 'boss_defeated' },
+    })
+  })
+
   it('decodes every lobby server message variant', () => {
     expect(decodeServer(JSON.stringify({ type: 'room_state', room }))).toEqual({ type: 'room_state', room })
     expect(decodeServer(JSON.stringify({ type: 'member_joined', member: { userId: 'u3', username: '沙僧' } }))).toEqual({
@@ -135,11 +149,28 @@ describe('social protocol codec', () => {
     })
   })
 
-  it('rejects malformed, unknown, and future combat-sync frames', () => {
+  it('decodes combat-sync server frames without validating their payloads', () => {
+    expect(decodeServer(JSON.stringify({ type: 'state', fromUserId: 'u2', seq: 9, sentAt: 123, payload: { x: 1 } }))).toEqual({
+      type: 'state',
+      fromUserId: 'u2',
+      seq: 9,
+      sentAt: 123,
+      payload: { x: 1 },
+    })
+    expect(decodeServer(JSON.stringify({ type: 'event', fromUserId: 'u2', name: 'hit_intent', payload: { attackId: 7 } }))).toEqual({
+      type: 'event',
+      fromUserId: 'u2',
+      name: 'hit_intent',
+      payload: { attackId: 7 },
+    })
+  })
+
+  it('rejects malformed and unknown frames', () => {
     expect(decodeServer('not json')).toBeNull()
     expect(decodeServer('42')).toBeNull()
     expect(decodeServer('{"type":"bogus"}')).toBeNull()
     expect(decodeServer(JSON.stringify({ type: 'state', seq: 1, payload: {}, sentAt: 1 }))).toBeNull()
+    expect(decodeServer(JSON.stringify({ type: 'event', fromUserId: 'u2', payload: {} }))).toBeNull()
     expect(decodeServer(JSON.stringify({ type: 'room_state', room: { ...room, status: 'started' } }))).toBeNull()
     expect(decodeServer(JSON.stringify({ type: 'room_state', room: { ...room, members: [{ userId: 'u1' }] } }))).toBeNull()
     expect(decodeServer(JSON.stringify({ type: 'member_joined', member: { userId: 'u3' } }))).toBeNull()
@@ -232,5 +263,33 @@ describe('SocialClient session and REST behavior', () => {
 
     const resumed = new SocialClient({ baseUrl: 'http://localhost:7100', fetch: fetchLike, storage })
     expect(resumed.getSession()?.user.username).toBe('悟空')
+  })
+
+  it('hands off an open game-start room socket to the next room connection claim', () => {
+    const storage = memoryStorage()
+    storage.setItem(SOCIAL_SESSION_STORAGE_KEY, JSON.stringify({ token: 'jwt', user: { id: 'u1', username: '悟空' } }))
+    const sockets: FakeSocket[] = []
+    const client = new SocialClient({ baseUrl: 'http://localhost:7100', storage })
+    const createSocket = () => {
+      const socket = new FakeSocket()
+      sockets.push(socket)
+      return socket
+    }
+
+    const lobbyConnection = client.openRoomConnection('room-1', createSocket)
+    lobbyConnection.connect()
+    sockets[0].open()
+    sockets[0].message(JSON.stringify({ type: 'game_start', levelId: 'L1' }))
+    lobbyConnection.dispose()
+
+    expect(sockets[0].closed).toBe(false)
+
+    const battleConnection = client.openRoomConnection('room-1', createSocket)
+    expect(battleConnection).toBe(lobbyConnection)
+    expect(battleConnection.isOpen()).toBe(true)
+
+    battleConnection.dispose()
+    expect(sockets[0].closed).toBe(true)
+    expect(sockets).toHaveLength(1)
   })
 })

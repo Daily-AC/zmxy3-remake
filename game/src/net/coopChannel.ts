@@ -11,6 +11,7 @@ import {
   type HitSettlementPayload,
   type MonsterStateSnapshot,
 } from '../systems/coopSync'
+import type { ServerMessage, SocialRoomConnection } from './socialClient'
 
 export type CoopTransportMessageType = 'state' | 'event'
 
@@ -21,6 +22,32 @@ export interface CoopRoomTransport {
 
 export interface CoopChannelOptions {
   onInvalidMessage?: (message: unknown) => void
+}
+
+export function createSocialRoomTransport(
+  connection: Pick<SocialRoomConnection, 'send' | 'onMessage'>,
+): CoopRoomTransport {
+  const subscribers: Record<CoopTransportMessageType, Set<(message: unknown) => void>> = {
+    state: new Set(),
+    event: new Set(),
+  }
+
+  connection.onMessage = (message: ServerMessage) => {
+    if (message.type !== 'state' && message.type !== 'event') return
+    for (const handler of subscribers[message.type]) handler(message)
+  }
+
+  return {
+    sendRoomMessage(message) {
+      return connection.send(message)
+    },
+    onRoomMessage(type, handler) {
+      subscribers[type].add(handler)
+      return () => {
+        subscribers[type].delete(handler)
+      }
+    },
+  }
 }
 
 export class CoopChannel {

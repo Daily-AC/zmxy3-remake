@@ -43,6 +43,8 @@ export type ClientMessage =
   | { type: 'ready'; ready: boolean }
   | { type: 'leave' }
   | { type: 'start' }
+  | { type: 'state'; seq: number; payload: unknown; sentAt: number }
+  | { type: 'event'; name: string; payload: unknown }
 
 export type ServerMessage =
   | { type: 'room_state'; room: RoomSnapshot }
@@ -51,8 +53,10 @@ export type ServerMessage =
   | { type: 'ready_changed'; userId: string; ready: boolean }
   | { type: 'game_start'; levelId: LevelId }
   | { type: 'error'; message: string }
+  | { type: 'state'; fromUserId: string; seq: number; payload: unknown; sentAt: number }
+  | { type: 'event'; fromUserId: string; name: string; payload: unknown }
 
-const SERVER_TYPES = new Set(['room_state', 'member_joined', 'member_left', 'ready_changed', 'game_start', 'error'])
+const SERVER_TYPES = new Set(['room_state', 'member_joined', 'member_left', 'ready_changed', 'game_start', 'error', 'state', 'event'])
 
 export function resolveSocialServerBaseUrl(search: string, env?: string): string {
   try {
@@ -113,6 +117,17 @@ export function decodeServer(raw: string): ServerMessage | null {
       return isLevelId(obj.levelId) ? { type: 'game_start', levelId: obj.levelId } : null
     case 'error':
       return typeof obj.message === 'string' ? { type: 'error', message: obj.message } : null
+    case 'state':
+      return typeof obj.fromUserId === 'string' &&
+        isFiniteNumber(obj.seq) &&
+        isFiniteNumber(obj.sentAt) &&
+        hasOwn(obj, 'payload')
+        ? { type: 'state', fromUserId: obj.fromUserId, seq: obj.seq, sentAt: obj.sentAt, payload: obj.payload }
+        : null
+    case 'event':
+      return typeof obj.fromUserId === 'string' && typeof obj.name === 'string' && hasOwn(obj, 'payload')
+        ? { type: 'event', fromUserId: obj.fromUserId, name: obj.name, payload: obj.payload }
+        : null
     default:
       return null
   }
@@ -120,6 +135,14 @@ export function decodeServer(raw: string): ServerMessage | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function hasOwn(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key)
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function isLevelId(value: unknown): value is LevelId {
@@ -266,6 +289,8 @@ export class SocialClient {
 
   openRoomConnection(roomId: string, createSocket?: (url: string) => SocketLike): SocialRoomConnection {
     const session = this.requireSession()
+    const preserved = claimPreservedRoomConnection(session.token, roomId)
+    if (preserved) return preserved
     return new SocialRoomConnection({
       wsUrl: socialWsUrl(this.baseUrl),
       token: session.token,
@@ -363,6 +388,22 @@ export function getSharedSocialClient(baseUrl: string): SocialClient {
   return sharedClient
 }
 
+const preservedRoomConnections = new Map<string, SocialRoomConnection>()
+
+function roomConnectionKey(token: string, roomId: string): string {
+  return `${roomId}\u0000${token}`
+}
+
+function claimPreservedRoomConnection(token: string, roomId: string): SocialRoomConnection | null {
+  const key = roomConnectionKey(token, roomId)
+  const connection = preservedRoomConnections.get(key) ?? null
+  if (!connection) return null
+  preservedRoomConnections.delete(key)
+  if (!connection.isOpen()) return null
+  connection.claimPreservedForGame()
+  return connection
+}
+
 export type SocialConnStatus = 'connecting' | 'open' | 'closed' | 'error'
 
 export interface SocketLike {
@@ -389,6 +430,7 @@ export class SocialRoomConnection {
   private socket: SocketLike | null = null
   private disposed = false
   private _status: SocialConnStatus = 'closed'
+  private preserveOnDispose = false
 
   onStatus: (status: SocialConnStatus) => void = () => {}
   onMessage: (msg: ServerMessage) => void = () => {}
@@ -419,7 +461,10 @@ export class SocialRoomConnection {
     }
     socket.onmessage = (ev) => {
       const msg = typeof ev.data === 'string' ? decodeServer(ev.data) : null
-      if (msg) this.onMessage(msg)
+      if (msg) {
+        if (msg.type === 'game_start') this.preserveOnDispose = true
+        this.onMessage(msg)
+      }
     }
     socket.onerror = () => {
       if (!this.disposed) this.setStatus('error')
@@ -442,10 +487,21 @@ export class SocialRoomConnection {
   }
 
   dispose(): void {
+    if (this.preserveOnDispose && this.socket && this._status === 'open') {
+      preservedRoomConnections.set(roomConnectionKey(this.token, this.roomId), this)
+      this.onStatus = () => {}
+      this.onMessage = () => {}
+      return
+    }
     this.disposed = true
     this.socket?.close()
     this.socket = null
     this.setStatus('closed')
+  }
+
+  claimPreservedForGame(): void {
+    this.preserveOnDispose = false
+    this.disposed = false
   }
 
   private setStatus(status: SocialConnStatus): void {
