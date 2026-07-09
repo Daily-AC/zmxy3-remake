@@ -1014,6 +1014,12 @@ export class BattleScene extends Phaser.Scene {
     if (this.scene.isActive(SCENE.skillTree)) return
     this.events.once(Phaser.Scenes.Events.RESUME, () => this.refreshSkillTreeFromSlot())
     this.scene.launch(SCENE.skillTree, { returnScene: SCENE.battle })
+    // main.ts's scene array lists 'skilltree' before 'battle', so Phaser's
+    // default render order would paint the (still-visible-while-paused)
+    // BattleScene over the freshly launched SkillTreeScene -- the pause
+    // would work but the skill tree would be invisible. bringToTop pins the
+    // launched scene above battle regardless of boot-config order.
+    this.scene.bringToTop(SCENE.skillTree)
     this.scene.pause(SCENE.battle)
   }
 
