@@ -180,9 +180,15 @@ export function createDefaultSkillTreeState(): SkillTreeState {
   return state
 }
 
-/** Migration fallback for saves written before `skills` existed (`skills:null`):
- * preserve the pre-S5 demo loadout instead of silently stripping abilities from
- * an existing player. Fresh saves must use `createDefaultSkillTreeState()`. */
+/** Pre-S5 demo loadout (all 4 fire-school skills pre-learned). Originally the
+ * migration fallback for saves written before `skills` existed
+ * (`skills:null`) -- superseded 2026-07-09 (tasks/skilltree-redo-brief.md
+ * point 3): `save.ts`'s `decodeSkillTree` now falls back to
+ * `createDefaultSkillTreeState()` instead, because the demo loadout was
+ * silently showing every tester "four skills already active" on a save that
+ * should have started with just 升龙斩. Kept here, unused by the migration
+ * path, as an inert archival record of the old demo state and for tests
+ * that exercise this function directly. */
 export function createLegacySkillTreeState(): SkillTreeState {
   const state = createEmptySkillTreeState()
   state.schools[0].level = 1 // unlocks allSklName[0][0] = slz
@@ -282,6 +288,14 @@ export function learnSkill(
 }
 
 // ---------- per-skill level-up ----------
+//
+// DORMANT (2026-07-09 user ruling, tasks/skilltree-redo-brief.md point 2):
+// this trio is a real AS3 feature (SkillControl.as `skillupgradeFunc`), but
+// spending it requires a 技能书 (skill-book) item this project hasn't built
+// yet -- "如果没做技能书，先不要留这个口子". SkillTreeScene no longer
+// imports or calls any of the three functions below; they're kept intact,
+// unit-tested, and ready to wire back up once a real skill-book system
+// exists. Do not delete.
 
 /** SkillControl.as:295 `150 * sl * sl * Math.sqrt(sl)`, sl = currentLevel. */
 export function getSkillUpgradeCost(currentLevel: number): number {

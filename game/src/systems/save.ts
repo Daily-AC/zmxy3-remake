@@ -19,12 +19,15 @@
 //    comment used to describe as a placeholder: it's now `SkillTreeSaveState`
 //    (systems/skillTree.ts), decoded defensively exactly like every other
 //    field below. A pre-S5 save has `skills: null`; decodeSkillTree treats
-//    that as a legacy migration and returns `createLegacySkillTreeState()` so
-//    players who already had the old five-skill demo loadout keep it. Brand-new
-//    saves use `createDefaultSkillTreeState()` instead: only slz is learned and
-//    bound to Y. `soul` (soulPurse.ts) is new for the same reason: S5's skill
-//    costs need a currency that survives a scene change, so the previously
-//    ephemeral wallet is persisted here too.
+//    that as a migration and returns `createDefaultSkillTreeState()` (only
+//    slz learned, bound to Y) -- same as any brand-new save. This was
+//    originally `createLegacySkillTreeState()` (preserving an old five-skill
+//    demo loadout for existing users), changed 2026-07-09 per
+//    tasks/skilltree-redo-brief.md point 3: that demo loadout was never
+//    something a player actually earned, so migrating it in was itself the
+//    "why do I have 4 skills already" bug. `soul` (soulPurse.ts) is new for
+//    the same S5 reason: skill costs need a currency that survives a scene
+//    change, so the previously ephemeral wallet is persisted here too.
 //  - Version starts at 1, not kagami's 2. Kagami's "2" is the result of a
 //    real v1->v2 migration already shipped in their game; we've never
 //    shipped a v1, so calling ours "2" would document a migration that
@@ -43,14 +46,7 @@ import { createEquipment } from './equipment'
 import type { Inventory } from './inventory'
 import { createInventory, addItem } from './inventory'
 import type { SkillTreeState, SchoolState, LearnedSkillEntry, BindKey, Role1TreeSkillId } from './skillTree'
-import {
-  BIND_KEYS,
-  ROLE1_SCHOOLS,
-  MAX_SCHOOL_LEVEL,
-  MAX_SKILL_LEVEL,
-  createDefaultSkillTreeState,
-  createLegacySkillTreeState,
-} from './skillTree'
+import { BIND_KEYS, ROLE1_SCHOOLS, MAX_SCHOOL_LEVEL, MAX_SKILL_LEVEL, createDefaultSkillTreeState } from './skillTree'
 
 export const GameSaveVersion = 1 as const
 export const GameSaveStorageKey = 'zmxy3-remake.save.v1'
@@ -221,13 +217,19 @@ function decodeInventory(saved: unknown): Inventory {
 /**
  * Decode a saved `skills` blob (systems/skillTree.ts's SkillTreeState). Any
  * shape mismatch -- most commonly a pre-S5 save's literal `null` -- falls
- * back to `createLegacySkillTreeState()`, preserving the old five-skill demo
- * loadout for existing users. A validly-shaped but genuinely empty state
- * decodes as empty, not defaulted -- only unreadable data gets the fallback.
+ * back to `createDefaultSkillTreeState()` (2026-07-09 user ruling,
+ * tasks/skilltree-redo-brief.md point 3, superseding the original
+ * `createLegacySkillTreeState()` fallback documented in this file's header):
+ * a pre-S5 save has no real record of ever "learning" anything, so silently
+ * granting it the old five-skill demo loadout was itself the bug users were
+ * seeing ("为什么显示我四个技能都激活了？") -- migrating it to the same
+ * single-starter-skill state every other save (old or new) begins with is
+ * the honest behavior. A validly-shaped but genuinely empty state decodes as
+ * empty, not defaulted -- only unreadable data gets the fallback.
  */
 function decodeSkillTree(saved: unknown): SkillTreeState {
   if (!isRecord(saved) || !Array.isArray(saved.schools) || saved.schools.length !== 2) {
-    return createLegacySkillTreeState()
+    return createDefaultSkillTreeState()
   }
   const schools = [decodeSchool(saved.schools[0], 0), decodeSchool(saved.schools[1], 1)] as [
     SchoolState,
