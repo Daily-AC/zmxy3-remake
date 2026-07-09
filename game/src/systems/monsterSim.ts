@@ -13,6 +13,39 @@
 //  - Animation-driven durations (hurt/attack/dead) come from monster30.json
 //    stopCounts × tick; the scene computes and passes them in.
 //  - Damage model is simplified physics: max(1, damage - def) (combat-rules-index.md).
+//
+// Hit-stun protection (combat-triage pen, 2026-07-10 -- fixes the reported
+// "怪物无限眩晕不反击"): every hit that lands re-enters `hurt` and resets
+// `modeElapsedMs` to 0 (see `applyHit` below), so a player who keeps landing
+// hits faster than `hurtDurationMs` can refresh `hurt` forever -- the monster
+// never gets a tick where `hasAttackTarget()`-equivalent logic would let it
+// act. The real AS3 defense against exactly this is `BaseMonster.as`'s
+// `beattackedtimes` counter (read directly off this project's own
+// `tmp/re-level1/mainscripts/scripts/base/BaseMonster.as` decompile,
+// `beMagicAttack()` lines 606-754):
+//   - `beMagicAttack()`'s very first line rejects the hit outright while
+//     `gc.protectedPerproty.getProperty(this,"isYourFather")` is true
+//     (`return false` before any damage/hurt logic runs at all).
+//   - Every hit that DOES land adds the attacking move's own
+//     `attackBackInfoDict[action].addprotection` (falls back to a flat `2`)
+//     to `this.beattackedtimes`. Once that exceeds a threshold --
+//     `> 49` for `isBoss` monsters, `> 59` for grunts (BaseMonster.as:743/750)
+//     -- the monster calls `setYourFather(gc.frameClips * 3, true)`, i.e.
+//     ~3000ms (frameClips=30 @ 30fps) of the above "isYourFather" hit
+//     immunity, and resets the counter to 0.
+//   - `export/hero/Role1.as:33-67` (悟空, the hero this bug was reported
+//     against) sets `addprotection:2.5` on EVERY ONE of `hit1`..`hit5` -- the
+//     entire 5-hit ground combo that caused the report uses this single
+//     uniform value (skills/finishers use other values, 1-5, not modeled
+//     here since `MonsterHit` carries no per-move addProtection field yet --
+//     Adapted simplification, but the exact real value for the actual combo
+//     path in play).
+//   - Net effect, faithfully ported below: a mashing player CAN stun-lock a
+//     monster for a while (exactly like the original), but after ~20-24
+//     combo hits land the monster gets a real ~3s window where it is fully
+//     hit-immune, its `hurt` animation runs to completion uninterrupted, and
+//     it returns to `chase`/`attack` (able to act/counter) -- so "从不反击"
+//     is no longer possible, matching the real game's own behavior.
 
 export type MonsterMode = 'patrol' | 'chase' | 'attack' | 'hurt' | 'dead' | 'gone'
 
@@ -93,6 +126,9 @@ export interface MonsterConfig {
   /** If present, the hit frame spawns a projectile instead of resolving a
    * melee-range attack-hit. Used by Monster30's AS3 Monster30Bullet1 chain. */
   rangedAttack?: RangedAttackConfig
+  /** BaseMonster.as:741/750 picks the hit-stun-protection threshold off this
+   * -- see file header. Defaults to the grunt threshold (59) when omitted. */
+  isBoss?: boolean
 }
 
 export interface RangedAttackConfig {
@@ -103,6 +139,12 @@ export interface RangedAttackConfig {
   spawnOffsetX?: number
   spawnOffsetY?: number
 }
+
+// See file header "Hit-stun protection" note for sourcing.
+const HIT_ADD_PROTECTION = 2.5 // Role1.as hit1..hit5's uniform addprotection
+const BOSS_PROTECTION_THRESHOLD = 49 // BaseMonster.as:743
+const GRUNT_PROTECTION_THRESHOLD = 59 // BaseMonster.as:750
+const PROTECTION_MS = 3000 // gc.frameClips(30) * 3 @ 30fps, BaseMonster.as:745/752
 
 export interface MonsterState {
   x: number
@@ -124,6 +166,13 @@ export interface MonsterState {
    * multi-tick attack only ever gets one shot at connecting, never one per
    * tick past the threshold). Reset false whenever a new attack starts. */
   attackHitResolved: boolean
+  /** BaseMonster.as `beattackedtimes` -- accumulates per landed hit, reset to
+   * 0 once it crosses the hit-stun-protection threshold (see file header). */
+  beattackedTimes: number
+  /** BaseMonster.as `isYourFather` hit-immunity window, in ms remaining.
+   * While > 0, `applyHit` ignores every incoming hit outright (no damage, no
+   * hurt re-trigger) -- ticks down to 0 every frame regardless of mode. */
+  protectionMs: number
 }
 
 export interface MonsterHit {
@@ -183,6 +232,8 @@ export function initMonster(cfg: MonsterConfig, x: number, y: number): MonsterSt
     resolvedAttackIds: [],
     accMs: 0,
     attackHitResolved: false,
+    beattackedTimes: 0,
+    protectionMs: 0,
   }
 }
 
@@ -203,6 +254,9 @@ function stepVertical(state: MonsterState, heroY: number | undefined, follow: Ve
 /** Resolve an incoming hero hit, if it is new. Returns emitted events. */
 function applyHit(state: MonsterState, hit: MonsterHit, cfg: MonsterConfig): MonsterEvent[] {
   if (state.mode === 'dead' || state.mode === 'gone') return []
+  // BaseMonster.beMagicAttack()'s own first line: `isYourFather` -> the hit
+  // is rejected outright, before dedup/damage/hurt even run (see file header).
+  if (state.protectionMs > 0) return []
   if (state.resolvedAttackIds.includes(hit.attackId)) return []
   state.resolvedAttackIds.push(hit.attackId)
   const dmg = Math.max(1, hit.damage - cfg.stats.def)
@@ -213,6 +267,12 @@ function applyHit(state: MonsterState, hit: MonsterHit, cfg: MonsterConfig): Mon
     state.action = 'dead'
     state.modeElapsedMs = 0
     return [] // death event fires when the dead animation completes
+  }
+  state.beattackedTimes += HIT_ADD_PROTECTION
+  const threshold = cfg.isBoss ? BOSS_PROTECTION_THRESHOLD : GRUNT_PROTECTION_THRESHOLD
+  if (state.beattackedTimes > threshold) {
+    state.beattackedTimes = 0
+    state.protectionMs = PROTECTION_MS
   }
   state.mode = 'hurt'
   state.action = 'hurt'
@@ -230,6 +290,7 @@ function tickMonster(
 ): MonsterEvent[] {
   const events: MonsterEvent[] = []
   if (state.cooldownMs > 0) state.cooldownMs = Math.max(0, state.cooldownMs - cfg.tickMs)
+  if (state.protectionMs > 0) state.protectionMs = Math.max(0, state.protectionMs - cfg.tickMs)
 
   if (hit) events.push(...applyHit(state, hit, cfg))
 

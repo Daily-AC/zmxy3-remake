@@ -57,7 +57,7 @@ describe('heroSim integration (fixed-timestep 组合)', () => {
       apex = Math.min(apex, s.vertical.y)
       ticks++
     }
-    expect(Math.round(400 - apex)).toBe(90)
+    expect(Math.round(400 - apex)).toBe(124) // gravity=1.5, see jump.ts header
     expect(s.vertical.y).toBe(400)
     expect(s.action).toBe('wait')
   })
@@ -95,6 +95,26 @@ describe('heroSim integration (fixed-timestep 组合)', () => {
     advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg) // chain hit2
     expect(s.combo.stage).toBe(2)
     expect(s.attackId).toBe(2) // new swing -> new id
+  })
+
+  it('exposes s.attacking=false during the post-swing grace window even though combo.stage stays nonzero (combat-triage pen, 2026-07-10)', () => {
+    // s.attacking is what BattleScene's resolveHeroHits() now gates the melee
+    // hitbox on -- combo.stage alone stays >0 through the whole grace window
+    // (chain memory), which used to leave the hitbox live long after the
+    // swing visually ended ("乌鸦还没被打就死了"). Ticks one TICK_MS at a
+    // time (like advanceHero's own internal stepping) so advanceHero's
+    // spiral-of-death budget cap (8 ticks/call) never truncates a call short
+    // of a full stage duration.
+    const s = initHeroState(cfg, 480)
+    advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg) // start hit1
+    expect(s.combo.stage).toBe(1)
+    expect(s.attacking).toBe(true) // genuinely mid-swing
+    for (let i = 0; i < 9; i++) advanceHero(s, NO_EDGES, TICK_MS, cfg) // finish hit1's swing (duration 300ms), no fresh press
+    expect(s.combo.stage).toBe(1) // still alive as chain memory
+    expect(s.attacking).toBe(false) // but the swing itself is over
+    for (let i = 0; i < 7; i++) advanceHero(s, NO_EDGES, TICK_MS, cfg) // let the grace window (220ms) expire too
+    expect(s.combo.stage).toBe(0)
+    expect(s.attacking).toBe(false)
   })
 
   it('cannot start a combo while airborne', () => {

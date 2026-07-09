@@ -234,6 +234,71 @@ describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
     expect(events.some((e) => e.type === 'death')).toBe(true)
   })
 
+  describe('hit-stun protection (combat-triage pen, 2026-07-10 -- fixes "怪物无限眩晕不反击")', () => {
+    // BaseMonster.as: every landed hit adds Role1's own addprotection(2.5) to
+    // beattackedtimes; crossing the threshold (59 grunt / 49 boss) grants
+    // ~3000ms of full hit-immunity and resets the counter. See monsterSim.ts's
+    // file header for the exact decompile citations.
+    function spamHits(m: MonsterState, cfg: MonsterConfig, count: number): void {
+      for (let i = 1; i <= count; i++) {
+        // Each hit lands on its own fresh attackId, well inside hurtDurationMs
+        // (500) of the previous one -- exactly the rapid-combo scenario the
+        // user reported ("连续攻击时怪物永远处于受击硬直"). Chip damage (1 per
+        // hit, after def) so MONSTER30_STATS's 150 hp survives the whole
+        // sequence -- this test is about the stun lock, not lethality.
+        advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId: i, damage: 4 } }, 10, cfg)
+      }
+    }
+
+    it('a grunt stays perpetually re-hurt below the protection threshold (reproduces the reported exploit)', () => {
+      const cfg = makeCfg()
+      const m = initMonster(cfg, 500, 400)
+      spamHits(m, cfg, 23) // 23 * 2.5 = 57.5 <= 59 threshold -- protection not yet granted
+      expect(m.mode).toBe('hurt') // still locked, exactly the reported bug
+      expect(m.protectionMs).toBe(0)
+    })
+
+    it('grants ~3s of full hit-immunity once a grunt crosses the 59 threshold, breaking the lock', () => {
+      const cfg = makeCfg()
+      const m = initMonster(cfg, 500, 400)
+      spamHits(m, cfg, 24) // 24 * 2.5 = 60 > 59 -- protection triggers on this hit
+      expect(m.protectionMs).toBe(3000)
+      expect(m.beattackedTimes).toBe(0) // reset on trigger
+      const hpAfterTrigger = m.hp
+
+      // Further hits are fully ignored while protected -- no damage, no re-hurt.
+      advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId: 999, damage: 30 } }, 10, cfg)
+      expect(m.hp).toBe(hpAfterTrigger)
+
+      // The hurt animation is free to run to completion (nothing is re-resetting
+      // modeElapsedMs anymore), so the monster genuinely leaves 'hurt' and can
+      // act again -- this is the "怪物会反击" acceptance bar.
+      run(m, noHit(500, true), cfg.hurtDurationMs + 10, cfg)
+      expect(m.mode).not.toBe('hurt')
+    })
+
+    it('uses the boss threshold (49, lower than grunt) when cfg.isBoss is set', () => {
+      const cfg: MonsterConfig = { ...makeCfg(), isBoss: true }
+      const m = initMonster(cfg, 500, 400)
+      spamHits(m, cfg, 19) // 19 * 2.5 = 47.5 <= 49 -- not yet
+      expect(m.protectionMs).toBe(0)
+      advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId: 20, damage: 30 } }, 10, cfg) // 20*2.5=50 > 49
+      expect(m.protectionMs).toBe(3000)
+    })
+
+    it('protection decays back to 0 over real time, letting future hits land again', () => {
+      const cfg = makeCfg()
+      const m = initMonster(cfg, 500, 400)
+      spamHits(m, cfg, 24) // trigger protection
+      expect(m.protectionMs).toBe(3000)
+      run(m, noHit(500, true), 3000, cfg)
+      expect(m.protectionMs).toBe(0)
+      const hpBefore = m.hp
+      advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId: 5000, damage: 30 } }, 10, cfg)
+      expect(m.hp).toBeLessThan(hpBefore) // hits connect again once protection lapses
+    })
+  })
+
   it('ignores hits once gone', () => {
     const cfg = makeCfg()
     const m = initMonster(cfg, 500, 400)

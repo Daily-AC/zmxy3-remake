@@ -6,11 +6,18 @@
 //  - While action is jump1 and vy turns downward, action switches to jump3 (fall).
 //  - Landing resets jumpCount to 0.
 //
-// TODO-verify: gravity magnitude is NOT in the reverse-engineering docs (only
-// jumpPower is given). GRAVITY = 2 px/tick^2 yields a ~90px apex over ~19 ticks
-// (~0.63s) of air time at 30fps (semi-implicit Euler), which reads correctly,
-// but the exact original value should be recovered from BaseObject's per-frame
-// gravity before this is called final.
+// Gravity (combat-triage pen, 2026-07-10 -- corrects the module's previous
+// TODO-verify placeholder of 2, which caused the reported "跳跃抛体太快，
+// 高度不够" complaint): `base.BaseObject.as:55` declares
+// `protected var graity:Number = 1.5;` -- the hero's own baseline (Role1/
+// BaseHero never overrides this field; `BaseHero.as:1616`'s per-tick
+// `this.speed.y += graity` is exactly this module's `state.vy += cfg.gravity`
+// step below). `BaseHero.as` DOES reassign `graity` to 3.75/1.5 inside
+// `turnToGXP()`/`turnToNormal()`, but that pair is a temporary combat-buff
+// toggle (无双), not the resting jump arc, so it is out of scope here.
+// gravity=1.5, jumpPower=-20 (semi-implicit Euler) yields a ~124px apex over
+// ~26 ticks (~0.87s) of air time at 30fps -- a real ~38% higher/slower arc
+// than the old placeholder, not a guessed tuning pass.
 
 export type AirAction = 'jump1' | 'jump2' | 'jump3' | null
 
@@ -27,7 +34,7 @@ export interface JumpConfig {
 }
 
 export const DEFAULT_JUMP_CONFIG: JumpConfig = {
-  gravity: 2, // TODO-verify: not documented; tuned to jumpPower=-20 @30fps
+  gravity: 1.5, // base.BaseObject.as:55 `graity` default -- see file header
   jumpPower: -20,
   groundY: 0,
   maxJumps: 2,
