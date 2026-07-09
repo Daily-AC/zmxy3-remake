@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   CoopChannel,
+  createSocialRoomTransport,
   type CoopRoomTransport,
   type CoopTransportMessageType,
 } from '../src/net/coopChannel'
+import type { ServerMessage, SocialRoomConnection } from '../src/net/socialClient'
 import {
   encodeHeroState,
   encodeHitIntent,
@@ -74,6 +76,7 @@ describe('CoopChannel', () => {
         attackerUserId: 'u-peer',
         targetMonsterId: 'm-1',
         attackId: 'combo-3',
+        damage: 35,
         skillId: 'hit3',
         clientTimeMs: 1_125,
       }),
@@ -86,6 +89,7 @@ describe('CoopChannel', () => {
         attackerUserId: 'u-peer',
         targetMonsterId: 'm-1',
         attackId: 'combo-3',
+        damage: 35,
         skillId: 'hit3',
         clientTimeMs: 1_125,
       }),
@@ -105,6 +109,7 @@ describe('CoopChannel', () => {
         attackerUserId: 'u-peer',
         targetMonsterId: 'm-1',
         attackId: 'combo-3',
+        damage: 35,
         clientTimeMs: 1_225,
       }),
       fromUserId: 'u-peer',
@@ -121,5 +126,50 @@ describe('CoopChannel', () => {
     unsubscribe()
     transport.emit('event', intentMessage)
     expect(received).toHaveLength(2)
+  })
+
+  it('adapts SocialRoomConnection into a typed multi-subscriber room transport', () => {
+    const sent: unknown[] = []
+    const connection = {
+      onMessage: () => {},
+      send: (message: unknown) => {
+        sent.push(message)
+        return true
+      },
+    } as Pick<SocialRoomConnection, 'onMessage' | 'send'>
+    const transport = createSocialRoomTransport(connection)
+    const stateFrames: unknown[] = []
+    const eventFramesA: unknown[] = []
+    const eventFramesB: unknown[] = []
+
+    const unsubscribeState = transport.onRoomMessage('state', (message) => stateFrames.push(message))
+    const unsubscribeEventA = transport.onRoomMessage('event', (message) => eventFramesA.push(message))
+    transport.onRoomMessage('event', (message) => eventFramesB.push(message))
+
+    const heroMessage = { ...encodeHeroState(hero, 3, 1_200), fromUserId: 'u-peer' }
+    const intentMessage = {
+      ...encodeHitIntent({
+        attackerUserId: 'u-peer',
+        targetMonsterId: 'm-1',
+        attackId: 'combo-3',
+        damage: 35,
+        clientTimeMs: 1_225,
+      }),
+      fromUserId: 'u-peer',
+    }
+
+    expect(transport.sendRoomMessage(encodeMonsterState([monster], 4, 1_300))).toBe(true)
+    connection.onMessage(heroMessage as ServerMessage)
+    connection.onMessage(intentMessage as ServerMessage)
+    connection.onMessage({ type: 'ready_changed', userId: 'u-peer', ready: true } as ServerMessage)
+    unsubscribeState()
+    unsubscribeEventA()
+    connection.onMessage(heroMessage as ServerMessage)
+    connection.onMessage(intentMessage as ServerMessage)
+
+    expect(sent).toEqual([encodeMonsterState([monster], 4, 1_300)])
+    expect(stateFrames).toEqual([heroMessage])
+    expect(eventFramesA).toEqual([intentMessage])
+    expect(eventFramesB).toEqual([intentMessage, intentMessage])
   })
 })
