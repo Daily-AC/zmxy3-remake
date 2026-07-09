@@ -343,3 +343,6 @@
 - **协作拓扑事故记档**：climb-engine 的下级 codex 包装器"点火即退"，对上级转达的扩单拒收（只认直接 orchestrator 的显式派发）——扩单一度没真跑。已捅回 climb-engine 亲自重派，现已确认在途（工作树可见 pickup/monsterSim/level1/level2 正在被改）。纪律：**经由中间层的追加指令必须要求中间层确认下级真实开跑**（收到"已转达"不算数，要看到进程/文件证据）。
 - 手感根因（climb-engine 考古坐实）：**"小兵不打我"= normalAttackRate 字段张冠李戴**——数值表借用了 AS3 无关的 probability 字段（0.15），真实出手判定字段 normalAttackRate 杂兵构造函数根本没覆写、应取基类默认 0.3；monster30/5 恰是仅有的两个用对字段的物种，正好解释"只有乌鸦怪打我"。修表规则：逐物种查 AS3 构造函数有无覆写，无则 0.3（含 level2.ts 边界例外已授权）。
 - 浏览器冒烟（vite:5301 独立端口+独立 tab）：主菜单→存档 6 槽→选人→世界地图渲染与导航全正常；进 L1 亲验因工作树活改（HMR 重载）暂停，等扩单 commit 后续验。
+- 12:2x **economy-archaeology 收棒（tasks/economy-archaeology-report.md，369 行）**，两大真相改写经济线：①炼丹炉=StrengthEquipment 四页窗（强化/熔炼/打造/分解），配方全部硬编码 AllEquipment.as——38 条打造配方/强化成功率二维表/熔炼配方/分解产出表**全部逐字抄录到手**；②**否证"击杀掉魂"**：原版怪死只掉装备+1级强化石（fallEquip/fallStone），灵魂进项=卖装备(getValue)+卖白装+任务+洗技能返还，经济闭环真相="杀怪→掉装备→卖/分解→灵魂+材料喂炉子"。装备全表 218 件 schema 完整、提取难度低。四待查：药品数值/装备卖价来源/玉衡石天枢石渠道/制作书 fill 冲突。systems-map.md 经济节点已按真相更新。
+- 新棒 **codex-econ-extract**：装备全表+逐怪 fallList 机械提取→game/src/data/original/*.json（幂等脚本+计数对账判据）+四待查项。
+- **geometry 线卡死救援**：codex job 74 分钟 CPU 0.09s/日志冻结/零产出（判定三样全中），已令 codex-geometry 杀掉重派（全新一次性调用，二次卡死则走 codex exec 裸救援）。climb-engine 扩单三件确认真跑（status 见真实文件读取）。
