@@ -360,3 +360,15 @@
 - 16:3x **coop-shell 收棒验收通过（9 commits, dcbb2ae..f468acb）**：新流程"登录→选人→直进地图"落地（MainMenuScene 退化为登录壳、slot0 自动、联机入口进世界地图）、LoginScene/LobbyScene/socialClient 全链两 tab 真机验证（11 张证据图：注册→建房→实时互见→ready→双双进 L1）；**挖出真雷：social-server 无 CORS 头，线上跨域部署下真实浏览器完全无法注册登录**（此前 Node 压测天然绕过），已修（aefb532）。主会话终审：双套测试亲跑绿（game 575 + social 41/41+冒烟）、抽验证据图、master 推送（..f468acb）、**social-server 带 CORS 重部署 home 并线上预检 204 亲验**（裁决依据：联机为用户硬需求、改动最小已测，报备）。发令：coop-sync 开始 BattleScene 集成（单支笔窗口移交）、B 棒补终审截图。
 - 17:2x **大合流+上线**：①B 棒终审通过（六件截图亲验：塔顶巫鹰高度触发/宫殿穿云/掉落新样式/技能树置顶修复 ee5a7e8——它还抓修了"技能树被战斗画面盖住"的真 bug；裁决：云影 alpha 0.12→0.3 待集成后改，乌鸦重叠=原版刷怪观感不动）；②furnace-recipe 四 commit 交付（配方引擎/老君三工具/FurnaceRecipeView/常量导出）；③coop-sync 纯逻辑四 commit + 集成 codex 在跑（socialClient 消息类型拓宽为第一步，简化设计=可信客户端伤害+host 权威 hitQueue）；④主会话换肤两屏交付（4edd47f：mock 即素材管线，splash Ken-Burns+火星+文牒像素对位+盖章涟漪）。**全部推送（..dec1a58）+ 干净 worktree 构建验证 + 部署 zaixu + 线上真机冒烟**（注册→地图→联机入口，prod CORS 生效实证）。剩：coop 战斗内集成（在途）→ 全链双人亲验 → 云影加深 → 终包。
 - 17:4x **furnace-recipe 终审通过（5 commit 至 da999da）+ 登录页返工上线（94b511c）+ agent-server 部署**。炉棒证据纪律标杆：两条判据路径均以 localStorage 存档落盘核验（灵魂 200→0/背包 whg 入库/atk 落在 equipment.json 区间），老君真 LLM 报价确认→craft_recipe 意图→游戏侧权威执行；顺手修了 persistSlot 不落 skillTree/soul 的真 bug。遗留记档：宝石附魔/邪灵魂器消耗兜底 1600/六属性字段无 Effect 槽位静默丢弃/聊天文本溢出面板（backlog）/**opencode+DeepSeek provider 本机启动即崩需另棒查（线上正常）**/Phaser4 输入只认 mouse 事件不认 PointerEvent（坑单）。登录页返工：用户打回"糊弄"成立——改为背景图手术（PIL 擦除画上占位字+链接行）+全透明输入框嵌画框+逐元素倾角（1.5~2.9° 实测），已部署。zmxy-agent 重启带上代炼工具，welcome[laojun] 回归绿。**在途仅剩 coop-sync 战斗集成**。
+
+### === 会话交接 session6 → session7（2026-07-09 18:0x，用户拍板开新会话打磨前端；黑客松截止 ~22:35）===
+
+换会话原因：session6 上下文 53% + 用户要开前端打磨专场。remote master=3a39671 全推，线上 https://zaixu.qmledmq.cn:8443 = 同版本。读 CLAUDE.md（总纲 3c 视觉基调/3d 屏幕流为最新拍板）+ 本文件即可接手。
+
+**线上现状（全部主会话终审过）**：splash 破晓 keyart→通关文牒登录（透明输入嵌画框+逐元素倾角+盖章涟漪，用户两轮打回后过审）→选人→世界地图（联机共斗入口+炼丹炉配方版）→L1 九重天爬塔（bg11 对位/平台碰撞/乌鸦弹道/掉魂球/单掷掉落/真物品表/反刷门/技能灵魂激活）。老君代炼线上可用（agent-server 已带 craft 工具重启，welcome 回归绿）。
+
+**在途（唯一）**：coop-sync 的 BattleScene 战斗内同步集成（codex job + 看门狗，包装层 codex-coop-sync 会向本会话信箱汇报——新会话接手后此汇报会丢失，**接手第一件事：查 git log 看 coop 集成是否已 commit + 查工作树 + tasks/coop-sync-report.md 增补**；其纯逻辑已合入 fb5e417..f27e299）。集成判据：两 tab 同房互见/同打怪/host 权威/通关同步，证据 tmp/coop-sync-evidence/。
+
+**接手待办排序**：①coop 集成收口+双人两 tab 终审+部署（联机是提交硬需求）；②小尾巴：爬塔云影 alpha 0.12→0.3（BattleScene，等集成合入后动）、老君聊天文本溢出面板（FurnaceRecipeView）；③用户亲玩轮；④**19:00~21:00 终包窗口**：electron exe→home 真机（tools/acceptance/，wanctl 链路），提交材料含 keyart（tmp/keyart/ 两张终稿）；⑤提交叙事素材：progress.md 本身就是"CC 构建大型项目"的过程证据。
+**前端打磨专场素材**：定稿 mock=tmp/keyart/{keyart-v1-dawn,login-mock-v2}.png；入库件 game/public/assets/keyart/；手法=mock 即素材+PIL 测位+逐元素倾角（LoginScene.ts 是范例）；Phaser DOMElement rotation 无效须用 CSS transform；Phaser4 输入只认 mouse 事件；大厅 LobbyScene/选人/世界地图按钮仍是素面板待皮。
+**纪律**：实现类一律 codex；高流量文件改动即刻 commit；隔层转达要看到开跑证据；push 用 -c http.proxy；部署=push 后 ssh home-wsl 跑 ~/deploy-zm-frontend.sh；agent-server/social-server 改动需 systemctl restart zmxy-agent/zmxy-social；线上验收亲跑（本会话 CORS 事故教训：Node 脚本测不出浏览器跨域）。
