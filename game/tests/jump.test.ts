@@ -38,9 +38,10 @@ describe('jump physics (重力/落地/跳跃曲线)', () => {
       apex = Math.min(apex, v.y)
       ticks++
     }
-    // gravity=2, jumpPower=-20 (semi-implicit Euler): apex 90px, 19 ticks air.
-    expect(Math.round(400 - apex)).toBe(90)
-    expect(ticks).toBe(19)
+    // gravity=1.5 (base.BaseObject.as:55), jumpPower=-20 (semi-implicit
+    // Euler): apex 124px, 26 ticks air.
+    expect(Math.round(400 - apex)).toBe(124)
+    expect(ticks).toBe(26)
     // Lands exactly back on the ground with state reset.
     expect(v.y).toBe(400)
     expect(v.grounded).toBe(true)

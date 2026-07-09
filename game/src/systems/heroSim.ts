@@ -54,6 +54,17 @@ export interface HeroState {
    * at most once. 0 means no swing has started yet.
    */
   attackId: number
+  /** True only while genuinely mid-swing (combo.ts's `attacking`, AS3's
+   * isAttacking()) -- false during the post-swing grace window even though
+   * `combo.stage` stays nonzero there as chain memory (see combo.ts's
+   * header). Callers that want to know "is the melee hitbox live right now"
+   * must check THIS, not `combo.stage !== 0` -- the same class of mixup
+   * jump-gating below was fixed for (see the `comboRes.attacking` comment on
+   * the jump line), left unfixed on BattleScene's own hero-hits resolver
+   * until the combat-triage pen (2026-07-10, "乌鸦还没被打就死了": the melee
+   * box was staying live, silently re-tested every frame at the hero's
+   * then-current position, for up to graceMs after every swing ended). */
+  attacking: boolean
   /** Accumulated real time not yet consumed by a full tick. */
   accMs: number
   /** Deterministic sim clock (sum of ticks), used for double-tap timing. */
@@ -88,6 +99,7 @@ export function initHeroState(cfg: HeroConfig, x: number): HeroState {
     action: 'wait',
     facing: -1,
     attackId: 0,
+    attacking: false,
     accMs: 0,
     simClockMs: 0,
   }
@@ -144,6 +156,7 @@ function tick(state: HeroState, edges: HeroEdges, cfg: HeroConfig): void {
 
   stepVertical(state.vertical, cfg.jump, state.x)
 
+  state.attacking = comboRes.attacking
   state.action = selectAction(state, comboRes.attacking, comboRes.action)
 }
 
