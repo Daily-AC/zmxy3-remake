@@ -97,6 +97,22 @@ export function stepDrops(
   const remaining: DropEntity[] = []
   const picked: PickedStack[] = []
   for (const d of drops) {
+    // 灵魂球（2026-07-09 用户拍板对齐原版）：不落地、不等靠近——出生即自动
+    // 飘向人物，加速渐快，贴身即被吸收。d.vy 复用为飘行速度累加器。
+    if (d.kind === 'soul') {
+      const dx = heroX - d.x
+      const dy = heroY - d.y
+      const dist = Math.hypot(dx, dy)
+      d.vy = Math.min(16, d.vy + 0.9)
+      if (dist <= Math.max(26, d.vy)) {
+        picked.push({ kind: 'soul', amount: d.amount })
+      } else {
+        d.x += (dx / dist) * d.vy
+        d.y += (dy / dist) * d.vy
+        remaining.push(d)
+      }
+      continue
+    }
     if (!d.grounded) {
       const fromY = d.y
       d.vy += cfg.gravity
@@ -115,9 +131,7 @@ export function stepDrops(
     const dx = heroX - d.x
     const dy = heroY - d.y
     if (Math.hypot(dx, dy) <= cfg.pickupRadius) {
-      if (d.kind === 'soul') {
-        picked.push({ kind: 'soul', amount: d.amount })
-      } else if (d.kind === 'consumable') {
+      if (d.kind === 'consumable') {
         picked.push({ kind: 'consumable', consumableId: d.consumableId })
       } else {
         picked.push({ item: d.item, qty: d.qty })

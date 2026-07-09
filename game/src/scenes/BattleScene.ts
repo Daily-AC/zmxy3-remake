@@ -1654,16 +1654,28 @@ export class BattleScene extends Phaser.Scene {
     for (const o of this.climbClouds) o.destroy()
     this.climbClouds = []
     if (!active || !this.textures.exists('cloud_puff1')) return
+    // 每一块可站立的非实体平台都要有云——不做 y 带过滤（首版只给
+    // -1800..-300 带内的平台铺云，塔下段平台裸奔，用户 23:0x 红框点名
+    // "云的位置和实际空气块位置不一致"）。注意 sl11 的墙来自 mined 几何
+    // （level1-geometry.json），不是 fallback 列表：平台宽 240~455，另有两条
+    // 1100 宽的全场穿透膜（塔段出入口，不是可视平台）——膜跳过；宽平台不许
+    // 单朵拉伸成条带（首修版的第二个错），改用 2~3 朵自然比例云拼铺。
     let i = 0
     for (const wall of this.currentWalls) {
-      const style = level1PlatformDebugStyle(wall)
-      if (!style.adaptedCloudPlaceholder) continue
-      const tex = i % 2 === 0 ? 'cloud_puff1' : 'cloud_puff2'
-      const img = this.add.image(wall.x + wall.width / 2, wall.y + wall.height / 2 + 6, tex).setDepth(3)
-      // 云比碰撞体宽一圈、压在平台线上，顶缘≈站立线，脚感与视觉对齐。
-      img.displayWidth = wall.width * 1.35
-      img.displayHeight = Math.max(46, wall.width * 0.36)
-      this.climbClouds.push(img)
+      if (wall.type === 'solid') continue
+      if (wall.width > 600) continue // 全场穿透膜（1100 宽），非平台
+      const segs = Math.max(1, Math.round(wall.width / 200))
+      for (let k = 0; k < segs; k++) {
+        const tex = (i + k) % 2 === 0 ? 'cloud_puff1' : 'cloud_puff2'
+        const cx = wall.x + ((k + 0.5) / segs) * wall.width
+        const w = Math.min(wall.width * 1.15, 280)
+        const h = w * 0.42
+        // 云心压在站立线下方：顶部羽化区托住脚底，视觉站立线≈碰撞线。
+        const img = this.add.image(cx, wall.y + h * 0.22 + (k % 2) * 8, tex).setDepth(3)
+        img.displayWidth = w
+        img.displayHeight = h
+        this.climbClouds.push(img)
+      }
       i++
     }
     // 塔底云海带：起跳地面(GROUND_Y=400)本身没有任何地面美术，悟空开局
@@ -1689,7 +1701,7 @@ export class BattleScene extends Phaser.Scene {
       const img = this.add
         .image(d.x, d.y, j % 2 === 0 ? 'cloud_puff2' : 'cloud_puff1')
         .setDepth(-20)
-        .setAlpha(0.75)
+        .setAlpha(0.5) // 压低到明显弱于平台云，避免被误读成可站立
         .setScrollFactor(d.s, 1)
       img.displayWidth = d.w
       img.displayHeight = d.w * 0.42
@@ -3031,15 +3043,13 @@ export class BattleScene extends Phaser.Scene {
   // floating name text. No opaque backing, rarity ring, or nearby blue frame.
   private makeDropSprite(drop: DropEntity): Phaser.GameObjects.Container {
     if (drop.kind === 'soul') {
-      const orb = this.add.circle(0, 0, 10, 0xd33131, 0.9).setStrokeStyle(2, 0xffb0a0, 0.9)
-      const shine = this.add.circle(-3, -3, 3, 0xfff1e8, 0.85)
-      const label = this.add
-        .text(0, 16, `灵魂 +${drop.amount}`, {
-          fontSize: '12px',
-          color: '#ffd8ce',
-        })
-        .setOrigin(0.5, 0)
-      return this.add.container(drop.x, drop.y, [orb, shine, label]).setDepth(8)
+      // 原版语义（用户 2026-07-09 拍板）：小紫球，自己飘进人物（homing 在
+      // systems/pickup.ts 的 soul 分支），无文字标签——数值反馈走吸收时的
+      // floatText。红色大球版被用户红框点名，弃。
+      const halo = this.add.circle(0, 0, 8, 0x9b59d0, 0.28)
+      const orb = this.add.circle(0, 0, 5, 0x8e4fd0, 0.95).setStrokeStyle(1.5, 0xd8b4ff, 0.9)
+      const shine = this.add.circle(-1.5, -1.5, 1.6, 0xf4e8ff, 0.9)
+      return this.add.container(drop.x, drop.y, [halo, orb, shine]).setDepth(8)
     }
     if (drop.kind === 'consumable') {
       const spec = CONSUMABLE_SPECS[drop.consumableId]
