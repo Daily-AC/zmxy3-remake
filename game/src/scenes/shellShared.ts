@@ -12,6 +12,8 @@ export const SCENE = {
   slotSelect: 'slotselect',
   characterSelect: 'charselect',
   worldMap: 'worldmap',
+  coopLogin: 'cooplogin',
+  coopLobby: 'cooplobby',
   battle: 'battle',
   skillTree: 'skilltree',
 } as const

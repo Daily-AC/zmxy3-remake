@@ -4,6 +4,8 @@ import { SlotSelectScene } from './scenes/SlotSelectScene'
 import { CharacterSelectScene } from './scenes/CharacterSelectScene'
 import { WorldMapScene } from './scenes/WorldMapScene'
 import { SkillTreeScene } from './scenes/SkillTreeScene'
+import { LoginScene } from './scenes/LoginScene'
+import { LobbyScene } from './scenes/LobbyScene'
 import { BattleScene } from './scenes/BattleScene'
 import { ensureArtFontsLoaded } from './systems/artFont'
 
@@ -29,6 +31,6 @@ ensureArtFontsLoaded().finally(() => {
     // Enables `scene.add.dom(...)` so the dialogue input can live inside the
     // canvas (kept aligned to game coords by Phaser across scaling/letterboxing).
     dom: { createContainer: true },
-    scene: [MainMenuScene, SlotSelectScene, CharacterSelectScene, WorldMapScene, SkillTreeScene, BattleScene],
+    scene: [MainMenuScene, LoginScene, LobbyScene, SlotSelectScene, CharacterSelectScene, WorldMapScene, SkillTreeScene, BattleScene],
   })
 })
