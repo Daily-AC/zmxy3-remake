@@ -330,3 +330,9 @@
 **session6 建议优先**：①用户晨间反馈处置；②手感校准轮（Ruffle 活原版基准，一直欠）；③技能树/背包 UI 生图皮统一轮（素面板中间态）；④__shellScene 谎报修复；⑤音效覆盖对账+伤害飘字字体（B 层账本）；⑥承伤档位用户亲校。
 
 **纪律（血泪版）**：交付用户前主会话必亲玩线上版；实现活一律 codex（用户硬指令）；高流量文件（BattleScene）改动即刻 commit（两次双向收编事故）；共享 playwright 必须 bringToFront+断言 URL 或独立 context；派 codex 写装依赖服务=brief 开头写"不装包不跑测试验证交包裹层"；push 大素材需 postBuffer+长超时；每 commit 立即汇报（behavior-fidelity 三次静默教训）。（用户拍板：前端 zaixu.qmledmq.cn，正式后端预留 zaixu-api.qmledmq.cn，zm 弃用）。执行：C:\www\zm 改名 zaixu、caddy 受控副本删 zm-site 增 zaixu-site、主 Caddyfile import 替换、删已部署孤儿、一键脚本 SITE 默认改 zaixu（文件名 ~/deploy-zm-frontend.sh 沿用，跟 CLAUDE.md §3b）、build/dist 零改动（renamed 非 rebuild），apply.ps1 -DeployCaddy（C:\infra commit d3b37fe）。**复验全绿**：curl https://zaixu.qmledmq.cn:8443 → 200+标题、keyart 3385731 image/png；playwright 截图水墨首屏真实渲染；zm.qmledmq.cn 游戏彻底下线（现只落 *.qmledmq.cn 通配占位 45B text/plain）；zm-dev 零打扰（agent welcome[laojun]+/social/me 401）。report tasks/frontend-deploy-report.md 域名状态更新。**最终前端 URL：https://zaixu.qmledmq.cn:8443**。
+
+## 2026-07-09 session6（09:30 起）L1 九重天空间结构重建
+
+- 用户实玩指出 L1 三宗罪：背景不对、出怪顺序不对、地图空间不对（原版=纵向爬塔跳阶梯+乌鸦怪追击+顶部巫鹰战且乌鸦照刷）。主会话重挖 SWF 证实：1.swf 实为三子场景（bg11 1132×3051 纵图爬塔 + bg12/13 ~4890 宽横向卷轴），session1 移植时"爬塔→横版"适配把三段压成了单屏平地。
+- 真源三处全部挖到：StageListener11.as（刷怪 3s 首轮/6s 周期/每轮 2 只 Monster30 于英雄头顶上方、y≤-1900 触发镜头上摇+巫鹰(750,-2050)、Boss 战刷怪不停，frameClips=24 已核实）；平台碰撞架构 = 场景 MC 子节点命名标记（isWall/isThroughWall/isThroughUpButDownWall/isThroughDownButUpWall，PhysicsWorld.addSubObj 收集）；场景符号 sl11=195/sl12=209/sl13=211（主 SWF）。AS3 全量导出在 tmp/re-level1/。
+- 10:30 双 codex 并行派工（用户拍板实现类一律 codex）：**codex-geometry**（挖 195/209/211 平台矩形→level1-geometry.json+overlay 验收图，brief=tasks/level1-geometry-brief.md）∥ **codex-climb-engine**（平台碰撞 platformSim+纵向/横向卷轴相机+持续刷怪器+Monster30 飞行追击+三子场景 transferDoor 串联，brief=tasks/level1-climb-engine-brief.md）。文件产权互斥，geometry JSON schema 冻结作契约，engine 先 fixture 后换真数据。判据写死在 brief；主会话终审=亲跑测试+浏览器亲验爬塔。
