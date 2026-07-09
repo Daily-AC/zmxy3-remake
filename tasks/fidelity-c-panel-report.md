@@ -72,6 +72,8 @@ Evidence:
 - `tmp/panel-c-evidence/c-panel-fixed-pagination-annotated.png`: red vertical lines mark prev/right and next/left button edges; green box is the fixed page-number text box inside the gap.
 - Regression test: `tests/backpackWindowLayout.test.ts` asserts the page text box does not overlap `PREV_BTN` or `NEXT_BTN`.
 
+**Follow-up (main-session verdict, 2026-07-09, commit `688a860`)**: at the fixed 30px box width, `"${page} / ${total}"` (with spaces) word-wraps onto two lines ("1 /" + "1") — no longer overlapping the buttons (the actual bug criterion) but visually cramped. Dropped the spaces around the slash (`"${page}/${total}"`); at 12px font this renders as a single line ("1/1") fully inside the gap. Verified live via `window.__toggleBackpack()` + screenshot (`tmp/panel-c-evidence/crop-page-singleline.png`); no coordinate changes needed, no button overlap reintroduced.
+
 ## Bug #1: Left Stat Column Crowding
 
 Status: not reproduced in the states I could verify from code/assets in this sandbox.
