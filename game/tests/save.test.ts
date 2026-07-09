@@ -259,14 +259,18 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
     expect(loaded.soul).toBe(1234)
   })
 
-  it('restoreGameState migrates skills:null legacy saves to the old five-skill loadout', () => {
+  it('restoreGameState migrates skills:null legacy saves to the starter single-skill default (2026-07-09 拍板)', () => {
+    // Previously fell back to createLegacySkillTreeState()'s old five-skill
+    // demo loadout; changed per tasks/skilltree-redo-brief.md point 3 -- a
+    // legacy save never actually earned those four extra skills, so
+    // migrating it in was the "为什么显示我四个技能都激活了" bug users saw.
     const legacy: GameSave = {
       ...createGameSave({ progression: createProgression(1), equipment: createEquipment(), inventory: createInventory(4) }),
       skills: null,
       soul: undefined as unknown as number,
     }
     const loaded = restoreGameState(legacy)
-    expect(loaded.skillTree.bindings).toEqual({ Y: 'slz', U: 'lys', I: 'hytj', O: 'lyfb', L: 'jdy' })
+    expect(loaded.skillTree.bindings).toEqual({ Y: 'slz', U: null, I: null, O: null, L: null })
     expect(loaded.soul).toBe(0)
   })
 
