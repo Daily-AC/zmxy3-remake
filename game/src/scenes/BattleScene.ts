@@ -834,6 +834,10 @@ export class BattleScene extends Phaser.Scene {
     // 米黄"（用户反馈"第一关的图还没贴上来"）。风格零风险：像素就来自 bg11。
     this.load.image('cloud_puff1', 'assets/generated/cloud_puff1.png')
     this.load.image('cloud_puff2', 'assets/generated/cloud_puff2.png')
+    // L1 爬塔平台梁：原版是雕花玉石横梁（用户 23:19 参照图），vendor 未提取到
+    // 该件——按总纲用生图补（gpt-image-2，喂原版截图当风格参照；青白玉+淡金
+    // 云纹浮雕，1743x292 可横向平铺条）。
+    this.load.image('platform_beam', 'assets/generated/platform_beam.png')
     for (let i = 1; i <= TRANSFERWIND_FRAME_COUNT; i++) {
       this.load.image(`transferwind_${i}`, `assets/extracted/effects/transferwind_${i}.png`)
     }
@@ -1629,7 +1633,10 @@ export class BattleScene extends Phaser.Scene {
       cameraBounds.right - cameraBounds.left,
       cameraBounds.bottom - cameraBounds.top,
     )
-    this.bgBase?.setTexture(stage.background.base, '__BASE').setScale(1).setPosition(bgPlacement.x, bgPlacement.y)
+    // 爬塔段 bg11 横向 +7%：原始 1132px 放置在 x=-79 只盖到 1053，相机右界
+    // 1132 时右缘露 79px 黑边（2026-07-09 梁版截图暴露）。轻微横向拉伸补满。
+    const bgScaleX = stage.mode === 'climb' ? (stage.bounds.right - bgPlacement.x) / 1132 : 1
+    this.bgBase?.setTexture(stage.background.base, '__BASE').setScale(bgScaleX, 1).setPosition(bgPlacement.x, bgPlacement.y)
     this.bgBase?.setScrollFactor(bgPlacement.scrollFactorX, bgPlacement.scrollFactorY)
     this.bg12Layer?.setVisible(stage.id === 'sl12')
     this.bg13Layer?.setVisible(stage.id === 'sl13')
@@ -1654,40 +1661,31 @@ export class BattleScene extends Phaser.Scene {
     for (const o of this.climbClouds) o.destroy()
     this.climbClouds = []
     if (!active || !this.textures.exists('cloud_puff1')) return
-    // 每一块可站立的非实体平台都要有云——不做 y 带过滤（首版只给
-    // -1800..-300 带内的平台铺云，塔下段平台裸奔，用户 23:0x 红框点名
-    // "云的位置和实际空气块位置不一致"）。注意 sl11 的墙来自 mined 几何
-    // （level1-geometry.json），不是 fallback 列表：平台宽 240~455，另有两条
-    // 1100 宽的全场穿透膜（塔段出入口，不是可视平台）——膜跳过；宽平台不许
-    // 单朵拉伸成条带（首修版的第二个错），改用 2~3 朵自然比例云拼铺。
-    let i = 0
-    for (const wall of this.currentWalls) {
-      if (wall.type === 'solid') continue
-      if (wall.width > 600) continue // 全场穿透膜（1100 宽），非平台
-      const segs = Math.max(1, Math.round(wall.width / 200))
-      for (let k = 0; k < segs; k++) {
-        const tex = (i + k) % 2 === 0 ? 'cloud_puff1' : 'cloud_puff2'
-        const cx = wall.x + ((k + 0.5) / segs) * wall.width
-        const w = Math.min(wall.width * 1.15, 280)
-        const h = w * 0.42
-        // 云心压在站立线下方：顶部羽化区托住脚底，视觉站立线≈碰撞线。
-        const img = this.add.image(cx, wall.y + h * 0.22 + (k % 2) * 8, tex).setDepth(3)
-        img.displayWidth = w
-        img.displayHeight = h
-        this.climbClouds.push(img)
+    // 平台可视化 = 在碰撞矩形内部平铺贴图（用户 23:2x 拍板的做法，云朵方案
+    // 全废）：贴图为生图的雕花玉石横梁 platform_beam（原版参照见 preload 注释），
+    // tileSprite 左上角对齐 wall.x/wall.y，宽度=碰撞宽度，站立线=梁顶轨。
+    // sl11 的墙来自 mined 几何（level1-geometry.json）：平台宽 240~455；两条
+    // 1100 宽全场穿透膜是塔段出入口而非平台，跳过。
+    if (this.textures.exists('platform_beam')) {
+      const beamSrcH = (this.textures.get('platform_beam').getSourceImage() as { height: number }).height
+      for (const wall of this.currentWalls) {
+        if (wall.type === 'solid') continue
+        if (wall.width > 600) continue // 全场穿透膜（1100 宽），非平台
+        const h = Math.min(46, Math.max(32, wall.width * 0.16))
+        const beam = this.add
+          .tileSprite(wall.x, wall.y, wall.width, h, 'platform_beam')
+          .setOrigin(0, 0)
+          .setDepth(3)
+        const sc = h / beamSrcH
+        beam.setTileScale(sc, sc)
+        this.climbClouds.push(beam)
       }
-      i++
-    }
-    // 塔底云海带：起跳地面(GROUND_Y=400)本身没有任何地面美术，悟空开局
-    // 站在纯色雾里——沿塔底铺一排大云读作云海地面。
-    for (let gx = -60; gx <= 1200; gx += 260) {
-      const img = this.add
-        .image(gx, GROUND_Y + 92, gx % 520 === 0 ? 'cloud_puff1' : 'cloud_puff2')
-        .setDepth(3)
-        .setAlpha(0.95)
-      img.displayWidth = 340
-      img.displayHeight = 120
-      this.climbClouds.push(img)
+      // 塔底地面：同款梁加厚一档，铺满可行走区（GROUND_Y 是隐式地面，没有
+      // 对应 wall，原先悟空开局站在纯色雾里）。
+      const floorH = 78
+      const floor = this.add.tileSprite(-80, GROUND_Y, 1320, floorH, 'platform_beam').setOrigin(0, 0).setDepth(3)
+      floor.setTileScale(floorH / beamSrcH / 1.6, floorH / beamSrcH)
+      this.climbClouds.push(floor)
     }
     // 氛围漂云：低视差、慢漂移，填 bg11 下段的空旷区。
     const drift = [
