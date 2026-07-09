@@ -108,17 +108,22 @@ const LOCKED_LABEL = ['唐僧', '猪八戒', '沙僧']
 // 2026-07-08 feedback screenshot's blue boxes called out as covering faces.
 const LOCKED_LABEL_Y = ART_H * 0.772
 
-// "开始游戏"/"返回主菜单" buttons (2026-07-08 addition). Position derived from
-// docs/reference/user-flow-refs/selectrole-original-buttons.png (real
-// original-client screenshot, 1522x960): button-pair band sits at
-// y-fraction≈0.936 of the stage height, 开始游戏 centered at x-fraction≈0.510,
-// 返回主菜单 at x-fraction≈0.726 -- applied to our 960x540 canvas directly
-// (these are new UI chrome, not part of the extracted bitmap, so they're laid
-// out in canvas space rather than inside the scaled `row` container, which
-// keeps their text/stroke crisp instead of blurred by the 0.87x row scale).
-const ACTION_BTN_Y = 505
-const START_BTN_X = 489
-const BACK_BTN_X = 666
+// "开始游戏"/"返回主菜单" buttons (2026-07-08 addition; 2026-07-09 moved OFF
+// the artwork into a dedicated band BELOW it, per user feedback -- the old
+// y=505 placement sat on top of the panel art). The panel row is now
+// contain-fit to ART_BAND_H instead of the full 540 canvas height, freeing
+// the bottom strip for the button pair. Laid out in canvas space (not inside
+// the scaled `row` container) so their text/stroke stays crisp.
+const ART_BAND_H = 470
+const ACTION_BTN_Y = 507
+const START_BTN_X = 402
+const BACK_BTN_X = 568
+// Ambient backdrop (2026-07-09, user feedback "两边都是黑的"): the panel art
+// doesn't cover the full 960x540 canvas, so a blurred+darkened cover-fit
+// derivative of the SAME idle art (tools: PIL gaussian 14px, brightness 0.55,
+// generated/select-bg-blur.jpg) fills the whole frame behind it -- ambient
+// extension of the artwork itself, no new style introduced.
+const AMBIENT_BG_TEX = 'select_role_ambient_bg'
 
 export class CharacterSelectScene extends Phaser.Scene {
   private slot: SlotId = 0
@@ -148,16 +153,28 @@ export class CharacterSelectScene extends Phaser.Scene {
     if (!this.textures.exists(BADGE_1P_TEX)) {
       this.load.image(BADGE_1P_TEX, 'assets/extracted/menu/badge_1p.png')
     }
+    if (!this.textures.exists(AMBIENT_BG_TEX)) {
+      this.load.image(AMBIENT_BG_TEX, 'assets/generated/select-bg-blur.jpg')
+    }
   }
 
   create(): void {
-    // Scene底色 matches the panel row's own ink black so the contain-fit
-    // pillarbox reads as part of the artwork, not a visible letterbox seam.
+    // Base ink black under everything, then the blurred ambient derivative of
+    // the artwork itself cover-fills the canvas (see AMBIENT_BG_TEX comment),
+    // with a soft edge vignette so the sharp panel row stays the focal point.
     this.add.graphics().fillStyle(0x0b0a0d, 1).fillRect(0, 0, 960, 540)
+    if (this.textures.exists(AMBIENT_BG_TEX)) {
+      this.add.image(480, 270, AMBIENT_BG_TEX)
+    }
+    const vignette = this.add.graphics()
+    vignette.fillGradientStyle(0x0b0a0d, 0x0b0a0d, 0x0b0a0d, 0x0b0a0d, 0.85, 0.85, 0, 0)
+    vignette.fillRect(0, 0, 960, 90)
+    vignette.fillGradientStyle(0x0b0a0d, 0x0b0a0d, 0x0b0a0d, 0x0b0a0d, 0, 0, 0.9, 0.9)
+    vignette.fillRect(0, 430, 960, 110)
 
-    const scale = 540 / ART_H
+    const scale = ART_BAND_H / ART_H
     const offsetX = (960 - ART_W * scale) / 2
-    this.row = this.add.container(offsetX, 0).setScale(scale)
+    this.row = this.add.container(offsetX, 4).setScale(scale)
 
     this.idleImg = this.add.image(0, 0, IDLE_TEX).setOrigin(0, 0)
     this.selectedImg = this.add.image(0, 0, SELECTED_WUKONG_TEX).setOrigin(0, 0).setVisible(false)
@@ -295,10 +312,10 @@ export class CharacterSelectScene extends Phaser.Scene {
 
   private flashLocked(name: string): void {
     const t = this.add
-      .text(480, 500, `${name} 敬请期待`, { fontSize: '20px', fontFamily: activeArtFont().family, color: '#ffb26b' })
+      .text(480, 468, `${name} 敬请期待`, { fontSize: '20px', fontFamily: activeArtFont().family, color: '#ffb26b' })
       .setOrigin(0.5)
       .setDepth(20)
-    this.tweens.add({ targets: t, y: 480, alpha: 0, duration: 1100, onComplete: () => t.destroy() })
+    this.tweens.add({ targets: t, y: 448, alpha: 0, duration: 1100, onComplete: () => t.destroy() })
   }
 
   /** "开始游戏" button: always confirms with 悟空 (the only playable hero this
