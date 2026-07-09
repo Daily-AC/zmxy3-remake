@@ -161,6 +161,7 @@ import {
   CraftEffect,
   resolveNpcServerUrl,
 } from '../net/npcClient'
+import type { CoopSession } from '../net/socialClient'
 import { DialogueBox } from '../ui/DialogueBox'
 import {
   HUD_TEXTURES,
@@ -697,6 +698,8 @@ export class BattleScene extends Phaser.Scene {
   // when BattleScene is entered directly (dev/debug boot with no shell), which
   // falls back to the slot's saved progress like before S1.
   private entryCampaignIndex: number | null = null
+  // COOP-SEAM: stored for a future combat-sync pass; solo combat ignores it.
+  protected coopSession: CoopSession | null = null
   private playtimeSec = 0
   private playtimeAccMs = 0
   // Esc pause menu (continue / save & quit to main menu).
@@ -739,8 +742,10 @@ export class BattleScene extends Phaser.Scene {
 
   /** WorldMapScene passes which node was clicked; a direct/debug boot into
    * 'battle' (no shell) omits it and falls back to the slot's saved progress. */
-  init(data?: { campaignIndex?: number }): void {
+  init(data?: { campaignIndex?: number; coopSession?: CoopSession }): void {
     this.entryCampaignIndex = typeof data?.campaignIndex === 'number' ? data.campaignIndex : null
+    // COOP-SEAM: accept lobby handoff data without changing battle behavior.
+    this.coopSession = data?.coopSession ?? null
   }
 
   preload(): void {
