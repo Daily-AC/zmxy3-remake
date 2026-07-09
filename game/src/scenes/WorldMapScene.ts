@@ -36,7 +36,6 @@ import type { CraftMaterialOption } from '../ui/hud/FurnacePanel'
 import { FurnaceRecipeView } from '../ui/hud/FurnaceRecipeView'
 import { HUD_TEXTURES, HUD_ICONS, ICON_FALLBACK_KEY } from '../ui/hud/hudTheme'
 import { Toast } from '../ui/hud/Toast'
-import { MenuButton } from '../ui/menu/MenuButton'
 
 // S1 世界地图 hub. Everything below the map art (nodes/decorations/buttons +
 // coordinates) is data-driven from data/worldmapNodes.ts, which is
@@ -186,7 +185,6 @@ export class WorldMapScene extends Phaser.Scene {
     this.renderMap()
     this.buildFurnace()
     this.buildFurnaceRecipeView()
-    this.buildLobbyEntry()
     this.toastUi = new Toast(this)
     this.connectNpc()
     this.exposeHooks()
@@ -247,27 +245,9 @@ export class WorldMapScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * 2026-07-09 screen-flow change (用户拍板): the lobby's entry point moves
-   * from the (now login-gated) main menu to the world map. Placed as a plain
-   * screen-space MenuButton (no vendor bottom-bar texture/coordinate exists
-   * for this -- it's a hackathon-only feature) in the top-right corner, clear
-   * of the campaign nodes and the vendor bottom bar; visual placement is
-   * expected to be revisited later.
-   */
-  private buildLobbyEntry(): void {
-    new MenuButton(this, {
-      x: 878,
-      y: 32,
-      width: 140,
-      height: 36,
-      label: '联机共斗',
-      fontSize: 16,
-      variant: 'primary',
-      onClick: () => this.goToLobby(),
-    })
-  }
-
+  // 联机共斗入口：2026-07-09 二次调整 -- 右上角悬浮 MenuButton 超出地图画面
+  // （用户截图绿框），收进 vendor 底栏按钮列（data/worldmapNodes.ts 'coopbtn'，
+  // 合成素材 btn_coop.png），走统一的 onButton 分发。
   private goToLobby(): void {
     this.npcClient?.dispose()
     this.scene.start(SCENE.coopLobby)
@@ -289,6 +269,7 @@ export class WorldMapScene extends Phaser.Scene {
     else if (btn.action === 'furnace') this.openFurnace()
     else if (btn.action === 'skills') this.openSkillTree()
     else if (btn.action === 'back') this.goToMainMenu()
+    else if (btn.action === 'coop') this.goToLobby()
   }
 
   private openSkillTree(): void {
