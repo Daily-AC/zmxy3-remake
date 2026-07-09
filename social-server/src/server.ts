@@ -71,6 +71,25 @@ export function createServer(options: CreateServerOptions = {}): SocialServer {
 
   const app = express();
   app.use(express.json());
+  // Found 2026-07-09 during coop-shell browser verification: with zero CORS
+  // handling, no browser page can ever complete register/login against this
+  // server from a different origin -- and that's exactly how it's deployed
+  // (game frontend on zaixu.qmledmq.cn, this API on
+  // zm-dev.qmledmq.cn:8443/social). Node-script e2e tests never hit this
+  // (CORS is a browser-only enforcement), which is why it went unnoticed.
+  // `*` is safe here: auth is a bearer token in the Authorization header, not
+  // a cookie, so there is no credentialed-CORS/CSRF concern that would call
+  // for echoing a specific origin instead.
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+  });
 
   const db = options.db ?? openSocialDb(options.dbPath);
   const ownsDb = options.db === undefined;
