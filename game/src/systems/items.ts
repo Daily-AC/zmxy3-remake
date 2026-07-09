@@ -10,5 +10,9 @@ export interface Item {
   name: string
   kind: 'material' | 'equip' | 'consumable'
   rarity: 1 | 2 | 3
+  sourceFillName?: string
+  sourceType?: string
+  sourceQuality?: string
+  sourceArray?: string
   effects?: Effect[]
 }

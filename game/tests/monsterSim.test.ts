@@ -175,6 +175,33 @@ describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
     })
   })
 
+  it('emits Monster30Bullet1 projectile-spawn at the hit frame when configured as ranged, not melee damage', () => {
+    const cfg: MonsterConfig = {
+      ...makeCfg(() => 0),
+      attackDurationMs: 300,
+      attackHitFraction: 0.5,
+      rangedAttack: { kind: 'Monster30Bullet1', speedPxPerSecond: 600, radius: 50, ttlMs: 900 },
+    }
+    const m = initMonster(cfg, 500, 400)
+    let events = run(m, { heroX: 600, heroY: 410, heroAlive: true, incomingHit: null }, 1000, cfg)
+    expect(events.some((e) => e.type === 'attack-start')).toBe(true)
+    expect(events.some((e) => e.type === 'attack-hit')).toBe(false)
+
+    events = run(m, { heroX: 600, heroY: 410, heroAlive: true, incomingHit: null }, 170, cfg)
+    expect(events.filter((e) => e.type === 'projectile-spawn')).toEqual([
+      {
+        type: 'projectile-spawn',
+        x: 500,
+        y: 400,
+        facing: 1,
+        targetX: 600,
+        targetY: 410,
+        projectile: cfg.rangedAttack,
+      },
+    ])
+    expect(events.some((e) => e.type === 'attack-hit')).toBe(false)
+  })
+
   it('takes a hit once per attack id and enters hurt', () => {
     const cfg = makeCfg()
     const m = initMonster(cfg, 500, 400)

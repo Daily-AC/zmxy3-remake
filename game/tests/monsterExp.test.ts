@@ -83,6 +83,12 @@ describe('monsterExp: AS3-recovered values', () => {
     expect(monsterExp('monster22')).toBe(2580) // 430 * 6
     expect(monsterExp('unknown-species')).toBe(60) // DEFAULT 10 * 6
   })
+
+  it('applies Monster30.as anti-farm gate at hero level >= 10, not level 8', () => {
+    expect(monsterExp('monster30', { heroLevel: 9 })).toBe(24) // 4 * 6
+    expect(monsterExp('monster30', { heroLevel: 10 })).toBe(0)
+    expect(monsterExp('monster30', { heroLevel: 11 })).toBe(0)
+  })
 })
 
 describe('monsterExp: natural-playthrough trajectory', () => {

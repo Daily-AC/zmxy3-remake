@@ -18,14 +18,13 @@
 //  - S5 (skilltree-report.md) is the first real use of the `skills` field this
 //    comment used to describe as a placeholder: it's now `SkillTreeSaveState`
 //    (systems/skillTree.ts), decoded defensively exactly like every other
-//    field below. A pre-S5 save has `skills: null`, which `decodeSkillTree`
-//    treats the same as any other missing/invalid shape -- falls back to
-//    `createDefaultSkillTreeState()` (the decided "无绑定的旧存档回退默认5技"
-//    behavior) -- so this stayed a same-version, no-migration change exactly
-//    as this file predicted. `soul` (soulPurse.ts) is new for the same reason:
-//    S5's skill costs need a currency that survives a scene change (see
-//    soulPurse.ts's header), so the previously-ephemeral wallet is persisted
-//    here too.
+//    field below. A pre-S5 save has `skills: null`; decodeSkillTree treats
+//    that as a legacy migration and returns `createLegacySkillTreeState()` so
+//    players who already had the old five-skill demo loadout keep it. Brand-new
+//    saves use `createDefaultSkillTreeState()` instead: only slz is learned and
+//    bound to Y. `soul` (soulPurse.ts) is new for the same reason: S5's skill
+//    costs need a currency that survives a scene change, so the previously
+//    ephemeral wallet is persisted here too.
 //  - Version starts at 1, not kagami's 2. Kagami's "2" is the result of a
 //    real v1->v2 migration already shipped in their game; we've never
 //    shipped a v1, so calling ours "2" would document a migration that
@@ -44,7 +43,14 @@ import { createEquipment } from './equipment'
 import type { Inventory } from './inventory'
 import { createInventory, addItem } from './inventory'
 import type { SkillTreeState, SchoolState, LearnedSkillEntry, BindKey, Role1TreeSkillId } from './skillTree'
-import { BIND_KEYS, ROLE1_SCHOOLS, MAX_SCHOOL_LEVEL, MAX_SKILL_LEVEL, createDefaultSkillTreeState } from './skillTree'
+import {
+  BIND_KEYS,
+  ROLE1_SCHOOLS,
+  MAX_SCHOOL_LEVEL,
+  MAX_SKILL_LEVEL,
+  createDefaultSkillTreeState,
+  createLegacySkillTreeState,
+} from './skillTree'
 
 export const GameSaveVersion = 1 as const
 export const GameSaveStorageKey = 'zmxy3-remake.save.v1'
@@ -72,8 +78,7 @@ export type GameSaveV1 = {
   /** Not implemented yet -- reserved so a future pet system needs no migration. */
   pets: unknown[]
   /** S5: SkillTreeState (systems/skillTree.ts). A pre-S5 save has this as
-   * `null`; decodeSkillTree treats that (and any other invalid shape) as
-   * "no data" and falls back to createDefaultSkillTreeState(). */
+   * `null`; decodeSkillTree treats that as a legacy five-skill migration. */
   skills: SkillTreeState | null
   /** S5: soulPurse.ts's wallet. See save.ts header re: newly-persisted. */
   soul: number
@@ -216,14 +221,13 @@ function decodeInventory(saved: unknown): Inventory {
 /**
  * Decode a saved `skills` blob (systems/skillTree.ts's SkillTreeState). Any
  * shape mismatch -- most commonly a pre-S5 save's literal `null` -- falls
- * back to `createDefaultSkillTreeState()`, which is the decided "无绑定的
- * 旧存档回退默认5技" behavior (skilltree-brief.md). A validly-shaped but
- * genuinely empty state (a post-S5 character who hasn't learned anything)
+ * back to `createLegacySkillTreeState()`, preserving the old five-skill demo
+ * loadout for existing users. A validly-shaped but genuinely empty state
  * decodes as empty, not defaulted -- only unreadable data gets the fallback.
  */
 function decodeSkillTree(saved: unknown): SkillTreeState {
   if (!isRecord(saved) || !Array.isArray(saved.schools) || saved.schools.length !== 2) {
-    return createDefaultSkillTreeState()
+    return createLegacySkillTreeState()
   }
   const schools = [decodeSchool(saved.schools[0], 0), decodeSchool(saved.schools[1], 1)] as [
     SchoolState,
@@ -303,6 +307,10 @@ function decodeItem(value: unknown): Item | null {
     kind: value.kind as Item['kind'],
     rarity: value.rarity as Item['rarity'],
   }
+  if (typeof value.sourceFillName === 'string') item.sourceFillName = value.sourceFillName
+  if (typeof value.sourceType === 'string') item.sourceType = value.sourceType
+  if (typeof value.sourceQuality === 'string') item.sourceQuality = value.sourceQuality
+  if (typeof value.sourceArray === 'string') item.sourceArray = value.sourceArray
   const effects = decodeEffects(value.effects)
   if (effects.length > 0) item.effects = effects
   return item

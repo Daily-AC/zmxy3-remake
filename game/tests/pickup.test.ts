@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { spawnDrop, stepDrops, DropEntity, PickupConfig } from '../src/systems/pickup'
+import { spawnConsumableDrop, spawnDrop, spawnSoulDrop, stepDrops, DropEntity, PickupConfig } from '../src/systems/pickup'
 import type { Item } from '../src/systems/items'
 
 const item: Item = { id: 'yaocao', name: '妖草', kind: 'material', rarity: 1 }
@@ -56,5 +56,25 @@ describe('pickup drop physics + auto-pickup (掉落拾取)', () => {
     expect(farAbove.remaining).toHaveLength(1)
     expect(trulyNear.picked).toEqual([{ item, qty: 3 }])
     expect(trulyNear.remaining).toHaveLength(0)
+  })
+
+  it('collects soul orbs as pickup entities without an inventory item payload', () => {
+    const drop = spawnSoulDrop(2, 500, 500)
+    expect(drop).toMatchObject({ kind: 'soul', amount: 2, x: 500, y: 400, grounded: false })
+
+    const picked = stepDrops([{ ...drop, y: 400, grounded: true }], 500, 400, cfg)
+
+    expect(picked.picked).toEqual([{ kind: 'soul', amount: 2 }])
+    expect(picked.remaining).toHaveLength(0)
+  })
+
+  it('collects cure orbs as pickup entities without inventing backpack items', () => {
+    const drop = spawnConsumableDrop('smallHp', 500, 500)
+    expect(drop).toMatchObject({ kind: 'consumable', consumableId: 'smallHp', x: 500, y: 400, grounded: false })
+
+    const picked = stepDrops([{ ...drop, y: 400, grounded: true }], 500, 400, cfg)
+
+    expect(picked.picked).toEqual([{ kind: 'consumable', consumableId: 'smallHp' }])
+    expect(picked.remaining).toHaveLength(0)
   })
 })

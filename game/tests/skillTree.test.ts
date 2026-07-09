@@ -8,6 +8,7 @@ import {
   BIND_KEYS,
   createEmptySkillTreeState,
   createDefaultSkillTreeState,
+  createLegacySkillTreeState,
   getUnlockedSlotCount,
   getSchoolUpgradeCost,
   canUpgradeSchool,
@@ -50,26 +51,41 @@ describe('skillTree config (Config.as:263 allSklName[0..1], roleid 1)', () => {
   })
 })
 
-describe('createDefaultSkillTreeState (legacy-save / fresh-character fallback)', () => {
-  it('has slz/lys/hytj/lyfb/jdy learned at level 1 and bound to Y/U/I/O/L', () => {
+describe('createDefaultSkillTreeState (fresh-character bootstrap)', () => {
+  it('has only the first skill slz learned at level 1 and bound to Y', () => {
     const state = createDefaultSkillTreeState()
+    expect(getBindings(state)).toEqual({ Y: 'slz', U: null, I: null, O: null, L: null })
+    expect(getLearnedLevel(state, 'slz')).toBe(1)
+    expect(getLearnedLevel(state, 'lys')).toBe(0)
+    expect(getLearnedLevel(state, 'hytj')).toBe(0)
+    expect(getLearnedLevel(state, 'lyfb')).toBe(0)
+    expect(getLearnedLevel(state, 'jdy')).toBe(0)
+    expect(getLearnedLevel(state, 'qsez')).toBe(0)
+    expect(getLearnedLevel(state, 'sx')).toBe(0)
+    expect(totalLearnedCount(state)).toBe(1)
+  })
+
+  it('school levels are exactly enough to have unlocked only that first slot', () => {
+    const state = createDefaultSkillTreeState()
+    expect(state.schools[0].level).toBe(1) // unlocks slz only
+    expect(state.schools[1].level).toBe(0)
+    expect(getUnlockedSlotCount(state.schools[0].level)).toBe(1)
+    expect(getUnlockedSlotCount(state.schools[1].level)).toBe(0)
+  })
+})
+
+describe('createLegacySkillTreeState (pre-S5 save migration)', () => {
+  it('preserves the old slz/lys/hytj/lyfb/jdy demo loadout and Y/U/I/O/L bindings', () => {
+    const state = createLegacySkillTreeState()
     expect(getBindings(state)).toEqual({ Y: 'slz', U: 'lys', I: 'hytj', O: 'lyfb', L: 'jdy' })
     expect(getLearnedLevel(state, 'slz')).toBe(1)
     expect(getLearnedLevel(state, 'lys')).toBe(1)
     expect(getLearnedLevel(state, 'hytj')).toBe(1)
     expect(getLearnedLevel(state, 'lyfb')).toBe(1)
     expect(getLearnedLevel(state, 'jdy')).toBe(1)
-    expect(getLearnedLevel(state, 'qsez')).toBe(0)
-    expect(getLearnedLevel(state, 'sx')).toBe(0)
     expect(totalLearnedCount(state)).toBe(5)
-  })
-
-  it('school levels are exactly enough to have unlocked those 5 slots', () => {
-    const state = createDefaultSkillTreeState()
-    expect(state.schools[0].level).toBe(1) // unlocks slz only
-    expect(state.schools[1].level).toBe(4) // unlocks lys/hytj/lyfb/jdy
-    expect(getUnlockedSlotCount(state.schools[0].level)).toBe(1)
-    expect(getUnlockedSlotCount(state.schools[1].level)).toBe(4)
+    expect(state.schools[0].level).toBe(1)
+    expect(state.schools[1].level).toBe(4)
   })
 })
 
@@ -218,7 +234,7 @@ describe('per-skill level-up (SkillControl.as skillupgradeFunc/mOver)', () => {
 
 describe('rebindSkill (Adapted clean swap, see file header re: AS3 duplicate-entry bug)', () => {
   it('swaps two bound skills\' keys', () => {
-    const state = createDefaultSkillTreeState() // Y:slz U:lys I:hytj O:lyfb L:jdy
+    const state = createLegacySkillTreeState() // Y:slz U:lys I:hytj O:lyfb L:jdy
     expect(rebindSkill(state, 'slz', 'L')).toBe(true)
     expect(getBindings(state)).toEqual({ Y: 'jdy', U: 'lys', I: 'hytj', O: 'lyfb', L: 'slz' })
   })
@@ -232,7 +248,7 @@ describe('rebindSkill (Adapted clean swap, see file header re: AS3 duplicate-ent
   })
 
   it('no-ops (returns true) when the skill is already at targetKey', () => {
-    const state = createDefaultSkillTreeState()
+    const state = createLegacySkillTreeState()
     expect(rebindSkill(state, 'slz', 'Y')).toBe(true)
     expect(getBindings(state).Y).toBe('slz')
   })
@@ -243,7 +259,7 @@ describe('rebindSkill (Adapted clean swap, see file header re: AS3 duplicate-ent
   })
 
   it('keyForSkill finds the current key, or undefined if unbound', () => {
-    const state = createDefaultSkillTreeState()
+    const state = createLegacySkillTreeState()
     expect(keyForSkill(state, 'jdy')).toBe('L')
     expect(keyForSkill(state, 'sx')).toBeUndefined()
   })

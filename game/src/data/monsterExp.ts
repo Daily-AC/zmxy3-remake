@@ -23,9 +23,9 @@
 //     the `gc.curStage==9` elite form (60/70/80).
 //   - Monster20 (袁洪): 380 in both hp branches (the line-484 exp=0 is a
 //     never-reached fsCount==99999999 self-destruct edge).
-//   - Monster30 (swarm imp): base 4, but BaseMonster zeroes it once the hero
-//     is level >= 10 (an anti-farm gate on the hp-1 imp). We store the base 4;
-//     honoring the level-10 cutoff is a wiring-layer choice (see report).
+//   - Monster30 (swarm imp): base 4, but Monster30.as zeroes it once either
+//     hero is level >= 10 (an anti-farm gate on the hp-1 imp). `monsterExp`
+//     takes the current hero level so the runtime can apply that SWF cutoff.
 //
 // See tasks/hero-survivability-report.md §exp for the recovered-value table and
 // the natural-playthrough level trajectory this produces.
@@ -88,8 +88,13 @@ export const DEFAULT_MONSTER_EXP = 10
  */
 export const CAMPAIGN_EXP_MULTIPLIER = 6
 
+export interface MonsterExpContext {
+  heroLevel?: number
+}
+
 /** Kill-exp awarded for a monster species, after the campaign multiplier. */
-export function monsterExp(species: string): number {
+export function monsterExp(species: string, context: MonsterExpContext = {}): number {
+  if (species === 'monster30' && Math.floor(context.heroLevel ?? 0) >= 10) return 0
   const base = MONSTER_BASE_EXP[species] ?? DEFAULT_MONSTER_EXP
   return Math.round(base * CAMPAIGN_EXP_MULTIPLIER)
 }

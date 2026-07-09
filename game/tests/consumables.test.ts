@@ -15,9 +15,9 @@ import { createInventory, addItem, countItem } from '../src/systems/inventory'
 import type { Item } from '../src/systems/items'
 
 describe('CONSUMABLE_SPECS (export.cure.SmallHP/SmallMP/BigHP.as)', () => {
-  it('smallHp: flat +100 HP, heal-blockable', () => {
+  it('smallHp: +25% max HP, heal-blockable', () => {
     expect(CONSUMABLE_SPECS.smallHp).toMatchObject({
-      resource: 'hp', amount: { kind: 'flat', value: 100 }, healBlockable: true,
+      resource: 'hp', amount: { kind: 'fractionOfMax', fraction: 0.25 }, healBlockable: true,
     })
   })
 
@@ -27,9 +27,9 @@ describe('CONSUMABLE_SPECS (export.cure.SmallHP/SmallMP/BigHP.as)', () => {
     })
   })
 
-  it('smallMp: flat +100 MP, NOT heal-blockable', () => {
+  it('smallMp: +25% max MP, NOT heal-blockable', () => {
     expect(CONSUMABLE_SPECS.smallMp).toMatchObject({
-      resource: 'mp', amount: { kind: 'flat', value: 100 }, healBlockable: false,
+      resource: 'mp', amount: { kind: 'fractionOfMax', fraction: 0.25 }, healBlockable: false,
     })
   })
 
@@ -55,7 +55,7 @@ describe('pickup timing/range constants', () => {
 describe('applyConsumableEffect: HP orbs respect the heal-block gate, MP never does', () => {
   it('smallHp heals normally when not heal-blocked', () => {
     const result = applyConsumableEffect('smallHp', { current: 50, max: 500 }, { current: 0, max: 100 }, false)
-    expect(result.hpAfter).toBe(150)
+    expect(result.hpAfter).toBe(175)
     expect(result.blockedByHealBlock).toBe(false)
   })
 
@@ -78,7 +78,7 @@ describe('applyConsumableEffect: HP orbs respect the heal-block gate, MP never d
 
   it('smallMp heals MP regardless of heal-block state (MP has no such gate)', () => {
     const blocked = applyConsumableEffect('smallMp', { current: 0, max: 100 }, { current: 20, max: 200 }, true)
-    expect(blocked.mpAfter).toBe(120)
+    expect(blocked.mpAfter).toBe(70)
     expect(blocked.blockedByHealBlock).toBe(false)
   })
 
@@ -114,7 +114,7 @@ describe('useInventoryConsumable: a modernized backpack front door', () => {
     const inv = createInventory(10)
     addItem(inv, pillItem, 3)
     const result = useInventoryConsumable(inv, 'minor_pill', 'smallHp', { current: 50, max: 500 }, { current: 0, max: 100 }, false)
-    expect(result?.hpAfter).toBe(150)
+    expect(result?.hpAfter).toBe(175)
     expect(countItem(inv, 'minor_pill')).toBe(2)
   })
 

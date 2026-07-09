@@ -12,6 +12,7 @@ import {
 } from '../systems/heroSim'
 import {
   MonsterConfig,
+  type MonsterEvent,
   MonsterState,
   MonsterStats,
   initMonster,
@@ -27,10 +28,19 @@ import {
   spawnedHitboxToRect,
 } from '../systems/monsterBehaviors'
 import { heroAttackBox, centeredBox, overlaps, type Rect } from '../systems/hitbox'
-import { DropEntity, PickupConfig, DEFAULT_PICKUP_RADIUS, spawnDrop, stepDrops } from '../systems/pickup'
+import {
+  DropEntity,
+  PickupConfig,
+  DEFAULT_PICKUP_RADIUS,
+  spawnConsumableDrop,
+  spawnDrop,
+  spawnSoulDrop,
+  stepDrops,
+} from '../systems/pickup'
 import { createInventory, addItem, listStacks, Inventory } from '../systems/inventory'
-import { rollDrops } from '../systems/dropRoll'
+import { monsterSoulDropAmount, rollDrops, type DropRollContext } from '../systems/dropRoll'
 import type { Item } from '../systems/items'
+import { collectWorldPickup, CONSUMABLE_SPECS, rollMedicineDrop } from '../systems/consumables'
 import {
   Equipment,
   EquipSlot,
@@ -57,13 +67,19 @@ import {
 } from '../systems/heroIdentity'
 import { rollDailyLuck } from '../systems/heroGrowth'
 import { computeCombatPower } from '../systems/combatPower'
-import { SoulPurse, createSoulPurse, sellCommonEquipment } from '../systems/soulPurse'
+import { SoulPurse, addSoul, createSoulPurse, sellCommonEquipment } from '../systems/soulPurse'
 import {
   AttackKind,
   NormalAttackHit,
   calculateNormalAttackPower,
   resolveIncomingHeroDamage,
 } from '../systems/heroScale'
+import {
+  spawnEnemyProjectile,
+  stepEnemyProjectiles,
+  type EnemyProjectile,
+  type EnemyProjectileHit,
+} from '../systems/enemyProjectiles'
 import { RealSkillId, calculateRealSkillDamage } from '../systems/skillDamageReal'
 import {
   LevelDef,
@@ -226,14 +242,18 @@ const MONSTER_ATTACK_TIMING: Record<string, { fraction: number; reach: number }>
   monster5: { fraction: 8 / 15, reach: 155 }, // Monster5 hit1 bank4=[2,2,2,2,7], trigger x=3
   monster7: { fraction: 0.6, reach: 80 }, // Monster7 hit1 bank4=[2,2,2,4], trigger x=2
   monster8: { fraction: 1, reach: 97 }, // Monster8 hit1 bank4=[2,2,2,2,5], trigger x=4 (last sub-frame)
-  // Monster30 is the documented FLYING RANGED divergence (see monsterSim.ts
-  // header): real AS3 spawns its bullet at offsetX=0 (a hovering ranged
-  // burst, not a melee swing) and hits at the very last tick of its 10-tick
-  // hit1 (fraction 1.0, real+accurate). reach=0 doesn't transfer to our
-  // ground-melee reinterpretation (it would mean the swing never connects at
-  // all) -- kept at a grunt-average value, project-chosen, TODO-verify.
-  monster30: { fraction: 1, reach: 90 },
+  // Monster30 is ranged: AS3 hit1 spawns Monster30Bullet1 at offsetX=0, and
+  // the bullet hitbox checks the hero. `reach` is therefore intentionally 0;
+  // monsterConfigFor adds rangedAttack so monsterSim does not use meleeReach.
+  monster30: { fraction: 1, reach: 0 },
 }
+
+const MONSTER30_BULLET = {
+  kind: 'Monster30Bullet1',
+  speedPxPerSecond: 620,
+  radius: 58,
+  ttlMs: 900,
+} as const
 
 // hitstun-triad pen (2026-07-09): real AS3 hit1 attackBackInfoDict.power/
 // attackKind for every L1/L2 species (this port's own ffdec decompile of
@@ -559,6 +579,9 @@ export class BattleScene extends Phaser.Scene {
   private bg13Layer?: Phaser.GameObjects.Container
   private drops: DropEntity[] = []
   private dropSprites = new Map<DropEntity, Phaser.GameObjects.Container>()
+  private enemyProjectiles: EnemyProjectile[] = []
+  private enemyProjectileSprites = new Map<EnemyProjectile, Phaser.GameObjects.Container>()
+  private nextEnemyProjectileId = 1
   private pickupCfg!: PickupConfig
   private inventory: Inventory = createInventory(24)
   // Real battle-HUD components (ui/hud/), replacing the old debug text.
@@ -1092,6 +1115,9 @@ export class BattleScene extends Phaser.Scene {
     this.debugTexts = []
     this.drops = []
     this.dropSprites.clear()
+    this.enemyProjectiles = []
+    this.enemyProjectileSprites.clear()
+    this.nextEnemyProjectileId = 1
     this.playedHitIds.clear()
     this.monsters = []
     this.bossEntity = null
@@ -1498,6 +1524,7 @@ export class BattleScene extends Phaser.Scene {
       // defaults for species not yet decompiled (L2+, TODO-verify).
       attackHitFraction: timing?.fraction,
       meleeReach: timing?.reach,
+      rangedAttack: species === 'monster30' ? MONSTER30_BULLET : undefined,
       // StageListener11: Monster30 is a flying, gravity-free climb threat.
       // Keep vertical pursuit opt-in so ground waves and L2-L4 remain on the
       // previous x-only monsterSim path.
@@ -2004,6 +2031,7 @@ export class BattleScene extends Phaser.Scene {
       if (e.type === 'respawn') this.onHeroRespawn()
     }
     this.stepDropsAndPickup()
+    this.stepEnemyProjectiles(delta)
 
     this.applyHeroRender(this.heroState.action)
     this.renderMonsters()
@@ -2214,6 +2242,7 @@ export class BattleScene extends Phaser.Scene {
       // no matter how far away the hero stood (battle-fidelity 追加单 fix,
       // 2026-07-08). See MONSTER_ATTACK_TIMING's header comment.
       else if (ev.type === 'attack-hit') this.monsterHitsHero(e)
+      else if (ev.type === 'projectile-spawn') this.spawnMonsterProjectile(e, ev)
       else if (ev.type === 'death') {
         this.spawnDrops(ev.x, ev.y, e.species)
         this.npcClient.worldEvent('monster_killed', { monster: MONSTER_NAMES[e.species] ?? e.species })
@@ -2274,7 +2303,7 @@ export class BattleScene extends Phaser.Scene {
   // Kill reward: feed the exp through the identity host so a level-up grows the
   // hero's stats. Show light feedback (float text + a level-up toast/flash).
   private awardKillExp(x: number, y: number, species: string): void {
-    const result = gainHeroExp(this.identity, monsterExp(species))
+    const result = gainHeroExp(this.identity, monsterExp(species, { heroLevel: this.identity.progression.level }))
     this.floatText(x, y - 40, `+${result.appliedExp} EXP`, 'exp')
     if (result.levelsGained > 0) {
       this.showToast(`升级！ Lv.${result.levelAfter}`, '#ffe066')
@@ -2337,6 +2366,87 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  private spawnMonsterProjectile(e: MonsterEntity, ev: Extract<MonsterEvent, { type: 'projectile-spawn' }>): void {
+    const projectile = spawnEnemyProjectile({
+      id: this.nextEnemyProjectileId++,
+      kind: ev.projectile.kind,
+      sourceId: e.species,
+      attackId: ++e.attackId,
+      x: ev.x,
+      y: ev.y,
+      targetX: ev.targetX,
+      targetY: ev.targetY,
+      facing: ev.facing,
+      speedPxPerSecond: ev.projectile.speedPxPerSecond,
+      radius: ev.projectile.radius,
+      ttlMs: ev.projectile.ttlMs,
+      damage: e.attackPower,
+      attackKind: e.attackKind,
+    })
+    this.enemyProjectiles.push(projectile)
+    this.enemyProjectileSprites.set(projectile, this.makeEnemyProjectileSprite(projectile))
+  }
+
+  private makeEnemyProjectileSprite(projectile: EnemyProjectile): Phaser.GameObjects.Container {
+    const glow = this.add.circle(0, 0, projectile.radius, 0xb8c2cc, 0.12)
+    const core = this.add.circle(0, 0, 8, 0x636b76, 0.9).setStrokeStyle(2, 0xdfe7ef, 0.75)
+    return this.add.container(projectile.x, projectile.y, [glow, core]).setDepth(8)
+  }
+
+  private stepEnemyProjectiles(delta: number): void {
+    const heroCenter = this.heroVisualCenter()
+    const { remaining, hits } = stepEnemyProjectiles(
+      this.enemyProjectiles,
+      { x: heroCenter.x, y: heroCenter.y, alive: !isHeroDead(this.identity) },
+      delta,
+    )
+    for (const p of this.enemyProjectiles) {
+      if (!remaining.includes(p)) {
+        this.enemyProjectileSprites.get(p)?.destroy()
+        this.enemyProjectileSprites.delete(p)
+      }
+    }
+    this.enemyProjectiles = remaining
+    for (const p of this.enemyProjectiles) this.enemyProjectileSprites.get(p)?.setPosition(p.x, p.y)
+    for (const hit of hits) this.enemyProjectileHitsHero(hit)
+  }
+
+  private enemyProjectileHitsHero(hit: EnemyProjectileHit): void {
+    if (isHeroDead(this.identity)) return
+    if (isHeroInvincible(this.identity, this.simClockMs)) return
+    const mitigated = Math.max(
+      1,
+      Math.round(
+        resolveIncomingHeroDamage(
+          hit.damage,
+          hit.attackKind,
+          heroTotalDef(this.identity, this.equipment),
+          heroMagicDef(this.identity),
+        ),
+      ),
+    )
+    const knockbackX = this.heroState.x < hit.x ? -1 : 1
+    const heroHit: HeroHit = {
+      sourceId: hit.sourceId,
+      attackId: hit.attackId,
+      damage: mitigated,
+      knockbackX,
+    }
+    const events = damageHero(this.identity, heroHit, this.simClockMs)
+    for (const e of events) {
+      if (e.type === 'hurt') {
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'crit')
+        this.hero.setTint(0xff9a9a)
+        this.time.delayedCall(120, () => {
+          if (!isHeroDead(this.identity)) this.hero.clearTint()
+        })
+      } else if (e.type === 'death') {
+        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `-${mitigated}`, 'crit')
+        this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
+      }
+    }
+  }
+
   private onHeroRespawn(): void {
     this.hero.clearTint()
     this.hero.setAlpha(1)
@@ -2358,11 +2468,27 @@ export class BattleScene extends Phaser.Scene {
   // species' own configured table in drops.json (e.g. monster5's 玄铁碎片/
   // 踏云靴) could never drop. Now takes the real killer's species.
   private spawnDrops(x: number, y: number, species: string): void {
-    for (const { item, qty } of rollDrops(species, Math.random)) {
+    const medicineDrop = rollMedicineDrop(Math.random)
+    if (medicineDrop) {
+      const drop = spawnConsumableDrop(medicineDrop, x, y)
+      this.drops.push(drop)
+      this.dropSprites.set(drop, this.makeDropSprite(drop))
+    }
+    const soulDrop = spawnSoulDrop(monsterSoulDropAmount(species, this.dropRollContext()), x, y)
+    if (soulDrop.amount > 0) {
+      this.drops.push(soulDrop)
+      this.dropSprites.set(soulDrop, this.makeDropSprite(soulDrop))
+    }
+    for (const { item, qty } of rollDrops(species, Math.random, this.dropRollContext())) {
       const drop = spawnDrop(item, qty, x, y)
       this.drops.push(drop)
       this.dropSprites.set(drop, this.makeDropSprite(drop))
     }
+  }
+
+  private dropRollContext(): DropRollContext {
+    if (this.campaignIndex === 0) return { stage: 1, level: 1 }
+    return { stage: this.campaignIndex + 1, level: 1 }
   }
 
   // l1-truth pen: was a rarity-colored Phaser star primitive -- every one of
@@ -2373,6 +2499,31 @@ export class BattleScene extends Phaser.Scene {
   // the icon (the same rarity palette the old star used) as an at-a-glance
   // cue, same as the backpack grid's own icon+rarity-border convention.
   private makeDropSprite(drop: DropEntity): Phaser.GameObjects.Container {
+    if (drop.kind === 'soul') {
+      const orb = this.add.circle(0, 0, 10, 0xd33131, 0.9).setStrokeStyle(2, 0xffb0a0, 0.9)
+      const shine = this.add.circle(-3, -3, 3, 0xfff1e8, 0.85)
+      const label = this.add
+        .text(0, 16, `灵魂 +${drop.amount}`, {
+          fontSize: '12px',
+          color: '#ffd8ce',
+        })
+        .setOrigin(0.5, 0)
+      return this.add.container(drop.x, drop.y, [orb, shine, label]).setDepth(8)
+    }
+    if (drop.kind === 'consumable') {
+      const spec = CONSUMABLE_SPECS[drop.consumableId]
+      const fill = spec.resource === 'hp' ? 0xe85454 : 0x4d9dff
+      const stroke = spec.resource === 'hp' ? 0xffd0c8 : 0xc6e4ff
+      const orb = this.add.circle(0, 0, drop.consumableId === 'bigHp' ? 12 : 10, fill, 0.92).setStrokeStyle(2, stroke, 0.95)
+      const shine = this.add.circle(-3, -3, 3, 0xffffff, 0.75)
+      const label = this.add
+        .text(0, 16, spec.sourceName, {
+          fontSize: '12px',
+          color: spec.resource === 'hp' ? '#ffd8d2' : '#d6ebff',
+        })
+        .setOrigin(0.5, 0)
+      return this.add.container(drop.x, drop.y, [orb, shine, label]).setDepth(8)
+    }
     const rarityColor = [0x9fb0c8, 0x5fd6a0, 0x6ba8ff, 0xd9a441][drop.item.rarity] ?? 0x9fb0c8
     const ring = this.add.circle(0, 0, 15, rarityColor, 0.25).setStrokeStyle(2, rarityColor, 0.9)
     const iconKey = this.textures.exists('icon_' + drop.item.id) ? 'icon_' + drop.item.id : ICON_FALLBACK_KEY
@@ -2399,11 +2550,39 @@ export class BattleScene extends Phaser.Scene {
     this.drops = remaining
     for (const d of this.drops) this.dropSprites.get(d)?.setPosition(d.x, d.y)
     if (picked.length > 0) {
-      for (const { item, qty } of picked) {
-        addItem(this.inventory, item, qty)
-        this.npcClient.worldEvent('item_obtained', { item: item.name, qty })
+      for (const pickedDrop of picked) {
+        if (pickedDrop.kind === 'soul') {
+          addSoul(this.soulPurse, pickedDrop.amount)
+          this.floatText(this.heroState.x, heroCenter.y - 55, `+${pickedDrop.amount} 灵魂`, 'exp')
+          this.npcClient.worldEvent('soul_obtained', { amount: pickedDrop.amount })
+        } else if (pickedDrop.kind === 'consumable') {
+          const result = collectWorldPickup(
+            pickedDrop.consumableId,
+            { current: this.identity.combat.hp, max: this.identity.combat.maxHp },
+            { current: this.mp.mp, max: this.mp.maxMp },
+            false,
+          )
+          if (result.resource === 'hp' && result.hpAfter !== undefined) {
+            const delta = result.hpAfter - (result.hpBefore ?? this.identity.combat.hp)
+            this.identity.combat.hp = result.hpAfter
+            if (delta > 0) this.floatText(this.heroState.x, heroCenter.y - 55, `+${Math.round(delta)}`, 'heal')
+          } else if (result.resource === 'mp' && result.mpAfter !== undefined) {
+            const delta = result.mpAfter - (result.mpBefore ?? this.mp.mp)
+            this.mp.mp = result.mpAfter
+            if (delta > 0) this.floatText(this.heroState.x, heroCenter.y - 55, `+${Math.round(delta)} MP`, 'heal')
+          }
+          this.npcClient.worldEvent('consumable_obtained', {
+            id: pickedDrop.consumableId,
+            resource: result.resource,
+            amountRequested: Math.round(result.amountRequested),
+          })
+        } else {
+          addItem(this.inventory, pickedDrop.item, pickedDrop.qty)
+          this.npcClient.worldEvent('item_obtained', { item: pickedDrop.item.name, qty: pickedDrop.qty })
+        }
       }
       this.playSfx('pickup', 0.7)
+      this.saveToSlot()
     }
   }
 
@@ -2731,7 +2910,11 @@ export class BattleScene extends Phaser.Scene {
         portalOpen: this.activeDoor().visible,
         // Back-compat: report the nearest monster under the old `monster` key.
         monster: nm ? { species: nm.species, x: Math.round(nm.state.x), hp: Math.round(nm.state.hp), mode: nm.state.mode } : null,
-        drops: this.drops.map((d) => ({ id: d.item.id, x: Math.round(d.x), grounded: d.grounded })),
+        drops: this.drops.map((d) => ({
+          id: d.kind === 'soul' ? 'soul' : d.kind === 'consumable' ? d.consumableId : d.item.id,
+          x: Math.round(d.x),
+          grounded: d.grounded,
+        })),
         inventory: listStacks(this.inventory).map((s) => ({ id: s.item.id, name: s.item.name, qty: s.qty })),
         heroHp: Math.round(this.identity.combat.hp),
         heroMaxHp: this.identity.combat.maxHp,
@@ -2817,10 +3000,10 @@ export class BattleScene extends Phaser.Scene {
     // Grant a bundle of real monster materials (acceptance shortcut for the
     // furnace flow, standing in for several kills' drops).
     w.__giveMaterials = () => {
-      const demonSoul: Item = { id: 'demon_soul', name: '妖怪残魂', kind: 'material', rarity: 1 }
-      const silverOre: Item = { id: 'silver_ore', name: '白银矿石', kind: 'material', rarity: 2 }
-      addItem(this.inventory, demonSoul, 20)
-      addItem(this.inventory, silverOre, 12)
+      const tanmu: Item = { id: 'wptm', name: '檀木', kind: 'material', rarity: 1, sourceFillName: 'wptm', sourceType: 'zbwp', sourceQuality: '普 通', sourceArray: 'wpEquipment' }
+      const xuantie: Item = { id: 'wpxt', name: '玄铁', kind: 'material', rarity: 1, sourceFillName: 'wpxt', sourceType: 'zbwp', sourceQuality: '普 通', sourceArray: 'wpEquipment' }
+      addItem(this.inventory, tanmu, 20)
+      addItem(this.inventory, xuantie, 12)
       return this.bagMaterials().map((m) => ({ id: m.item.id, name: m.item.name, qty: m.qty }))
     }
     w.__npc = () => ({
