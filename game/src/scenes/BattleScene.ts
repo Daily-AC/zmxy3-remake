@@ -183,6 +183,7 @@ import {
 } from '../ui/hud/hudTheme'
 import { RoleInfoHud } from '../ui/hud/RoleInfoHud'
 import { SkillBarHud, SkillSlotData } from '../ui/hud/SkillBarHud'
+import { activeArtFont } from '../systems/artFont'
 import { PrefabLoader, type PrefabDocument } from '../prefab/PrefabLoader'
 import bg12PrefabDoc from '../data/prefab/bg12.prefab.json'
 import bg13PrefabDoc from '../data/prefab/bg13.prefab.json'
@@ -663,6 +664,10 @@ export class BattleScene extends Phaser.Scene {
   // L2-L4's bgN2/bgN3.
   private bg12Layer?: Phaser.GameObjects.Container
   private bg13Layer?: Phaser.GameObjects.Container
+  // L1 爬塔段的云台/漂云可视层（bg11 自身裁切的羽化云素材）。平台碰撞体一直
+  // 只有 debug 线框可视（rebuildPlatformDebugOverlay 默认隐藏），正常游玩里
+  // 玩家看到的是"踩空气"——2026-07-09 用户打磨反馈后补上正式可视层。
+  private climbClouds: Phaser.GameObjects.GameObject[] = []
   private drops: DropEntity[] = []
   private dropSprites = new Map<DropEntity, Phaser.GameObjects.Container>()
   private enemyProjectiles: EnemyProjectile[] = []
@@ -824,6 +829,11 @@ export class BattleScene extends Phaser.Scene {
       }
     }
     this.load.image('ink_panel', 'assets/extracted/ui/dialogue_textpanel_crop.png')
+    // L1 爬塔云台/漂云素材：从 bg11 自身的云海带裁切+椭圆羽化（PIL，
+    // tools 见 progress.md 2026-07-09 前端打磨场）——修"平台踩空气/开局一片
+    // 米黄"（用户反馈"第一关的图还没贴上来"）。风格零风险：像素就来自 bg11。
+    this.load.image('cloud_puff1', 'assets/generated/cloud_puff1.png')
+    this.load.image('cloud_puff2', 'assets/generated/cloud_puff2.png')
     for (let i = 1; i <= TRANSFERWIND_FRAME_COUNT; i++) {
       this.load.image(`transferwind_${i}`, `assets/extracted/effects/transferwind_${i}.png`)
     }
@@ -1058,55 +1068,109 @@ export class BattleScene extends Phaser.Scene {
 
   // ---------- pause / return to main menu ----------
 
+  // 2026-07-09 重做（用户："设置页重新做，加一个返回地图的按钮"）：素色矩形
+  // → 水墨×暗金双线面板 + 毛笔字标题 + 木纹渐变按钮（MenuButton 同款 DNA，
+  // 手绘以便挂进本容器）。按钮点击用场景级 screen-space 命中（pointer.x/y），
+  // 不用 setInteractive——镜头滚动后 world-space 命中区会漂（SkillBarHud 同款
+  // 教训，2026-07-08 实测）。
+  private pauseButtons: { cx: number; cy: number; w: number; h: number; onClick: () => void }[] = []
+
   private buildPauseMenu(): void {
-    const scrim = this.add.rectangle(480, 270, 960, 540, 0x05060c, 0.62).setScrollFactor(0)
-    const panel = this.add
-      .rectangle(480, 276, 380, 320, 0x1a130c, 0.96)
-      .setStrokeStyle(2, 0xd9b45a, 0.9)
-      .setScrollFactor(0)
+    const scrim = this.add.rectangle(480, 270, 960, 540, 0x05060c, 0.68).setScrollFactor(0)
+    const pw = 400
+    const ph = 380
+    const px = 480 - pw / 2
+    const py = 270 - ph / 2 + 6
+    const panel = this.add.graphics().setScrollFactor(0)
+    panel.fillStyle(0x14100b, 0.96).fillRoundedRect(px, py, pw, ph, 12)
+    panel.lineStyle(3, 0x2c1a0c, 1).strokeRoundedRect(px - 2, py - 2, pw + 4, ph + 4, 14)
+    panel.lineStyle(2, 0xd9b45a, 0.9).strokeRoundedRect(px, py, pw, ph, 12)
+    panel.lineStyle(1, 0x8a6a30, 0.7).strokeRoundedRect(px + 6, py + 6, pw - 12, ph - 12, 9)
+    // 标题下分隔金线 + 中央菱形（大厅同款语汇）。
+    const dy = py + 74
+    panel.fillGradientStyle(0xd9b45a, 0xd9b45a, 0xd9b45a, 0xd9b45a, 0, 0.85, 0, 0.85)
+    panel.fillRect(480 - 140, dy, 134, 1.5)
+    panel.fillGradientStyle(0xd9b45a, 0xd9b45a, 0xd9b45a, 0xd9b45a, 0.85, 0, 0.85, 0)
+    panel.fillRect(480 + 6, dy, 134, 1.5)
+    panel.fillStyle(0xd9b45a, 0.95)
+    panel.beginPath()
+    panel.moveTo(480, dy - 4)
+    panel.lineTo(485, dy + 0.75)
+    panel.lineTo(480, dy + 5.5)
+    panel.lineTo(475, dy + 0.75)
+    panel.closePath()
+    panel.fillPath()
+
     const title = this.add
-      .text(480, 168, '暂停', { fontSize: '26px', color: '#f0d99a', fontStyle: 'bold' })
+      .text(480, py + 42, '暂　停', {
+        fontSize: '32px',
+        fontFamily: activeArtFont().family,
+        color: '#ffd873',
+        stroke: '#2c1a0c',
+        strokeThickness: 4,
+        padding: { top: 8, bottom: 8 },
+      })
       .setOrigin(0.5)
       .setScrollFactor(0)
-    const resume = this.pauseButton(480, 226, '继续', 0xd9b45a, () => this.togglePause())
-    const saveQuit = this.pauseButton(480, 282, '保存并回主菜单', 0x8a7f66, () =>
-      this.returnToMainMenu(),
-    )
+
+    this.pauseButtons = []
+    const resume = this.pauseButton(480, py + 118, '继　续', 'primary', () => this.togglePause())
+    const toMap = this.pauseButton(480, py + 174, '返回地图', 'ghost', () => this.returnToWorldMap())
+    const saveQuit = this.pauseButton(480, py + 230, '保存并回主菜单', 'ghost', () => this.returnToMainMenu())
     // Key-help lives here now (kept off the battlefield).
     const help = this.add
       .text(
         480,
-        356,
+        py + 314,
         'A/D 走　K 跳　J 连击\nYUIOL 技能　B 背包\nW/↑ 对话·传送　E 穿戴',
-        { fontSize: '14px', color: '#c8bfa6', align: 'center', lineSpacing: 6 },
+        { fontSize: '14px', color: '#c8bfa6', align: 'center', lineSpacing: 7 },
       )
       .setOrigin(0.5)
       .setScrollFactor(0)
     this.pauseMenu = this.add
-      .container(0, 0, [scrim, panel, title, ...resume, ...saveQuit, help])
+      .container(0, 0, [scrim, panel, title, ...resume, ...toMap, ...saveQuit, help])
       .setScrollFactor(0)
       .setDepth(300)
       .setVisible(false)
+
+    const onDown = (pointer: Phaser.Input.Pointer) => {
+      if (!this.paused || !this.pauseMenu?.visible) return
+      for (const b of this.pauseButtons) {
+        if (Math.abs(pointer.x - b.cx) <= b.w / 2 && Math.abs(pointer.y - b.cy) <= b.h / 2) {
+          b.onClick()
+          return
+        }
+      }
+    }
+    this.input.on('pointerdown', onDown)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.off('pointerdown', onDown))
   }
 
+  /** MenuButton 的木纹渐变皮，手绘进暂停容器（见 buildPauseMenu 头注）。 */
   private pauseButton(
     cx: number,
     cy: number,
     text: string,
-    color: number,
+    variant: 'primary' | 'ghost',
     onClick: () => void,
   ): Phaser.GameObjects.GameObject[] {
-    const rect = this.add
-      .rectangle(cx, cy, 280, 44, 0x2a2013, 0.95)
-      .setStrokeStyle(2, color, 1)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-    rect.on('pointerdown', onClick)
+    const w = 300
+    const h = 44
+    const pal =
+      variant === 'primary'
+        ? { top: 0xf2c65a, bottom: 0xd98f2e, edge: 0x4a2c12, inner: 0xfbe6a0, text: '#3a2410' }
+        : { top: 0x6b4a2c, bottom: 0x4a3016, edge: 0x2c1a0c, inner: 0xd9b45a, text: '#f2eddf' }
+    const g = this.add.graphics().setScrollFactor(0)
+    g.fillStyle(pal.edge, 1).fillRoundedRect(cx - w / 2 - 2, cy - h / 2 - 2, w + 4, h + 4, 12)
+    g.fillGradientStyle(pal.top, pal.top, pal.bottom, pal.bottom, 1)
+    g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, 10)
+    g.lineStyle(1.5, pal.inner, 0.9).strokeRoundedRect(cx - w / 2 + 3, cy - h / 2 + 3, w - 6, h - 6, 8)
     const label = this.add
-      .text(cx, cy, text, { fontSize: '17px', color: '#f2eddf', fontStyle: 'bold' })
+      .text(cx, cy, text, { fontSize: '18px', color: pal.text, fontStyle: 'bold' })
       .setOrigin(0.5)
       .setScrollFactor(0)
-    return [rect, label]
+    this.pauseButtons.push({ cx, cy, w, h, onClick })
+    return [g, label]
   }
 
   private togglePause(): void {
@@ -1123,6 +1187,16 @@ export class BattleScene extends Phaser.Scene {
     this.paused = false
     this.pauseMenu?.setVisible(false)
     this.scene.start('mainmenu')
+  }
+
+  /** 暂停菜单「返回地图」（2026-07-09 用户要求）：与回主菜单同样先落存档，
+   * 落点改为世界地图 hub（赛内屏幕流：登录→选人→地图→关卡）。 */
+  private returnToWorldMap(): void {
+    this.saveToSlot()
+    this.npcClient?.dispose()
+    this.paused = false
+    this.pauseMenu?.setVisible(false)
+    this.scene.start('worldmap')
   }
 
   // ---------- skills / MP ----------
@@ -1517,6 +1591,7 @@ export class BattleScene extends Phaser.Scene {
     this.level1Chain = undefined
     this.level1Spawner = undefined
     this.levelState = createLevelState(def)
+    this.rebuildClimbClouds(false)
     this.swapBackground(this.campaignIndex)
     this.showLevelBanner(def.name)
     this.resetClimbState()
@@ -1566,8 +1641,57 @@ export class BattleScene extends Phaser.Scene {
       this.floorImg?.setVisible(false)
     }
     for (const { img } of this.bgTiles) img.setVisible(false)
+    this.rebuildClimbClouds(stage.mode === 'climb')
     this.rebuildPlatformDebugOverlay()
     this.showLevelBanner(stage.name)
+  }
+
+  /** L1 爬塔段：给每块云带内的可穿透平台铺真云视觉（素材=bg11 裁切羽化片，
+   * 见 preload 注释），并在镜头范围里撒几朵慢速漂云做纵深。此前平台只有
+   * debug 线框（正常游玩不可见），开局又正对 bg11 最空的下段云雾，整屏读作
+   * "没贴图"——2026-07-09 用户反馈修正。 */
+  private rebuildClimbClouds(active: boolean): void {
+    for (const o of this.climbClouds) o.destroy()
+    this.climbClouds = []
+    if (!active || !this.textures.exists('cloud_puff1')) return
+    let i = 0
+    for (const wall of this.currentWalls) {
+      const style = level1PlatformDebugStyle(wall)
+      if (!style.adaptedCloudPlaceholder) continue
+      const tex = i % 2 === 0 ? 'cloud_puff1' : 'cloud_puff2'
+      const img = this.add.image(wall.x + wall.width / 2, wall.y + wall.height / 2 + 6, tex).setDepth(3)
+      // 云比碰撞体宽一圈、压在平台线上，顶缘≈站立线，脚感与视觉对齐。
+      img.displayWidth = wall.width * 1.35
+      img.displayHeight = Math.max(46, wall.width * 0.36)
+      this.climbClouds.push(img)
+      i++
+    }
+    // 氛围漂云：低视差、慢漂移，填 bg11 下段的空旷区。
+    const drift = [
+      { x: 200, y: 240, s: 0.55, w: 300 },
+      { x: 760, y: -160, s: 0.45, w: 340 },
+      { x: 420, y: -700, s: 0.5, w: 320 },
+      { x: 880, y: -1240, s: 0.42, w: 360 },
+      { x: 240, y: -1700, s: 0.5, w: 300 },
+    ]
+    drift.forEach((d, j) => {
+      const img = this.add
+        .image(d.x, d.y, j % 2 === 0 ? 'cloud_puff2' : 'cloud_puff1')
+        .setDepth(-20)
+        .setAlpha(0.75)
+        .setScrollFactor(d.s, 1)
+      img.displayWidth = d.w
+      img.displayHeight = d.w * 0.42
+      this.tweens.add({
+        targets: img,
+        x: d.x + (j % 2 === 0 ? 46 : -46),
+        duration: 6000 + j * 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+      this.climbClouds.push(img)
+    })
   }
 
   private updateLevel1(delta: number): void {
