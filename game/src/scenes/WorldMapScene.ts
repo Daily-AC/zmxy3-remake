@@ -28,6 +28,7 @@ import { FurnacePanel } from '../ui/hud/FurnacePanel'
 import type { CraftMaterialOption } from '../ui/hud/FurnacePanel'
 import { HUD_TEXTURES, HUD_ICONS, ICON_FALLBACK_KEY } from '../ui/hud/hudTheme'
 import { Toast } from '../ui/hud/Toast'
+import { MenuButton } from '../ui/menu/MenuButton'
 
 // S1 世界地图 hub. Everything below the map art (nodes/decorations/buttons +
 // coordinates) is data-driven from data/worldmapNodes.ts, which is
@@ -175,6 +176,7 @@ export class WorldMapScene extends Phaser.Scene {
 
     this.renderMap()
     this.buildFurnace()
+    this.buildLobbyEntry()
     this.toastUi = new Toast(this)
     this.connectNpc()
     this.exposeHooks()
@@ -233,6 +235,32 @@ export class WorldMapScene extends Phaser.Scene {
       img.on('pointerdown', () => this.onButton(btn))
       map.add(img)
     }
+  }
+
+  /**
+   * 2026-07-09 screen-flow change (用户拍板): the lobby's entry point moves
+   * from the (now login-gated) main menu to the world map. Placed as a plain
+   * screen-space MenuButton (no vendor bottom-bar texture/coordinate exists
+   * for this -- it's a hackathon-only feature) in the top-right corner, clear
+   * of the campaign nodes and the vendor bottom bar; visual placement is
+   * expected to be revisited later.
+   */
+  private buildLobbyEntry(): void {
+    new MenuButton(this, {
+      x: 878,
+      y: 32,
+      width: 140,
+      height: 36,
+      label: '联机共斗',
+      fontSize: 16,
+      variant: 'primary',
+      onClick: () => this.goToLobby(),
+    })
+  }
+
+  private goToLobby(): void {
+    this.npcClient?.dispose()
+    this.scene.start(SCENE.coopLobby)
   }
 
   private tryEnterLevel(campaignIndex: number): boolean {
@@ -411,6 +439,7 @@ export class WorldMapScene extends Phaser.Scene {
   private exposeHooks(): void {
     const w = window as unknown as Record<string, unknown>
     w.__shellScene = () => SCENE.worldMap
+    w.__shellGoToLobby = () => this.goToLobby()
     w.__shellMapState = () => ({
       slot: this.slot,
       currentIndex: this.currentIndex,
