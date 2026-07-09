@@ -9,13 +9,20 @@ import {
 } from "./npc-state.js";
 import { validateCraftedItem } from "./craft-validate.js";
 import { getOpencode, OPENCODE_MODEL, stripCodeFence, safeJsonParse } from "./llm.js";
-import type { NpcItem, NpcGoal, CraftedItem } from "./types.js";
+import { checkMaterials, findRecipe, listRecipes } from "./furnace-recipes.js";
+import type { NpcItem, NpcGoal, CraftedItem, CraftMaterialRef } from "./types.js";
 
 export interface NpcBrainCallbacks {
   onSay: (text: string) => void;
   onGiveItem: (item: NpcItem) => void;
   onSetGoal: (goal: NpcGoal) => void;
   onCraftItem: (item: CraftedItem) => void;
+  onCraftRecipe: (recipeId: string) => void;
+}
+
+export interface NpcTurnContext {
+  materials?: CraftMaterialRef[];
+  soul?: number;
 }
 
 // Provider switch: which LLM backend drives the NPC's cognitive layer.
@@ -61,6 +68,35 @@ const CRAFT_FLOW_GUIDANCE = `如果玩家是在向你描述一件想要打造的
    算数——真实游戏里玩家是点一下"交材料"的按钮，不会把材料名字念一遍。
    这种情况下这一轮就要正式打造，并且仍然要说几句交货时的俏皮话。`;
 
+const RECIPE_CRAFT_GUIDANCE = `如果玩家是在请求原版确定配方打造（例如"帮我炼尾火棍"）：
+1. 优先使用【炼丹炉确定配方】和【玩家当前材料/灵魂快照】判断，不要编造配方、材料或灵魂数量。
+2. 玩家问"你能打造什么"时，列出少量匹配配方或概括可打造清单；玩家问缺什么时，按快照指出缺少的制作书、材料或灵魂。
+3. 只有当玩家明确要打造某个已知配方，并且快照显示材料/灵魂大体齐备时，才发出 craft_recipe 结构化指令。
+4. 原版确定配方不要使用旧的自由炼器 craft_item；旧 craft_item 只留给"自定义神器/自定义效果"那条技术储备流。`;
+
+function recipeReferenceBlock(): string {
+  return listRecipes()
+    .map((recipe) => {
+      const role = recipe.role ? `${recipe.role} ` : "";
+      const mats = recipe.materials.map((m) => `${m.name}(${m.fillName})x${m.qty}`).join(" + ");
+      return `${recipe.bookFillName}: ${recipe.productName}（${role}${recipe.quality}）= ${recipe.bookName} + ${mats} + 灵魂${recipe.soulCost}`;
+    })
+    .join("\n");
+}
+
+function recipeSnapshotBlock(context: NpcTurnContext): string {
+  const soul = context.soul ?? 0;
+  const materials = context.materials ?? [];
+  const materialLine = materials.length
+    ? materials.map((m) => `${m.name}(${m.id})x${m.qty}`).join("，")
+    : "（当前快照里没有材料/制作书）";
+  return `灵魂：${soul}\n物品：${materialLine}`;
+}
+
+export function dispatchCraftRecipeIntent(recipeId: string, cb: NpcBrainCallbacks): void {
+  cb.onCraftRecipe(recipeId);
+}
+
 // Crafting effect DSL, shared shape between both providers. This only
 // constrains structure (legal stat/effect enum names) — it does NOT
 // constrain numeric ranges. That's intentional: the real numeric bounds are
@@ -90,6 +126,7 @@ export async function askNpc(
   npcId: string,
   playerText: string,
   cb: NpcBrainCallbacks,
+  context: NpcTurnContext = {},
 ): Promise<void> {
   const persona = getNpcPersona(npcId);
   if (!persona) {
@@ -112,10 +149,12 @@ export async function askNpc(
     : "（这是你们的第一次对话）";
 
   const provider = getProvider();
+  const recipesBlock = recipeReferenceBlock();
+  const recipeContextBlock = recipeSnapshotBlock(context);
   const finalSayText =
     provider === "claude"
-      ? await askViaClaudeAgentSdk(persona, eventsBlock, historyBlock, playerText, cb)
-      : await askViaOpencode(persona, eventsBlock, historyBlock, playerText, cb);
+      ? await askViaClaudeAgentSdk(persona, eventsBlock, historyBlock, recipesBlock, recipeContextBlock, playerText, cb, context)
+      : await askViaOpencode(persona, eventsBlock, historyBlock, recipesBlock, recipeContextBlock, playerText, cb);
 
   pushHistory(npcId, { role: "npc", text: finalSayText, at: Date.now() });
 }
@@ -164,12 +203,21 @@ const npcTurnSchema = z.object({
       effects: z.array(z.discriminatedUnion("type", [statEffectSchema, onHitEffectSchema])).optional(),
     })
     .optional(),
+  craft_recipe: z
+    .object({
+      recipeId: z.string(),
+    })
+    .optional(),
 });
+
+type NpcTurn = z.infer<typeof npcTurnSchema>;
 
 async function askViaOpencode(
   persona: NpcPersona,
   eventsBlock: string,
   historyBlock: string,
+  recipesBlock: string,
+  recipeContextBlock: string,
   playerText: string,
   cb: NpcBrainCallbacks,
 ): Promise<string> {
@@ -186,9 +234,11 @@ JSON 格式（字段说明，不要照抄字面值）：
   "craft_item": {
     "id": "英文/拼音slug", "name": "装备中文名", "rarity": 1到3的品阶, "desc": "装备描述",
     "effects": [ {"type":"stat","stat":"atk|def|hp|mp|crit","value":数值} 或 {"type":"onHit","effect":"burn|lifesteal|freeze","chance":0到1,"power":数值} ]（最多3条）
-  }
+  },
+  "craft_recipe": { "recipeId": "确定配方制作书fillName，例如whgzzs" }
 }
-只有剧情确实需要时才带上 give_item / set_goal / craft_item 字段，平时只需要 say 一个字段，不要三个字段都编出来。
+只有剧情确实需要时才带上 give_item / set_goal / craft_item / craft_recipe 字段，平时只需要 say 一个字段，不要四个字段都编出来。
+确定配方打造只能使用 craft_recipe；自由描述、非原版配方的技术储备打造才使用 craft_item。
 重要格式要求：字符串值内部绝对不能出现英文双引号 "，会破坏 JSON 结构导致整轮回复失效；
 如果要在台词里引用物品名/说法，一律用中文引号「」或『』，不要用 " " 或 “ ”。`;
 
@@ -198,14 +248,23 @@ ${eventsBlock}
 【你和玩家的对话记录】
 ${historyBlock}
 
+【炼丹炉确定配方】
+${recipesBlock}
+
+【玩家当前材料/灵魂快照】
+${recipeContextBlock}
+
 【玩家刚才说】
 ${playerText}
 
 请只输出符合上面 JSON 格式的一个对象，不要输出其他任何文字。
 
-${CRAFT_FLOW_GUIDANCE}`;
+${CRAFT_FLOW_GUIDANCE}
+
+${RECIPE_CRAFT_GUIDANCE}`;
 
   let finalSay = `（${persona.name}沉默不语）`;
+  let finalTurn: NpcTurn | undefined;
   const created = await client.session.create();
   if (created.error || !created.data) {
     console.error("[brain:opencode] failed to create session", created.error);
@@ -243,19 +302,8 @@ ${CRAFT_FLOW_GUIDANCE}`;
 
       if (parsed?.success) {
         const turn = parsed.data;
+        finalTurn = turn;
         finalSay = turn.say;
-        if (turn.give_item) cb.onGiveItem(turn.give_item);
-        if (turn.set_goal) cb.onSetGoal(turn.set_goal);
-        if (turn.craft_item) {
-          const item = validateCraftedItem({
-            id: turn.craft_item.id,
-            name: turn.craft_item.name,
-            rarity: turn.craft_item.rarity,
-            desc: turn.craft_item.desc,
-            effects: turn.craft_item.effects ?? [],
-          });
-          cb.onCraftItem(item);
-        }
       } else {
         console.error(
           "[brain:opencode] failed to parse/validate NPC turn JSON",
@@ -274,6 +322,19 @@ ${CRAFT_FLOW_GUIDANCE}`;
   }
 
   cb.onSay(finalSay);
+  if (finalTurn?.give_item) cb.onGiveItem(finalTurn.give_item);
+  if (finalTurn?.set_goal) cb.onSetGoal(finalTurn.set_goal);
+  if (finalTurn?.craft_item) {
+    const item = validateCraftedItem({
+      id: finalTurn.craft_item.id,
+      name: finalTurn.craft_item.name,
+      rarity: finalTurn.craft_item.rarity,
+      desc: finalTurn.craft_item.desc,
+      effects: finalTurn.craft_item.effects ?? [],
+    });
+    cb.onCraftItem(item);
+  }
+  if (finalTurn?.craft_recipe) dispatchCraftRecipeIntent(finalTurn.craft_recipe.recipeId, cb);
   return finalSay;
 }
 
@@ -285,11 +346,15 @@ async function askViaClaudeAgentSdk(
   persona: NpcPersona,
   eventsBlock: string,
   historyBlock: string,
+  recipesBlock: string,
+  recipeContextBlock: string,
   playerText: string,
   cb: NpcBrainCallbacks,
+  context: NpcTurnContext,
 ): Promise<string> {
   let sayCalled = false;
   let lastSayText = "";
+  const pendingRecipeIds: string[] = [];
 
   const sayTool = tool(
     "say",
@@ -366,10 +431,45 @@ async function askViaClaudeAgentSdk(
     },
   );
 
+  const listRecipesTool = tool(
+    "list_recipes",
+    "列出原版确定配方炼丹炉能打造的制作书/产物/材料/灵魂消耗。玩家问你能打造什么时使用。",
+    {},
+    async () => ({
+      content: [{ type: "text", text: JSON.stringify(listRecipes()) }],
+    }),
+  );
+
+  const checkMaterialsTool = tool(
+    "check_materials",
+    "按玩家当前材料/灵魂快照检查某个确定配方是否够料。只做建议，真正扣料由游戏端执行。",
+    {
+      recipeId: z.string().describe("制作书 fillName，例如 whgzzs"),
+    },
+    async (args) => {
+      const recipe = findRecipe(args.recipeId);
+      if (!recipe) return { content: [{ type: "text", text: "未知配方" }] };
+      const result = checkMaterials(recipe, context.materials ?? [], context.soul ?? 0);
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    },
+  );
+
+  const craftRecipeTool = tool(
+    "craft_recipe",
+    "请求游戏端按某个原版确定配方打造。只传 recipeId；游戏端会重新校验制作书、材料、灵魂和背包容量。",
+    {
+      recipeId: z.string().describe("制作书 fillName，例如 whgzzs"),
+    },
+    async (args) => {
+      pendingRecipeIds.push(args.recipeId);
+      return { content: [{ type: "text", text: "已把配方打造意图交给游戏端校验" }] };
+    },
+  );
+
   const npcTools = createSdkMcpServer({
     name: "npc",
     version: "0.1.0",
-    tools: [sayTool, giveItemTool, setGoalTool, craftItemTool],
+    tools: [sayTool, giveItemTool, setGoalTool, craftItemTool, listRecipesTool, checkMaterialsTool, craftRecipeTool],
   });
 
   const prompt = `【最近的世界事件】
@@ -378,16 +478,24 @@ ${eventsBlock}
 【你和玩家的对话记录】
 ${historyBlock}
 
+【炼丹炉确定配方】
+${recipesBlock}
+
+【玩家当前材料/灵魂快照】
+${recipeContextBlock}
+
 【玩家刚才说】
 ${playerText}
 
 请调用 say 工具回应玩家这句话（必须调用且只调用一次 say）；如果剧情合适，
-可以额外调用 give_item 或 set_goal。
+可以额外调用 give_item、set_goal、list_recipes、check_materials 或 craft_recipe。
 
 ${CRAFT_FLOW_GUIDANCE.replace("这一轮不要打造，只回应报价", "这一轮不要调用 craft_item，只用 say 报价").replace(
   "才正式打造",
   "才调用 craft_item 正式打造",
 )}
+
+${RECIPE_CRAFT_GUIDANCE.replace("才发出 craft_recipe 结构化指令", "才调用 craft_recipe 工具")}
 
 除了这些工具调用，不要输出任何其他内容。`;
 
@@ -403,6 +511,9 @@ ${CRAFT_FLOW_GUIDANCE.replace("这一轮不要打造，只回应报价", "这一
         "mcp__npc__give_item",
         "mcp__npc__set_goal",
         "mcp__npc__craft_item",
+        "mcp__npc__list_recipes",
+        "mcp__npc__check_materials",
+        "mcp__npc__craft_recipe",
       ],
       tools: [],
     },
@@ -417,6 +528,7 @@ ${CRAFT_FLOW_GUIDANCE.replace("这一轮不要打造，只回应报价", "这一
     lastSayText = fallbackResultText?.trim() || `（${persona.name}沉默不语）`;
     cb.onSay(lastSayText);
   }
+  for (const recipeId of pendingRecipeIds) dispatchCraftRecipeIntent(recipeId, cb);
 
   return lastSayText;
 }

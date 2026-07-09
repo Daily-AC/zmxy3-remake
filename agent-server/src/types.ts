@@ -68,6 +68,8 @@ export interface PlayerSayMessage {
   npcId: string;
   playerId?: string;
   text: string;
+  materials?: CraftMaterialRef[];
+  soul?: number;
 }
 
 /** A single material lot the player is spending in a furnace craft. Mirrors
@@ -152,6 +154,13 @@ export interface CraftItemMessage {
   item: CraftedItem;
 }
 
+export interface CraftRecipeMessage {
+  type: "craft_recipe";
+  npcId: string;
+  recipeId: string;
+  flavor: string;
+}
+
 /** Response to a `craft_request`: a server-forged, statically-clamped item plus
  * 太上老君's line quoting the materials/description. Still re-clamped game-side
  * against the request budget before it enters the bag. */
@@ -184,6 +193,7 @@ export type OutboundMessage =
   | GiveItemMessage
   | SetGoalMessage
   | CraftItemMessage
+  | CraftRecipeMessage
   | CraftResultMessage
   | CraftRejectMessage
   | ErrorMessage;
