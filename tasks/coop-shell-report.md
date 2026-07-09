@@ -197,8 +197,29 @@ tabs' independent `BattleScene` L1 entry.
 
 Committed directly (outside Codex's execution sandbox, which cannot write
 `.git` or open listening sockets -- see above). One commit per logical
-file/group, not squashed, not pushed. See the final commit list the wrapper
-appended after this report.
+file/group, not squashed, not pushed:
+
+```
+dcbb2ae feat(coop-shell): social REST+WS client (login/register/rooms)
+813a61a feat(coop-shell): add LoginScene (register/login gate)
+3ecf9f9 feat(coop-shell): add LobbyScene (create/join/ready/start)
+519f51f feat(coop-shell): register coop scene keys and Phaser scenes
+359a436 feat(coop-shell): login-first screen flow (2026-07-09 用户拍板)
+f37aaf0 feat(coop-shell): BattleScene COOP-SEAM (accept coopSession, store only)
+aefb532 fix(social-server): add CORS headers, blocking every browser client
+4d962d5 feat(coop-shell): add 联机共斗 lobby entry point to world map
+```
+
+Note on commit order: `4d962d5` (the WorldMapScene lobby button) was
+committed earlier in the sequence, via a hand-built patch, because
+`WorldMapScene.ts` had another workstream's (furnace-recipe) uncommitted
+changes mixed into the same working-tree file. Used a HEAD-based copy +
+my known 4 edits + `git apply --cached` to stage and commit *only* my
+hunks, leaving furnace-recipe's own changes untouched and unstaged in the
+working tree for their own commit -- verified before and after that the
+staged diff was exactly mine and the remaining unstaged diff was exactly
+theirs. `BattleScene.ts` needed no such surgery: its only diff was this
+task's COOP-SEAM, cleanly isolated already.
 
 ## Backend Protocol Notes
 
