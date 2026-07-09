@@ -218,9 +218,14 @@ export class SkillTreeScene extends Phaser.Scene {
   private rebindModal?: Phaser.GameObjects.Container
   private artFontTexts: Phaser.GameObjects.Text[] = []
   private upgradeTooltip?: Phaser.GameObjects.Text
+  private returnScene: string = SCENE.worldMap
 
   constructor() {
     super(SCENE.skillTree)
+  }
+
+  init(data?: { returnScene?: string }): void {
+    this.returnScene = data?.returnScene === SCENE.battle ? SCENE.battle : SCENE.worldMap
   }
 
   /** Reuses the shared font loader another concurrent task already built
@@ -356,6 +361,11 @@ export class SkillTreeScene extends Phaser.Scene {
 
   private goBack(): void {
     this.persist()
+    if (this.returnScene === SCENE.battle) {
+      this.scene.stop()
+      this.scene.resume(SCENE.battle)
+      return
+    }
     this.scene.start(SCENE.worldMap)
   }
 

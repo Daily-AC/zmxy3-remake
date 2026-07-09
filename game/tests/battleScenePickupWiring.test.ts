@@ -45,4 +45,24 @@ describe('BattleScene pickup wiring', () => {
     expect(source).toMatch(/stepEnemyProjectiles\(\s*this\.enemyProjectiles,/)
     expect(source).toMatch(/damageHero\(this\.identity, heroHit, this\.simClockMs\)/)
   })
+
+  it('does not show pinyin abbreviation text when a skill cast succeeds', () => {
+    const source = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
+
+    expect(source).not.toMatch(/skillId\.toUpperCase\(\)/)
+    expect(source).not.toMatch(/showToast\(`\$\{skillId/)
+  })
+
+  it('opens the existing SkillTreeScene from the battle skill dock and resumes battle on return', () => {
+    const battle = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
+    const skillTree = readFileSync(new URL('../src/scenes/SkillTreeScene.ts', import.meta.url), 'utf8')
+
+    expect(battle).toMatch(/else if \(icon === 'jineng'\) this\.openSkillTreeFromBattle\(\)/)
+    expect(battle).toMatch(/this\.scene\.launch\(SCENE\.skillTree, \{ returnScene: SCENE\.battle \}\)/)
+    expect(battle).toMatch(/this\.scene\.pause\(SCENE\.battle\)/)
+    expect(battle).not.toMatch(/技能学习与按键设置/)
+
+    expect(skillTree).toMatch(/returnScene\?: string/)
+    expect(skillTree).toMatch(/this\.scene\.resume\(SCENE\.battle\)/)
+  })
 })
