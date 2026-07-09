@@ -185,6 +185,9 @@ export class LoginScene extends Phaser.Scene {
       caretColor: '#8a1f18',
       outline: 'none',
       transition: 'text-shadow 160ms ease',
+      // Phaser DOMElement.setRotation does not reach the node in this setup;
+      // rotate the input itself so text/caret sit on the hand-drawn tilt.
+      transform: `rotate(${(box.rot * 180) / Math.PI}deg)`,
     })
     input.addEventListener('focus', () => {
       input.style.textShadow = '0 0 6px rgba(179,39,30,0.35)'
