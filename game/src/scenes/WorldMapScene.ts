@@ -14,6 +14,13 @@ import { restoreGameState, createGameSave } from '../systems/save'
 import type { LoadedGameState } from '../systems/save'
 import { listStacks, addItem } from '../systems/inventory'
 import {
+  canCraft as canCraftRecipe,
+  craft as craftRecipe,
+  equipmentItemByFillName,
+  listRecipes as listFurnaceRecipes,
+  type CraftCheck,
+} from '../systems/furnaceRecipe'
+import {
   buildCraftRequest,
   lockMaterials,
   consumeMaterials,
@@ -26,6 +33,7 @@ import { NpcClient, resolveNpcServerUrl } from '../net/npcClient'
 import type { ServerMessage, CraftedItem } from '../net/npcClient'
 import { FurnacePanel } from '../ui/hud/FurnacePanel'
 import type { CraftMaterialOption } from '../ui/hud/FurnacePanel'
+import { FurnaceRecipeView } from '../ui/hud/FurnaceRecipeView'
 import { HUD_TEXTURES, HUD_ICONS, ICON_FALLBACK_KEY } from '../ui/hud/hudTheme'
 import { Toast } from '../ui/hud/Toast'
 import { MenuButton } from '../ui/menu/MenuButton'
@@ -121,6 +129,7 @@ export class WorldMapScene extends Phaser.Scene {
   private playtimeSec = 0
   private currentIndex = 0
   private furnacePanel!: FurnacePanel
+  private furnaceRecipeView!: FurnaceRecipeView
   private toastUi!: Toast
   private npcClient!: NpcClient
   private craftPending: {
@@ -176,6 +185,7 @@ export class WorldMapScene extends Phaser.Scene {
 
     this.renderMap()
     this.buildFurnace()
+    this.buildFurnaceRecipeView()
     this.buildLobbyEntry()
     this.toastUi = new Toast(this)
     this.connectNpc()
@@ -304,6 +314,8 @@ export class WorldMapScene extends Phaser.Scene {
       progression: this.loaded.progression,
       equipment: this.loaded.equipment,
       inventory: this.loaded.inventory,
+      skillTree: this.loaded.skillTree,
+      soul: this.loaded.soul,
     })
     writeSlot(storage, this.slot, buildSlotEnvelope(save, this.playtimeSec))
     writeCampaignIndex(storage, this.slot, this.currentIndex)
@@ -323,6 +335,15 @@ export class WorldMapScene extends Phaser.Scene {
     })
   }
 
+  private buildFurnaceRecipeView(): void {
+    this.furnaceRecipeView = new FurnaceRecipeView(this, {
+      recipes: listFurnaceRecipes(),
+      checkFor: (bookFillName) => canCraftRecipe(this.loaded.inventory, this.loaded.soul, bookFillName),
+      onCraftSubmit: (bookFillName) => this.submitRecipeCraft(bookFillName),
+      onChatSubmit: (text) => this.submitRecipeChat(text),
+    })
+  }
+
   private craftBudgetLine(lots: MaterialLot[]): string {
     if (lots.length === 0) return '炉火预算：0 点（先择材）'
     const b = computeBudget(lots)
@@ -336,16 +357,52 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   private openFurnace(): void {
-    if (this.craftPending) {
-      this.toastUi.show('老君正在炼制上一件…', '#c8cfe6')
+    this.furnaceRecipeView.open()
+  }
+
+  private recipeFailureText(result: CraftCheck): string {
+    if (result.ok) return ''
+    if (result.reason === 'unknown_recipe') return '老君炉中没有这张配方'
+    if (result.reason === 'missing_book') return '缺少对应制作书'
+    if (result.reason === 'missing_materials') {
+      return `材料不足：${result.missing.map((m) => `${m.name}${m.have}/${m.needed}`).join('、')}`
+    }
+    if (result.reason === 'insufficient_soul') return `灵魂不足：${result.have}/${result.needed}`
+    return '背包已满，腾出空位再打造'
+  }
+
+  private submitRecipeCraft(bookFillName: string): void {
+    const result = craftRecipe(this.loaded.inventory, this.loaded.soul, bookFillName)
+    if (result.ok) {
+      this.loaded.soul = result.newSoul
+      this.toastUi.show(`炼成【${result.item.name}】`, '#ffd873')
+      this.persistSlot()
+    } else {
+      this.toastUi.show(this.recipeFailureText(result), '#e0b060')
+    }
+    this.furnaceRecipeView.refresh()
+  }
+
+  private recipeChatMaterials() {
+    return listStacks(this.loaded.inventory)
+      .filter((s) => s.item.kind === 'material')
+      .map((s) => ({ id: s.item.id, name: s.item.name, rarity: s.item.rarity, qty: s.qty }))
+  }
+
+  private submitRecipeChat(text: string): void {
+    if (!this.npcClient.isOpen()) {
+      this.toastUi.show('太上老君正在闭关…', '#7a7f95')
       return
     }
-    const mats = this.bagMaterials()
-    if (mats.length === 0) {
-      this.toastUi.show('囊中空空，先去打些妖怪取材吧', '#c8cfe6')
+    const sent = this.npcClient.playerSay(NPC_ID, text, 'p1', {
+      materials: this.recipeChatMaterials(),
+      soul: this.loaded.soul,
+    })
+    if (!sent) {
+      this.toastUi.show('太上老君正在闭关…', '#7a7f95')
       return
     }
-    this.furnacePanel.open(mats)
+    this.furnaceRecipeView.setCraftLocked(true)
   }
 
   private submitCraft(description: string, lots: MaterialLot[]): void {
@@ -430,7 +487,14 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   private onNpcMessage(m: ServerMessage): void {
-    if (m.type === 'craft_result') this.onCraftResult(m.item, m.flavor, m.requestId)
+    if (m.type === 'npc_say') {
+      this.furnaceRecipeView.appendNpcLine(m.text)
+      this.furnaceRecipeView.setCraftLocked(false)
+    } else if (m.type === 'craft_recipe') {
+      this.furnaceRecipeView.appendNpcLine(m.flavor)
+      this.submitRecipeCraft(m.recipeId)
+      this.furnaceRecipeView.setCraftLocked(false)
+    } else if (m.type === 'craft_result') this.onCraftResult(m.item, m.flavor, m.requestId)
     else if (m.type === 'craft_reject') this.onCraftReject(m.reason, m.requestId)
   }
 
@@ -471,5 +535,21 @@ export class WorldMapScene extends Phaser.Scene {
       this.submitCraft(description, lots)
       return { pending: !!this.craftPending, requestId: this.craftPending?.requestId ?? null }
     }
+    w.__giveMaterials = (fillName: string, qty: number): boolean => {
+      const item = equipmentItemByFillName(fillName)
+      if (!item) return false
+      const result = addItem(this.loaded.inventory, item, Math.max(0, Math.floor(qty)))
+      this.furnaceRecipeView?.refresh()
+      return result.ok
+    }
+    w.__giveSoul = (amount: number): void => {
+      this.loaded.soul += Math.max(0, Math.floor(amount))
+      this.furnaceRecipeView?.refresh()
+    }
+    w.__shellMapRecipeState = () => ({
+      soul: this.loaded.soul,
+      npcOnline: this.npcClient.isOpen(),
+      ...this.furnaceRecipeView.debugState(),
+    })
   }
 }
