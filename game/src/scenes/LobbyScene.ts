@@ -1,5 +1,8 @@
 import Phaser from 'phaser'
 import { Toast } from '../ui/hud/Toast'
+import { activeArtFont } from '../systems/artFont'
+import { MenuButton } from '../ui/menu/MenuButton'
+import type { MenuButtonVariant } from '../ui/menu/MenuButton'
 import {
   SocialRestError,
   getSharedSocialClient,
@@ -13,29 +16,35 @@ import {
 } from '../net/socialClient'
 import { SCENE } from './shellShared'
 
+// 2026-07-09 视觉重做（用户打磨反馈：素面板 → 全游戏统一的水墨×暗金基调）。
+// 逻辑/协议/验收 hook 与重做前完全一致，只换了渲染层：地图暗化作底、双线金边
+// 墨面板、毛笔字体标题、MenuButton（主菜单同款木纹按钮）替代素色矩形按钮。
 export const LOBBY_THEME = {
   w: 960,
   h: 540,
-  bg: 0x10131d,
-  panel: 0x1a130c,
-  panelAlpha: 0.94,
+  bg: 0x0b0a0d,
+  panel: 0x14100b,
+  panelAlpha: 0.93,
   row: 0x241a10,
   gold: 0xd9b45a,
+  goldDim: 0x8a6a30,
   disabled: 0x5d5140,
   text: '#f2eddf',
   muted: '#b8aa8a',
   active: '#ffd873',
   good: '#6ef0a0',
   danger: '#e07a7a',
-  inputBg: 'rgba(14,16,26,0.82)',
+  inputBg: 'rgba(20,14,8,0.9)',
   inputBorder: '#d9b45a',
-  fontTitle: '26px',
+  fontTitle: '34px',
   fontBody: '17px',
   fontSmall: '14px',
-  panelW: 660,
-  panelH: 390,
-  inputW: 240,
+  panelW: 640,
+  panelH: 440,
+  inputW: 250,
 } as const
+
+const LOBBY_BG_TEX = 'wm_map_bg'
 
 type LobbyMode = 'roomSelect' | 'inRoom'
 export type LobbyRoomView = RoomSnapshot | null
@@ -109,6 +118,11 @@ export class LobbyScene extends Phaser.Scene {
     super(SCENE.coopLobby)
   }
 
+  preload(): void {
+    // 世界地图原画作暗化底图（玩家从地图进大厅，视觉上是同一空间的延续）。
+    if (!this.textures.exists(LOBBY_BG_TEX)) this.load.image(LOBBY_BG_TEX, 'assets/extracted/worldmap/map_bg.jpg')
+  }
+
   create(): void {
     this.client = runtimeSocialClient()
     if (!this.client.getSession()) {
@@ -163,106 +177,179 @@ export class LobbyScene extends Phaser.Scene {
     this.clearRoot()
     const t = LOBBY_THEME
     const cx = t.w / 2
-    const cy = t.h / 2
     const panel = this.basePanel('联机大厅')
-    const user = this.client.getSession()?.user.username ?? ''
-    const userText = this.add.text(cx, cy - 138, `当前账号：${user}`, { fontSize: t.fontSmall, color: t.muted }).setOrigin(0.5)
+    this.root = this.add.container(0, 0, [panel])
 
-    const levelLabel = this.add.text(cx - 210, cy - 78, '关卡', { fontSize: t.fontBody, color: t.text }).setOrigin(0, 0.5)
-    const l1 = this.button(cx - 76, cy - 78, 74, 34, 'L1', () => {
+    const user = this.client.getSession()?.user.username ?? ''
+    this.root.add(
+      this.add.text(cx, 148, `当前账号 · ${user}`, { fontSize: t.fontSmall, color: t.muted }).setOrigin(0.5),
+    )
+
+    this.root.add(this.sectionLabel(238, 205, '关　卡'))
+    this.lobbyButton(408, 205, 86, 40, 'L1', () => {
       this.selectedLevel = 'L1'
       this.render()
-    }, !this.busy, this.selectedLevel === 'L1')
-    const l2 = this.button(cx + 8, cy - 78, 74, 34, 'L2', () => {
+    }, !this.busy, this.selectedLevel === 'L1' ? 'primary' : 'ghost')
+    this.lobbyButton(504, 205, 86, 40, 'L2', () => {
       this.selectedLevel = 'L2'
       this.render()
-    }, !this.busy, this.selectedLevel === 'L2')
-    const create = this.button(cx + 142, cy - 78, 150, 34, '创建房间', () => {
+    }, !this.busy, this.selectedLevel === 'L2' ? 'primary' : 'ghost')
+    this.lobbyButton(650, 205, 150, 40, '创建房间', () => {
       void this.createRoom()
-    }, !this.busy)
+    }, !this.busy, 'primary')
 
-    const joinLabel = this.add.text(cx - 210, cy - 8, '加入房间', { fontSize: t.fontBody, color: t.text }).setOrigin(0, 0.5)
-    const input = this.buildInput(cx - 76, cy - 8, t.inputW, '输入房间 ID', () => {
+    this.root.add(this.sectionLabel(238, 285, '加入房间'))
+    const input = this.buildInput(330, 285, t.inputW, '输入房间 ID', () => {
       void this.joinTypedRoom()
     })
     this.roomInput = input.node as HTMLInputElement
-    const join = this.button(cx + 200, cy - 8, 110, 34, '加入', () => {
+    this.root.add(input)
+    this.lobbyButton(650, 285, 110, 40, '加入', () => {
       void this.joinTypedRoom()
-    }, !this.busy)
+    }, !this.busy, 'ghost')
 
-    const status = this.add
-      .text(cx, cy + 64, this.statusLine, { fontSize: t.fontSmall, color: this.busy ? t.active : t.muted })
-      .setOrigin(0.5)
+    this.root.add(
+      this.add
+        .text(cx, 345, this.statusLine, { fontSize: t.fontSmall, color: this.busy ? t.active : t.muted })
+        .setOrigin(0.5),
+    )
     // 2026-07-09: lobby entry moved from the main menu to a button on the
     // world map (see WorldMapScene.goToLobby), so this needs its own way
     // back that doesn't log the player out.
-    const back = this.button(cx - 120, cy + 126, 110, 32, '返回地图', () => this.backToMap(), !this.busy)
-    const logout = this.button(cx + 120, cy + 126, 110, 32, '退出登录', () => this.logout(), !this.busy)
-
-    this.root = this.add.container(0, 0, [panel, userText, levelLabel, l1, l2, create, joinLabel, input, join, status, back, logout])
+    this.lobbyButton(390, 428, 150, 40, '返回地图', () => this.backToMap(), !this.busy, 'ghost')
+    this.lobbyButton(570, 428, 150, 40, '退出登录', () => this.logout(), !this.busy, 'danger')
   }
 
   private renderRoom(): void {
     this.clearRoot()
     const t = LOBBY_THEME
     const cx = t.w / 2
-    const cy = t.h / 2
     const panel = this.basePanel('房间准备')
+    this.root = this.add.container(0, 0, [panel])
     const room = this.room
     const me = this.client.requireSession().user.id
-    const header = this.add
-      .text(
-        cx,
-        cy - 140,
-        room ? `房间 ${room.id} · ${room.levelId}${isOwner(room, me) ? ' · 房主' : ''}` : '正在连接房间...',
-        { fontSize: t.fontBody, color: t.active },
-      )
-      .setOrigin(0.5)
-    const hint = this.add
-      .text(cx, cy - 112, '把房间 ID 发给队友，对方在大厅输入后加入', { fontSize: t.fontSmall, color: t.muted })
-      .setOrigin(0.5)
 
-    const children: Phaser.GameObjects.GameObject[] = [panel, header, hint]
+    this.root.add(
+      this.add
+        .text(
+          cx,
+          150,
+          room ? `房间 ${room.id} · ${room.levelId}${isOwner(room, me) ? ' · 房主' : ''}` : '正在连接房间...',
+          { fontSize: '19px', color: t.active, fontStyle: 'bold' },
+        )
+        .setOrigin(0.5),
+    )
+    this.root.add(
+      this.add
+        .text(cx, 178, '把房间 ID 发给队友，对方在大厅输入后加入', { fontSize: t.fontSmall, color: t.muted })
+        .setOrigin(0.5),
+    )
+
     if (room) {
       room.members.forEach((member, index) => {
-        const y = cy - 58 + index * 34
-        const row = this.add.rectangle(cx, y, 470, 28, t.row, 0.9).setStrokeStyle(1, t.gold, 0.25)
+        const y = 220 + index * 42
+        const row = this.add.graphics()
+        row.fillStyle(t.row, 0.92).fillRoundedRect(cx - 250, y - 17, 500, 34, 8)
+        row.lineStyle(1, t.gold, 0.35).strokeRoundedRect(cx - 250, y - 17, 500, 34, 8)
         const ownerMark = member.userId === room.ownerId ? '房主' : '队员'
         const meMark = member.userId === me ? ' · 我' : ''
         const name = this.add
-          .text(cx - 220, y, `${member.username}（${ownerMark}${meMark}）`, { fontSize: t.fontSmall, color: t.text })
+          .text(cx - 228, y, `${member.username}（${ownerMark}${meMark}）`, { fontSize: t.fontSmall, color: t.text })
           .setOrigin(0, 0.5)
         const ready = this.add
-          .text(cx + 140, y, member.ready ? '已准备' : '未准备', {
+          .text(cx + 160, y, member.ready ? '已准备' : '未准备', {
             fontSize: t.fontSmall,
             color: member.ready ? t.good : t.muted,
+            fontStyle: member.ready ? 'bold' : '',
           })
           .setOrigin(0, 0.5)
-        children.push(row, name, ready)
+        this.root?.add([row, name, ready])
       })
     }
 
-    const readyLabel = roomMemberReady(room, me) ? '取消准备' : '准备'
-    const readyButton = this.button(cx - 146, cy + 126, 120, 34, readyLabel, () => this.toggleReady(), !!room)
-    const startButton = isOwner(room, me)
-      ? this.button(cx, cy + 126, 120, 34, '开始', () => this.startRoom(), canStartRoom(room, me))
-      : this.add.container(0, 0)
-    const leaveButton = this.button(cx + 146, cy + 126, 120, 34, '离开', () => this.leaveRoom(), true)
-    children.push(readyButton, startButton, leaveButton)
-
-    this.root = this.add.container(0, 0, children)
+    const readyLabel = roomMemberReady(room, me) ? '取消准备' : '准　备'
+    this.lobbyButton(334, 428, 140, 40, readyLabel, () => this.toggleReady(), !!room, 'primary')
+    if (isOwner(room, me)) {
+      this.lobbyButton(480, 428, 130, 40, '开　始', () => this.startRoom(), canStartRoom(room, me), 'primary')
+    }
+    this.lobbyButton(626, 428, 130, 40, '离　开', () => this.leaveRoom(), true, 'danger')
   }
 
+  /** 全屏底：暗化世界地图 + 墨色渐晕 + 双线金边墨面板 + 毛笔字标题。 */
   private basePanel(title: string): Phaser.GameObjects.Container {
     const t = LOBBY_THEME
     const cx = t.w / 2
     const cy = t.h / 2
-    const bg = this.add.rectangle(cx, cy, t.w, t.h, t.bg, 1)
+    const children: Phaser.GameObjects.GameObject[] = []
+
+    children.push(this.add.rectangle(cx, cy, t.w, t.h, t.bg, 1))
+    if (this.textures.exists(LOBBY_BG_TEX)) {
+      // map_bg 940x590 cover-fit 进 960x540（放大 1.022，垂直居中裁切）。
+      const img = this.add.image(cx, cy, LOBBY_BG_TEX)
+      const s = Math.max(t.w / img.width, t.h / img.height)
+      img.setScale(s).setAlpha(0.35)
+      children.push(img)
+    }
+    const shade = this.add.graphics()
+    shade.fillStyle(0x0b0a0d, 0.55).fillRect(0, 0, t.w, t.h)
+    shade.fillGradientStyle(0x0b0a0d, 0x0b0a0d, 0x0b0a0d, 0x0b0a0d, 0.85, 0.85, 0, 0)
+    shade.fillRect(0, 0, t.w, 120)
+    shade.fillGradientStyle(0x0b0a0d, 0x0b0a0d, 0x0b0a0d, 0x0b0a0d, 0, 0, 0.9, 0.9)
+    shade.fillRect(0, t.h - 120, t.w, 120)
+    children.push(shade)
+
+    const px = cx - t.panelW / 2
+    const py = cy - t.panelH / 2
     const panel = this.add.graphics()
-    panel.fillStyle(t.panel, t.panelAlpha).fillRoundedRect(cx - t.panelW / 2, cy - t.panelH / 2, t.panelW, t.panelH, 8)
-    panel.lineStyle(2, t.gold, 0.85).strokeRoundedRect(cx - t.panelW / 2, cy - t.panelH / 2, t.panelW, t.panelH, 8)
-    const titleText = this.add.text(cx, cy - 174, title, { fontSize: t.fontTitle, color: t.active, fontStyle: 'bold' }).setOrigin(0.5)
-    return this.add.container(0, 0, [bg, panel, titleText])
+    panel.fillStyle(t.panel, t.panelAlpha).fillRoundedRect(px, py, t.panelW, t.panelH, 12)
+    panel.lineStyle(3, 0x2c1a0c, 1).strokeRoundedRect(px - 2, py - 2, t.panelW + 4, t.panelH + 4, 14)
+    panel.lineStyle(2, t.gold, 0.9).strokeRoundedRect(px, py, t.panelW, t.panelH, 12)
+    panel.lineStyle(1, t.goldDim, 0.7).strokeRoundedRect(px + 6, py + 6, t.panelW - 12, t.panelH - 12, 9)
+    children.push(panel)
+
+    const titleText = this.add
+      .text(cx, py + 44, title, {
+        fontSize: t.fontTitle,
+        fontFamily: activeArtFont().family,
+        color: t.active,
+        stroke: '#2c1a0c',
+        strokeThickness: 4,
+        padding: { top: 8, bottom: 8 },
+      })
+      .setOrigin(0.5)
+    children.push(titleText)
+
+    // 标题下分隔线：两翼渐隐金线 + 中央菱形。
+    const divider = this.add.graphics()
+    const dy = py + 78
+    divider.fillGradientStyle(t.gold, t.gold, t.gold, t.gold, 0, 0.85, 0, 0.85)
+    divider.fillRect(cx - 200, dy, 194, 1.5)
+    divider.fillGradientStyle(t.gold, t.gold, t.gold, t.gold, 0.85, 0, 0.85, 0)
+    divider.fillRect(cx + 6, dy, 194, 1.5)
+    divider.fillStyle(t.gold, 0.95)
+    divider.beginPath()
+    divider.moveTo(cx, dy - 4)
+    divider.lineTo(cx + 5, dy + 0.75)
+    divider.lineTo(cx, dy + 5.5)
+    divider.lineTo(cx - 5, dy + 0.75)
+    divider.closePath()
+    divider.fillPath()
+    children.push(divider)
+
+    return this.add.container(0, 0, children)
+  }
+
+  private sectionLabel(x: number, y: number, text: string): Phaser.GameObjects.Text {
+    return this.add
+      .text(x, y, text, {
+        fontSize: '22px',
+        fontFamily: activeArtFont().family,
+        color: '#e8d9b0',
+        stroke: '#2c1a0c',
+        strokeThickness: 3,
+        padding: { top: 6, bottom: 6 },
+      })
+      .setOrigin(0, 0.5)
   }
 
   private clearRoot(): void {
@@ -271,7 +358,8 @@ export class LobbyScene extends Phaser.Scene {
     this.roomInput = undefined
   }
 
-  private button(
+  /** MenuButton（主菜单/世界地图同款木纹按钮）挂进 root，随 render() 重建销毁。 */
+  private lobbyButton(
     x: number,
     y: number,
     w: number,
@@ -279,20 +367,21 @@ export class LobbyScene extends Phaser.Scene {
     label: string,
     onClick: () => void,
     enabled = true,
-    active = false,
-  ): Phaser.GameObjects.Container {
-    const fill = active ? 0x4a3817 : enabled ? 0x3a2c12 : LOBBY_THEME.disabled
-    const rect = this.add.rectangle(0, 0, w, h, fill, enabled ? 0.95 : 0.65).setStrokeStyle(2, LOBBY_THEME.gold, enabled ? 1 : 0.35)
-    const text = this.add
-      .text(0, 0, label, {
-        fontSize: LOBBY_THEME.fontBody,
-        color: enabled ? LOBBY_THEME.active : LOBBY_THEME.muted,
-        fontStyle: active ? 'bold' : '',
-      })
-      .setOrigin(0.5)
-    const container = this.add.container(x, y, [rect, text]).setSize(w, h)
-    if (enabled) container.setInteractive({ useHandCursor: true }).on('pointerdown', onClick)
-    return container
+    variant: MenuButtonVariant = 'ghost',
+  ): MenuButton {
+    const btn = new MenuButton(this, {
+      x,
+      y,
+      width: w,
+      height: h,
+      label,
+      fontSize: 17,
+      variant,
+      enabled,
+      onClick,
+    })
+    this.root?.add(btn.container)
+    return btn
   }
 
   private buildInput(leftX: number, cy: number, width: number, placeholder: string, onEnter: () => void): Phaser.GameObjects.DOMElement {
@@ -303,13 +392,15 @@ export class LobbyScene extends Phaser.Scene {
     Object.assign(input.style, {
       width: `${width}px`,
       boxSizing: 'border-box',
-      padding: '7px 10px',
+      padding: '9px 12px',
       fontSize: '15px',
-      border: `1px solid ${LOBBY_THEME.inputBorder}`,
-      borderRadius: '8px',
+      border: `1.5px solid ${LOBBY_THEME.inputBorder}`,
+      borderRadius: '6px',
       background: LOBBY_THEME.inputBg,
       color: LOBBY_THEME.text,
       outline: 'none',
+      letterSpacing: '0.06em',
+      boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.55)',
     })
     input.addEventListener('keydown', (event) => {
       event.stopPropagation()
