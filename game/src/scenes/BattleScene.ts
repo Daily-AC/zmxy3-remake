@@ -179,6 +179,7 @@ import { BackpackWindow } from '../ui/hud/BackpackWindow'
 import { FurnacePanel } from '../ui/hud/FurnacePanel'
 import { ResultBanner } from '../ui/hud/ResultBanner'
 import { Toast, spawnFloatingText } from '../ui/hud/Toast'
+import { rarityCss } from '../ui/hud/rarity'
 import roleRaw from '../data/roles/role1.json'
 
 const roleData = roleRaw as unknown as RoleData
@@ -206,6 +207,11 @@ for (const [dir, ids] of [
   ['level4', ['31', '32', '33', '34']],
 ] as [string, string[]][]) {
   for (const n of ids) SPECIES_SHEET['monster' + n] = { dir, file: 'Monster' + n }
+}
+SPECIES_SHEET.monster30 = { dir: 'level1', file: 'Monster30_clean' }
+
+export function monsterSheetAssetFor(species: string): { dir: string; file: string } | undefined {
+  return SPECIES_SHEET[species]
 }
 // Names for boss HP-bar labels, merged from each level pack.
 const MONSTER_NAMES: Record<string, string> = {
@@ -351,6 +357,69 @@ const FLOOR_TOP_Y = 356
 const MIN_X = 90
 const MAX_X = 1460
 const WORLD_W = 1560
+const BG11_AS3_X_OFFSET = -20
+const BG11_SYMBOL_BOUNDS = { left: -59, top: -2370, right: 1073, bottom: 681 } as const
+const LEVEL1_CLOUD_PLATFORM_TOP_Y = -1800
+const LEVEL1_CLOUD_PLATFORM_BOTTOM_Y = -300
+const LEVEL1_CLIMB_GROUND_STRIP_PX = 32
+
+export function computeBg11ClimbPlacement(): { x: number; y: number; scrollFactorX: number; scrollFactorY: number } {
+  return {
+    x: BG11_SYMBOL_BOUNDS.left + BG11_AS3_X_OFFSET,
+    y: BG11_SYMBOL_BOUNDS.top,
+    scrollFactorX: 1,
+    scrollFactorY: 1,
+  }
+}
+
+export function level1PlatformDebugStyle(wall: Pick<Wall, 'type' | 'y'>): {
+  strokeColor: number
+  strokeAlpha: number
+  fillColor: number
+  fillAlpha: number
+  adaptedCloudPlaceholder: boolean
+} {
+  const adaptedCloudPlaceholder =
+    wall.type !== 'solid' && wall.y >= LEVEL1_CLOUD_PLATFORM_TOP_Y && wall.y <= LEVEL1_CLOUD_PLATFORM_BOTTOM_Y
+  return {
+    strokeColor: wall.type === 'solid' ? 0xffc45a : 0xbfd7ff,
+    strokeAlpha: wall.type === 'solid' ? 0.95 : 0.82,
+    fillColor: 0xd8ecff,
+    fillAlpha: adaptedCloudPlaceholder ? 0.12 : 0,
+    adaptedCloudPlaceholder,
+  }
+}
+
+export function computeLevel1ClimbCameraBounds(stageBounds = { left: 0, right: 1132, top: -2150, bottom: 430 }): {
+  left: number
+  right: number
+  top: number
+  bottom: number
+} {
+  const heroBottom = GROUND_Y + roleData.offset.y * HERO_SCALE + (roleData.sheet.cellH / 2) * HERO_SCALE
+  return {
+    ...stageBounds,
+    bottom: Math.max(stageBounds.bottom, heroBottom + LEVEL1_CLIMB_GROUND_STRIP_PX),
+  }
+}
+
+export function dropItemVisualSpec(rarity: number): {
+  iconMaxSize: number
+  labelY: number
+  backgroundAlpha: number
+  rarityRing: boolean
+  nearbyFrame: boolean
+  nameColor: string
+} {
+  return {
+    iconMaxSize: 44,
+    labelY: 26,
+    backgroundAlpha: 0,
+    rarityRing: false,
+    nearbyFrame: false,
+    nameColor: rarityCss(rarity),
+  }
+}
 
 // --- Level 1 ground segment (session5 battle-fidelity, tasks/battle-fidelity-brief.md) ---
 // The team-lead's diagnosis against docs/reference/user-flow-refs/battle-original.png
@@ -596,6 +665,7 @@ export class BattleScene extends Phaser.Scene {
   private toastUi!: Toast
   // F1 debug telemetry (hidden by default).
   private debugTexts: Phaser.GameObjects.Text[] = []
+  private platformDebugOverlay?: Phaser.GameObjects.Graphics
   private debugVisible = false
   private hud!: Phaser.GameObjects.Text
   private playedHitIds = new Set<number>()
@@ -780,8 +850,7 @@ export class BattleScene extends Phaser.Scene {
     kb.on('keydown-UP', () => this.onInteract())
     kb.on('keydown-F1', (e: KeyboardEvent) => {
       e.preventDefault()
-      this.debugVisible = !this.debugVisible
-      for (const t of this.debugTexts) t.setVisible(this.debugVisible)
+      this.setDebugVisible(!this.debugVisible)
     })
     // E: equip the first equippable item in the bag. (Unequip is dev-only via the
     // __unequip hook now that U is a skill hotkey; the real unequip is the bag UI.)
@@ -925,6 +994,24 @@ export class BattleScene extends Phaser.Scene {
     writeCampaignIndex(window.localStorage, this.activeSlot, this.campaignIndex)
   }
 
+  private refreshSkillTreeFromSlot(): void {
+    if (this.activeSlot === null) return
+    const env = readSlot(window.localStorage, this.activeSlot)
+    const fresh = env ? restoreGameState(env.save) : undefined
+    if (!fresh) return
+    this.skillTreeState = fresh.skillTree
+    this.soulPurse = createSoulPurse(fresh.soul)
+    syncRole1SkillLevels(this.skillRuntime, this.learnedSkillLevels())
+    this.refreshSkillBar()
+  }
+
+  private openSkillTreeFromBattle(): void {
+    if (this.scene.isActive(SCENE.skillTree)) return
+    this.events.once(Phaser.Scenes.Events.RESUME, () => this.refreshSkillTreeFromSlot())
+    this.scene.launch(SCENE.skillTree, { returnScene: SCENE.battle })
+    this.scene.pause(SCENE.battle)
+  }
+
   // ---------- pause / return to main menu ----------
 
   private buildPauseMenu(): void {
@@ -1038,7 +1125,6 @@ export class BattleScene extends Phaser.Scene {
     const action = result.reentered && skillId === 'jdy' ? 'hit11_2' : SKILL_ACTION[skillId]
     this.skillAnim = { action, untilMs: this.simClockMs + Math.max(200, this.skillRuntime.cooldownMs) }
     this.playSfx(this.hitSfxKey(5), 0.5)
-    this.showToast(`${skillId.toUpperCase()}${result.reentered ? '·二段' : ''}`, '#9fd8ff')
     // Skill level for the real damage formula: jdy stage-2 reuses stage-1's
     // level; others use the runtime's learned level (min 1 since it just cast).
     const skillLevel = Math.max(1, this.skillRuntime.levels[skillId])
@@ -1409,14 +1495,19 @@ export class BattleScene extends Phaser.Scene {
     this.heroState.vertical.jumpCount = 0
     this.heroState.vertical.airAction = null
 
+    const bgPlacement =
+      stage.mode === 'climb'
+        ? computeBg11ClimbPlacement()
+        : { x: stage.bounds.left, y: stage.bounds.top, scrollFactorX: 0.35, scrollFactorY: 0 }
+    const cameraBounds = stage.mode === 'climb' ? computeLevel1ClimbCameraBounds(stage.bounds) : stage.bounds
     this.cameras.main.setBounds(
-      stage.bounds.left,
-      stage.bounds.top,
-      stage.bounds.right - stage.bounds.left,
-      stage.bounds.bottom - stage.bounds.top,
+      cameraBounds.left,
+      cameraBounds.top,
+      cameraBounds.right - cameraBounds.left,
+      cameraBounds.bottom - cameraBounds.top,
     )
-    this.bgBase?.setTexture(stage.background.base, '__BASE').setScale(1).setPosition(stage.bounds.left, stage.bounds.top)
-    this.bgBase?.setScrollFactor(stage.mode === 'climb' ? 0.12 : 0.35, stage.mode === 'climb' ? 1 : 0)
+    this.bgBase?.setTexture(stage.background.base, '__BASE').setScale(1).setPosition(bgPlacement.x, bgPlacement.y)
+    this.bgBase?.setScrollFactor(bgPlacement.scrollFactorX, bgPlacement.scrollFactorY)
     this.bg12Layer?.setVisible(stage.id === 'sl12')
     this.bg13Layer?.setVisible(stage.id === 'sl13')
     this.bg12Layer?.setScale(1).setPosition(0, 0).setScrollFactor(1, 0)
@@ -1427,6 +1518,7 @@ export class BattleScene extends Phaser.Scene {
       this.floorImg?.setVisible(false)
     }
     for (const { img } of this.bgTiles) img.setVisible(false)
+    this.rebuildPlatformDebugOverlay()
     this.showLevelBanner(stage.name)
   }
 
@@ -1481,6 +1573,7 @@ export class BattleScene extends Phaser.Scene {
     this.heroConfig.maxX = MAX_X
     this.cameras.main.setBounds(0, 0, WORLD_W, 540)
     this.bgBase?.setScrollFactor(0.12, 0)
+    this.clearPlatformDebugOverlay()
   }
 
   private showLevelBanner(name: string): void {
@@ -1736,7 +1829,7 @@ export class BattleScene extends Phaser.Scene {
       onIconClick: (icon) => {
         if (icon === 'beibao') this.toggleBackpack()
         else if (icon === 'shezhi') this.togglePause()
-        else if (icon === 'jineng') this.showToast('技能学习与按键设置：世界地图 → 学习技能', '#e0b060')
+        else if (icon === 'jineng') this.openSkillTreeFromBattle()
         else this.showToast('敬请期待', '#e0b060')
       },
     })
@@ -2491,13 +2584,8 @@ export class BattleScene extends Phaser.Scene {
     return { stage: this.campaignIndex + 1, level: 1 }
   }
 
-  // l1-truth pen: was a rarity-colored Phaser star primitive -- every one of
-  // the 19 dropped itemIds already has a real extracted icon (loaded into
-  // this scene's texture cache via hudTheme.ts's HUD_ICONS, the same set
-  // BackpackWindow/FurnacePanel already consume via `icon_<id>`), the ground
-  // renderer just never used them. Keeps a small rarity-colored ring behind
-  // the icon (the same rarity palette the old star used) as an at-a-glance
-  // cue, same as the backpack grid's own icon+rarity-border convention.
+  // Item drops use the original-style cue: larger bare icon plus rarity-colored
+  // floating name text. No opaque backing, rarity ring, or nearby blue frame.
   private makeDropSprite(drop: DropEntity): Phaser.GameObjects.Container {
     if (drop.kind === 'soul') {
       const orb = this.add.circle(0, 0, 10, 0xd33131, 0.9).setStrokeStyle(2, 0xffb0a0, 0.9)
@@ -2524,18 +2612,17 @@ export class BattleScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
       return this.add.container(drop.x, drop.y, [orb, shine, label]).setDepth(8)
     }
-    const rarityColor = [0x9fb0c8, 0x5fd6a0, 0x6ba8ff, 0xd9a441][drop.item.rarity] ?? 0x9fb0c8
-    const ring = this.add.circle(0, 0, 15, rarityColor, 0.25).setStrokeStyle(2, rarityColor, 0.9)
+    const visual = dropItemVisualSpec(drop.item.rarity)
     const iconKey = this.textures.exists('icon_' + drop.item.id) ? 'icon_' + drop.item.id : ICON_FALLBACK_KEY
     const icon = this.add.image(0, 0, iconKey)
-    icon.setScale(Math.min(1, 26 / Math.max(icon.width, icon.height)))
+    icon.setScale(Math.min(1, visual.iconMaxSize / Math.max(icon.width, icon.height)))
     const label = this.add
-      .text(0, 20, `${drop.item.name}${drop.qty > 1 ? ' ×' + drop.qty : ''}`, {
+      .text(0, visual.labelY, `${drop.item.name}${drop.qty > 1 ? ' ×' + drop.qty : ''}`, {
         fontSize: '12px',
-        color: '#e8ecff',
+        color: visual.nameColor,
       })
       .setOrigin(0.5, 0)
-    return this.add.container(drop.x, drop.y, [ring, icon, label]).setDepth(8)
+    return this.add.container(drop.x, drop.y, [icon, label]).setDepth(8)
   }
 
   private stepDropsAndPickup(): void {
@@ -2684,6 +2771,32 @@ export class BattleScene extends Phaser.Scene {
   private updateParallax(): void {
     const camX = this.cameras.main.scrollX
     for (const { img, factor } of this.bgTiles) img.tilePositionX = camX * factor
+  }
+
+  private setDebugVisible(visible: boolean): void {
+    this.debugVisible = visible
+    for (const t of this.debugTexts) t.setVisible(visible)
+    this.platformDebugOverlay?.setVisible(visible)
+  }
+
+  private clearPlatformDebugOverlay(): void {
+    this.platformDebugOverlay?.destroy()
+    this.platformDebugOverlay = undefined
+  }
+
+  private rebuildPlatformDebugOverlay(): void {
+    this.clearPlatformDebugOverlay()
+    if (this.currentWalls.length === 0) return
+    const g = this.add.graphics().setDepth(55).setVisible(this.debugVisible)
+    for (const wall of this.currentWalls) {
+      const style = level1PlatformDebugStyle(wall)
+      // Adapted placeholder: bg11 has no discrete stair texture through the
+      // cloud-sea section, so this wash only makes mined platforms visible for
+      // art-direction sign-off.
+      if (style.fillAlpha > 0) g.fillStyle(style.fillColor, style.fillAlpha).fillRect(wall.x, wall.y, wall.width, wall.height)
+      g.lineStyle(2, style.strokeColor, style.strokeAlpha).strokeRect(wall.x, wall.y, wall.width, wall.height)
+    }
+    this.platformDebugOverlay = g
   }
 
   private updateHud(): void {
@@ -3153,8 +3266,8 @@ export class BattleScene extends Phaser.Scene {
       return this.tryUsePortal()
     }
     w.__toggleDebug = () => {
-      this.debugVisible = !this.debugVisible
-      for (const t of this.debugTexts) t.setVisible(this.debugVisible)
+      this.setDebugVisible(!this.debugVisible)
+      return this.debugVisible
     }
   }
 }
