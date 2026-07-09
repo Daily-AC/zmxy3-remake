@@ -88,7 +88,7 @@ flowchart TB
 |---|---|---|---|
 | 掉落 | dropRoll + drops.json | L2 🟢 / L1 🟡 | L2 对 fallEquip() 概率逐字；L1 材料名自建。**考古更正：原版怪只掉装备+1 级强化石**（fallList/fallStone），材料靠分解装备产出——配方制重构时 L1 表按此重审 |
 | 灵魂钱包 | soulPurse | 🟢 | 卖白装+20 逐字；技能升级消耗接通并持久化 |
-| **灵魂进项** | — | 🔴 接线 | **考古否证"击杀掉魂"——原版无此机制**（BaseMonster 死亡链路只掉装备/石头）。真实进项 = 卖单件装备（getValue=value1+value2，赋值来源待查）+ 卖白装 + 任务奖励 + 洗技能返还。经济闭环真相：杀怪→掉装备→卖/分解→灵魂+材料喂炉子 |
+| **灵魂进项** | — | 🔴 接线 | **二次更正（2026-07-09 canon-numbers + 主会话逐字亲验）：击杀掉魂存在**——BaseMonster 死亡刷 auraRed 灵魂球（power=gxp×2）→ AuraEvent → RoleInfo.addWarriors setLhValue（乌鸦 2 魂/千里眼顺风耳 20/巨灵神 30）。economy-archaeology Q2 判"无击杀掉魂"系漏挖 dropAura 链，作废。完整进项 = 击杀灵魂球 + 卖单件装备（getValue，赋值来源待查）+ 卖白装 + 任务奖励 + 洗技能返还 |
 | **炼丹炉** | furnace + agent-server | 🔴 重构 | 2026-07-09 用户拍板翻案：**按原版复刻**。考古已交付全部数据（tasks/economy-archaeology-report.md）：四页结构（强化/熔炼/打造/分解）+ 38 条打造配方逐字 + 强化成功率/消耗二维表 + 熔炼配方 + 分解产出表。"预算-clamp 自由生成"降级为技术储备；agent=规则内代理操作 |
 | **装备池** | items（4 自建件） | 🟡 提取中 | AllEquipment.as 全表 218 件（67 真装备+120 物品+10 法宝+12 时装+9 白装），schema 完整、机械提取难度低，codex-econ-extract 在跑 |
 | 拾取 | pickup | 🟡 | y 盲已实锤（BattleScene:2385 写死 GROUND_Y），climb-engine 修复中 |
