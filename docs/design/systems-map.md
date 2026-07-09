@@ -34,14 +34,14 @@ flowchart TB
   end
 
   subgraph ECONOMY[经济循环]
-    KILL -->|dropRoll×drops.json 🟢L2/🟡L1| DROPS[掉落物]
-    KILL -->|击杀掉魂 🔴| SOUL[soulPurse 灵魂 🟢]
+    KILL -->|dropRoll×drops.json 🟢L2/🟡L1| DROPS[掉落物<br/>装备+强化石]
     DROPS --> PICKUP[pickup 拾取 🟡y盲修复中] --> INV[inventory 背包 🟢]
-    INV -->|卖白装+20 🟢| SOUL
+    INV -->|卖装备 getValue 🔴接线<br/>卖白装+20 🟢| SOUL[soulPurse 灵魂 🟢]
     SOUL -->|升级消耗 🟢| STREE
-    INV --> FURNACE[炼丹炉<br/>配方合成 🔴重构中] --> INV
+    SOUL -->|强化/打造/熔炼/分解消耗 🔴| FURNACE
+    INV --> FURNACE[炼丹炉四页 🔴重构中<br/>强化/熔炼/打造/分解<br/>配方已逐字恢复] --> INV
     INV --> EQUIP
-    EQTABLE[装备全表<br/>AllEquipment 🔴未提取] -.-> DROPS
+    EQTABLE[装备全表 218 件<br/>AllEquipment 🟡提取中] -.-> DROPS
     EQTABLE -.-> FURNACE
     SHOP[商店 🔴置灰] -.-> INV
   end
@@ -86,11 +86,11 @@ flowchart TB
 ### 经济循环
 | 节点 | 模块 | 状态 | 备注/缺口 |
 |---|---|---|---|
-| 掉落 | dropRoll + drops.json | L2 🟢 / L1 🟡 | L2 对 fallEquip() 概率逐字；L1 材料名自建（服务旧炼丹炉设计，配方制重构时需对表重审） |
+| 掉落 | dropRoll + drops.json | L2 🟢 / L1 🟡 | L2 对 fallEquip() 概率逐字；L1 材料名自建。**考古更正：原版怪只掉装备+1 级强化石**（fallList/fallStone），材料靠分解装备产出——配方制重构时 L1 表按此重审 |
 | 灵魂钱包 | soulPurse | 🟢 | 卖白装+20 逐字；技能升级消耗接通并持久化 |
-| **击杀掉魂** | — | 🔴 | 经济最大漏洞：进项只有卖白装。AS3 链路 economy-archaeology 在挖 |
-| **炼丹炉** | furnace + agent-server | 🔴 重构 | 2026-07-09 用户拍板翻案：**按原版配方复刻**；现"预算-clamp 自由生成"降级为技术储备。配方表考古中 |
-| **装备池** | items（4 自建件） | 🔴 | AllEquipment.as 全表未提取，economy-archaeology 在评估；装备强化玩法归属同步考古 |
+| **灵魂进项** | — | 🔴 接线 | **考古否证"击杀掉魂"——原版无此机制**（BaseMonster 死亡链路只掉装备/石头）。真实进项 = 卖单件装备（getValue=value1+value2，赋值来源待查）+ 卖白装 + 任务奖励 + 洗技能返还。经济闭环真相：杀怪→掉装备→卖/分解→灵魂+材料喂炉子 |
+| **炼丹炉** | furnace + agent-server | 🔴 重构 | 2026-07-09 用户拍板翻案：**按原版复刻**。考古已交付全部数据（tasks/economy-archaeology-report.md）：四页结构（强化/熔炼/打造/分解）+ 38 条打造配方逐字 + 强化成功率/消耗二维表 + 熔炼配方 + 分解产出表。"预算-clamp 自由生成"降级为技术储备；agent=规则内代理操作 |
+| **装备池** | items（4 自建件） | 🟡 提取中 | AllEquipment.as 全表 218 件（67 真装备+120 物品+10 法宝+12 时装+9 白装），schema 完整、机械提取难度低，codex-econ-extract 在跑 |
 | 拾取 | pickup | 🟡 | y 盲已实锤（BattleScene:2385 写死 GROUND_Y），climb-engine 修复中 |
 | 商店 | — | 🔴 | 世界地图入口置灰。赛内不做除非用户翻案；但药品获取渠道依赖它，需拍板替代（掉落加权/老君兑换） |
 
@@ -105,15 +105,15 @@ flowchart TB
 
 ## 三、闭环判定与补洞排序
 
-**当前判定：技术闭环成立，经济闭环有两个断点。** 玩家能从选人一路玩到通关存档；但①灵魂进项瘸（无击杀掉魂，攒魂只能卖白装，技能升级被卡）；②装备线天花板极低（4 自建件+炉产件，炉又要重构）——成长循环的"装备服务属性"这根齿条实际咬不上力。
+**当前判定：技术闭环成立，经济闭环有两个断点。** 玩家能从选人一路玩到通关存档；但①灵魂进项瘸（**考古更正：原版本就无击杀掉魂，正确补法是"卖单件装备换灵魂"接线 + 怪物按 fallList 掉真装备**）；②装备线天花板极低（4 自建件，全表提取在途）——成长循环的"装备服务属性"这根齿条实际咬不上力。
 
-补洞顺序（依赖倒排）：
-1. **考古先行**（在途）：炼丹炉配方 / 击杀掉魂 / 装备全表 三问 → economy-archaeology
-2. **装备表落库**：AllEquipment → items 数据层（掉落表/配方表两个消费者都等它）
-3. **炼丹炉配方制重构**：furnace.ts 从预算模型改配方模型；agent 改代理操作接口（列配方、检查材料、代炼、批量）
-4. **击杀掉魂接线**：KILL 事件 → soulPurse，数值对 AS3
-5. **L1 掉落表对表重审**（自建材料名与真配方表对齐）
-6. 商店替代渠道拍板（药品进项）
+补洞顺序（依赖倒排，考古已完成 → 见 tasks/economy-archaeology-report.md）：
+1. ~~考古三问~~ ✅（2026-07-09 交付：配方全逐字/无击杀掉魂否证/装备表 schema）
+2. **数据机械提取**（在途 codex-econ-extract）：装备全表 218 件 + 逐怪 fallList/掉率 → game/src/data/original/*.json；顺带四待查（药品数值/卖价来源/玉衡石天枢石渠道/制作书 fill 冲突）
+3. **炼丹炉四页重构**：furnace.ts 改配方模型（打造 38 配方+宝石附魔/强化成功率表+降级规则/熔炼/分解），UI 照 StrengthEquipment 四页结构；agent 改代理操作接口（列配方、查料、代炼、批量强化循环）
+4. **灵魂进项接线**：卖单件装备（等 value 来源考据）+ 怪物掉落改 fallList 制（装备+强化石）
+5. **L1 掉落表对表重审**（自建材料名替换为真源材料体系：丝绸/玄铁/檀木经分解产出）
+6. 商店替代渠道拍板（药品进项；原版商城是充值微支付，不吃灵魂——赛内替代方案到时问用户）
 
 ## 四、维护约定
 
