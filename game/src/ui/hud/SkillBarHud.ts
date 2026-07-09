@@ -124,6 +124,17 @@ export class SkillBarHud {
     ledge.fillStyle(0x080808, 0.85).fillRoundedRect(lx, (SLOT_CY - 24) * this.scale, lw, 48 * this.scale, 5)
     children.push(ledge)
 
+    // chid262 怒气/无双充能条（空态）：2026-07-09 用户拍板从 RoleInfoHud 的
+    // 头像条下方移到这里——无双按钮簇右侧、技能槽行正下方，视觉上与无双钮
+    // 相连（原素材 hud_ri_rage 323x11 白条，横向压缩铺满槽行宽度）。
+    if (scene.textures.exists('hud_ri_rage')) {
+      const rx = 109 * this.scale
+      const rw = (SLOT_CX[SLOT_CX.length - 1] + 20) * this.scale - rx
+      const rage = scene.add.image(rx, 98 * this.scale, 'hud_ri_rage').setOrigin(0, 0)
+      rage.setScale(rw / rage.width, this.scale)
+      children.push(rage)
+    }
+
     this.slotLayer = scene.add.container(0, 0)
     children.push(this.slotLayer)
     this.container = scene.add.container(x, y, children).setScrollFactor(0).setDepth(100)

@@ -53,11 +53,9 @@ const LABELS = ['HP', 'MP', 'EXP']
 // (1+19.5, 2+71) rounded. The previous (22, 79) sat near the ring's
 // bottom-left edge instead of its centre (team-lead's "数字在墨圈左下角" call).
 const LEVEL = { x: 20, y: 72 }
-// chid262 怒气/无双 charge meter — rendered empty (no rage system yet). Object-tree
-// translate is (111.7, 78) sx 0.68, but the sprite's shape has a ~-109px internal
-// x-offset, so the bar's left edge lands at x≈3 (calibrated by min-diff / white-bar
-// bbox vs the composite). Native 323x11.
-const RAGE = { x: 3, y: 87, sx: 0.666 }
+// chid262 怒气/无双 charge meter：2026-07-09 用户拍板移到左下角无双按钮簇旁
+// （SkillBarHud 里渲染），不再挂在头像条下面——此前按 object-tree 坐标放在
+// (3,87) 的白条被用户红框点名"位置不对"。
 
 export class RoleInfoHud {
   readonly container: Phaser.GameObjects.Container
@@ -84,13 +82,6 @@ export class RoleInfoHud {
     }
     const head = img('hud_ri_head', HEAD.x, HEAD.y)
     if (head) children.push(head)
-
-    // Empty 怒气/无双 charge meter (chid262) at its object-tree coord + own scaleX.
-    if (scene.textures.exists('hud_ri_rage')) {
-      children.push(
-        scene.add.image(RAGE.x * s, RAGE.y * s, 'hud_ri_rage').setOrigin(0, 0).setScale(RAGE.sx * s, s),
-      )
-    }
 
     // Bar fills (cropped by fraction each frame) + labels + numbers.
     BARS.forEach((b, i) => {
