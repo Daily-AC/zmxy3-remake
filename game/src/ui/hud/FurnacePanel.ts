@@ -21,14 +21,14 @@ import { MODAL_PANEL_DEPTH } from './depths'
 // original 打造 is a deterministic recipe); everything else mirrors the game.
 export const ASSET_SOURCE_ONLINE = false // 打造 art is official 造3 (Online 大闹天庭篇)
 
-const FRAME_TEX = 'furnace_frame'
+export const FRAME_TEX = 'furnace_frame'
 const MAKING_TEX = 'furnace_making'
 
 // The 打造 layout (furnace_making) sits on the LEFT of the window; the material
 // picker + wish input + budget live on the RIGHT. Coordinates below are all
 // screen-space in the 960x540 game canvas.
-const WIN = { cx: 480, cy: 272 }
-const FRAME_SCALE = 1.05 // fits 479px art inside 540 canvas, 炼丹炉 title visible
+export const WIN = { cx: 480, cy: 272 }
+export const FRAME_SCALE = 1.05 // fits 479px art inside 540 canvas, 炼丹炉 title visible
 const MAKING = { x: 312, y: 272 } // furnace_making center (354x385, origin center)
 
 // Slot centers inside furnace_making, image-local (origin = image center):
