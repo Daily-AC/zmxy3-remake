@@ -5,8 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>再续西游</title>
     <style>
-      html, body { margin: 0; padding: 0; background: #0b0e1a; height: 100%; }
-      #app { display: flex; justify-content: center; align-items: center; height: 100%; }
+      /* 2026-07-09 页面壳氛围化：letterbox 余量不再是纯黑——暗化 keyart 铺满
+         视口 + 径向渐晕聚焦画布（配合 main.ts 的 Scale.FIT）。 */
+      html, body { margin: 0; padding: 0; height: 100%; background: #0b0a0d; }
+      body {
+        background:
+          radial-gradient(ellipse at center, rgba(11, 10, 13, 0.35) 0%, rgba(11, 10, 13, 0.88) 78%, #0b0a0d 100%),
+          url('/assets/keyart/menu-keyart.jpg') center / cover no-repeat fixed;
+      }
+      /* 布局全权交给 Phaser Scale Manager（autoCenter 用 margin 居中 canvas 和
+         DOM 容器）——不要再叠 flex 居中，两套居中会把 DOM 输入层和 canvas 拆开。 */
+      #app { position: fixed; inset: 0; }
+      #app canvas { box-shadow: 0 0 60px rgba(0, 0, 0, 0.75); }
     </style>
   </head>
   <body>

@@ -27,6 +27,13 @@ ensureArtFontsLoaded().finally(() => {
     parent: 'app',
     width: 960,
     height: 540,
+    // 2026-07-09 用户点名"四周黑色背景没处理"：此前没配 Scale Manager，画布
+    // 固定 960x540 CSS 像素居中，大窗口下四周全是黑。FIT=等比放大铺满窗口
+    // 短边，letterbox 余量由 index.html 的暗化 keyart 页面背景兜住。
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+    },
     backgroundColor: '#0b0e1a',
     // Enables `scene.add.dom(...)` so the dialogue input can live inside the
     // canvas (kept aligned to game coords by Phaser across scaling/letterboxing).
