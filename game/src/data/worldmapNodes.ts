@@ -137,7 +137,7 @@ export const WORLDMAP_DECORATIONS: WorldMapDecoration[] = [
 // rather than leaving dead decorative art. Real position/art were previously
 // correct (see tasks/worldmap-report.md); this is a scope cut, not a bug fix.
 
-export type WorldMapButtonAction = 'save' | 'shop' | 'furnace' | 'skills' | 'activity' | 'tasks' | 'back'
+export type WorldMapButtonAction = 'save' | 'shop' | 'furnace' | 'skills' | 'activity' | 'tasks' | 'back' | 'coop'
 
 export interface WorldMapButton {
   id: string
@@ -179,6 +179,19 @@ export const WORLDMAP_BUTTONS: WorldMapButton[] = [
   },
   { id: 'rwbtn', x: 329.95, y: 506.95, texture: 'wm_btn_tasks', action: 'tasks', label: '任务', enabled: false },
   { id: 'btnback', x: 396.95, y: 508.0, texture: 'wm_btn_back', action: 'back', label: '返回', enabled: true },
+  {
+    // 联机共斗（黑客松新增，无 vendor 真源按钮）：素材是照 vendor 底栏按钮
+    // DNA（红球+金环+金图标+描边白字标签）用 PIL 合成的 btn_coop.png（双剑交叉
+    // 图标），坐标接在 vendor 一排（间距 66px）的 返回 之后 —— 用户拍板从右上角
+    // 悬浮 MenuButton 收进左下角这一列（2026-07-09）。
+    id: 'coopbtn',
+    x: 462.95,
+    y: 506.0,
+    texture: 'wm_btn_coop',
+    action: 'coop',
+    label: '联机共斗',
+    enabled: true,
+  },
 ]
 
 /** Original stage size (SWF header, twips/20). */
