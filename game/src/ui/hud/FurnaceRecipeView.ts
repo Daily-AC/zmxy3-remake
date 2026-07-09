@@ -5,6 +5,17 @@ import { rarityCss } from './rarity'
 import { withinRect, type Rect } from '../screenHit'
 import { MODAL_PANEL_DEPTH } from './depths'
 import { FRAME_SCALE, FRAME_TEX, WIN } from './FurnacePanel'
+import { activeArtFont } from '../../systems/artFont'
+
+// 2026-07-09 重做（用户："这个页面重做——把老君收到一个入口里，按需要打开；
+// 另外现在只展示悟空的装备制作"）：
+//   - 配方列表铺满面板主区（此前右半永远被老君聊天栏占着）；
+//   - 「太上老君」成为右上角入口按钮，点开一个覆盖式抽屉（聊天记录 + 输入 +
+//     发送），老君有新回话时自动弹开；
+//   - 配方按角色过滤在调用方做（WorldMapScene 只传悟空 + 无角色限定件），
+//     本组件不感知角色语义。
+// 公开 API（open/close/refresh/appendNpcLine/setCraftLocked/debugState）与
+// 重做前一致，验收 hook 不受影响。
 
 export interface FurnaceRecipeViewOptions {
   recipes: FurnaceRecipe[]
@@ -16,12 +27,6 @@ export interface FurnaceRecipeViewOptions {
 
 interface RowView {
   recipe: FurnaceRecipe
-  bg: Phaser.GameObjects.Rectangle
-  product: Phaser.GameObjects.Text
-  detail: Phaser.GameObjects.Text
-  status: Phaser.GameObjects.Text
-  button: Phaser.GameObjects.Rectangle
-  buttonLabel: Phaser.GameObjects.Text
   hitRect: Rect
   canCraftNow: boolean
 }
@@ -66,10 +71,14 @@ export class FurnaceRecipeView {
   private readonly scene: Phaser.Scene
   private readonly opts: FurnaceRecipeViewOptions
   private readonly rowLayer: Phaser.GameObjects.Container
+  private readonly chatDrawer: Phaser.GameObjects.Container
   private readonly chatLayer: Phaser.GameObjects.Container
   private readonly pageText: Phaser.GameObjects.Text
   private readonly sendButton: Phaser.GameObjects.Rectangle
+  private readonly inputDom: Phaser.GameObjects.DOMElement
   private readonly closeRect: Rect
+  private readonly laojunRect: Rect
+  private readonly drawerCloseRect: Rect
   private readonly prevRect: Rect
   private readonly nextRect: Rect
   private readonly sendRect: Rect
@@ -78,6 +87,7 @@ export class FurnaceRecipeView {
   private npcLines: string[] = []
   private page = 0
   private locked = false
+  private drawerOpen = false
 
   constructor(scene: Phaser.Scene, opts: FurnaceRecipeViewOptions) {
     this.scene = scene
@@ -94,45 +104,92 @@ export class FurnaceRecipeView {
       children.push(g)
     }
 
-    children.push(scene.add.text(126, 82, '配方打造', { fontSize: '20px', color: HUD_COLORS.textGold, fontStyle: 'bold' }).setShadow(1, 1, '#000', 3))
-    children.push(scene.add.text(620, 82, '太上老君', { fontSize: '20px', color: HUD_COLORS.textGold, fontStyle: 'bold' }).setShadow(1, 1, '#000', 3))
+    children.push(
+      scene.add
+        .text(126, 78, '配方打造', {
+          fontSize: '24px',
+          fontFamily: activeArtFont().family,
+          color: HUD_COLORS.textGold,
+          stroke: '#2c1a0c',
+          strokeThickness: 3,
+          padding: { top: 6, bottom: 6 },
+        })
+        .setShadow(1, 1, '#000', 3),
+    )
 
     this.rowLayer = scene.add.container(0, 0)
     children.push(this.rowLayer)
-    this.chatLayer = scene.add.container(0, 0)
-    children.push(this.chatLayer)
 
-    this.prevRect = centerRect(364, 438, 66, 30)
-    this.nextRect = centerRect(534, 438, 66, 30)
-    this.pageText = scene.add.text(449, 438, '', { fontSize: '13px', color: HUD_COLORS.textDim }).setOrigin(0.5)
+    // 底部翻页条（居中）。
+    this.prevRect = centerRect(396, 442, 74, 30)
+    this.nextRect = centerRect(564, 442, 74, 30)
+    this.pageText = scene.add.text(480, 442, '', { fontSize: '13px', color: HUD_COLORS.textDim }).setOrigin(0.5)
     children.push(
-      scene.add.rectangle(364, 438, 66, 30, INK, 0.82).setStrokeStyle(1, 0x6b5f47, 1),
-      scene.add.text(364, 438, '上一页', { fontSize: '13px', color: HUD_COLORS.text }).setOrigin(0.5),
+      scene.add.rectangle(396, 442, 74, 30, INK, 0.82).setStrokeStyle(1, 0x6b5f47, 1),
+      scene.add.text(396, 442, '上一页', { fontSize: '13px', color: HUD_COLORS.text }).setOrigin(0.5),
       this.pageText,
-      scene.add.rectangle(534, 438, 66, 30, INK, 0.82).setStrokeStyle(1, 0x6b5f47, 1),
-      scene.add.text(534, 438, '下一页', { fontSize: '13px', color: HUD_COLORS.text }).setOrigin(0.5),
+      scene.add.rectangle(564, 442, 74, 30, INK, 0.82).setStrokeStyle(1, 0x6b5f47, 1),
+      scene.add.text(564, 442, '下一页', { fontSize: '13px', color: HUD_COLORS.text }).setOrigin(0.5),
     )
 
-    const logBg = scene.add.rectangle(738, 262, 246, 284, INK, 0.72).setStrokeStyle(2, 0x6b5f47, 1)
-    children.push(logBg)
-    children.push(this.buildInput(620, 421, 205))
-    this.sendRect = centerRect(852, 421, 58, 30)
-    this.sendButton = scene.add.rectangle(852, 421, 58, 30, 0x3a2c12, 0.9).setStrokeStyle(2, GOLD, 0.9)
-    children.push(this.sendButton, scene.add.text(852, 421, '发送', { fontSize: '13px', color: HUD_COLORS.text }).setOrigin(0.5))
-
-    this.closeRect = centerRect(792, 92, 66, 30)
+    // 右上：太上老君入口 + 返回。
+    this.laojunRect = centerRect(706, 92, 104, 30)
     children.push(
-      scene.add.rectangle(792, 92, 66, 30, INK, 0.85).setStrokeStyle(2, 0x8a7f66, 1),
-      scene.add.text(792, 92, '返回', { fontSize: '14px', color: HUD_COLORS.text }).setOrigin(0.5),
+      scene.add.rectangle(706, 92, 104, 30, 0x3a2c12, 0.92).setStrokeStyle(2, GOLD, 0.9),
+      scene.add.text(706, 92, '太上老君', { fontSize: '14px', color: HUD_COLORS.textGold, fontStyle: 'bold' }).setOrigin(0.5),
+    )
+    this.closeRect = centerRect(796, 92, 60, 30)
+    children.push(
+      scene.add.rectangle(796, 92, 60, 30, INK, 0.85).setStrokeStyle(2, 0x8a7f66, 1),
+      scene.add.text(796, 92, '返回', { fontSize: '14px', color: HUD_COLORS.text }).setOrigin(0.5),
     )
 
-    this.container = scene.add.container(0, 0, children).setScrollFactor(0).setDepth(MODAL_PANEL_DEPTH).setVisible(false)
+    // 老君抽屉（覆盖在列表右侧，按需展开）。
+    const drawerChildren: Phaser.GameObjects.GameObject[] = []
+    const drawerBg = scene.add.graphics()
+    drawerBg.fillStyle(0x14100b, 0.97).fillRoundedRect(560, 116, 320, 356, 10)
+    drawerBg.lineStyle(2, GOLD, 0.9).strokeRoundedRect(560, 116, 320, 356, 10)
+    drawerBg.lineStyle(1, 0x8a6a30, 0.6).strokeRoundedRect(565, 121, 310, 346, 8)
+    drawerChildren.push(drawerBg)
+    drawerChildren.push(
+      scene.add
+        .text(600, 136, '太上老君', {
+          fontSize: '18px',
+          fontFamily: activeArtFont().family,
+          color: HUD_COLORS.textGold,
+          stroke: '#2c1a0c',
+          strokeThickness: 3,
+          padding: { top: 4, bottom: 4 },
+        })
+        .setOrigin(0, 0.5),
+    )
+    this.drawerCloseRect = centerRect(852, 136, 30, 24)
+    drawerChildren.push(
+      scene.add.rectangle(852, 136, 30, 24, INK, 0.9).setStrokeStyle(1, 0x8a7f66, 1),
+      scene.add.text(852, 136, '×', { fontSize: '16px', color: HUD_COLORS.text }).setOrigin(0.5),
+    )
+    drawerChildren.push(scene.add.rectangle(720, 292, 288, 260, INK, 0.72).setStrokeStyle(1, 0x6b5f47, 1))
+    this.chatLayer = scene.add.container(0, 0)
+    drawerChildren.push(this.chatLayer)
+    this.inputDom = this.buildInput(578, 442, 224)
+    drawerChildren.push(this.inputDom)
+    this.sendRect = centerRect(840, 442, 58, 30)
+    this.sendButton = scene.add.rectangle(840, 442, 58, 30, 0x3a2c12, 0.9).setStrokeStyle(2, GOLD, 0.9)
+    drawerChildren.push(this.sendButton, scene.add.text(840, 442, '发送', { fontSize: '13px', color: HUD_COLORS.text }).setOrigin(0.5))
+    this.chatDrawer = scene.add.container(0, 0, drawerChildren).setVisible(false)
+
+    this.container = scene.add
+      .container(0, 0, [...children, this.chatDrawer])
+      .setScrollFactor(0)
+      .setDepth(MODAL_PANEL_DEPTH)
+      .setVisible(false)
     scene.input.on('pointerdown', this.onPointerDown)
     scene.input.on('pointermove', this.onPointerMove)
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       scene.input.off('pointerdown', this.onPointerDown)
       scene.input.off('pointermove', this.onPointerMove)
     })
+    this.setDrawerOpen(false)
     this.refresh()
   }
 
@@ -143,7 +200,7 @@ export class FurnaceRecipeView {
   open(): void {
     this.container.setVisible(true)
     this.refresh()
-    setTimeout(() => this.input.focus(), 0)
+    if (this.drawerOpen) setTimeout(() => this.input.focus(), 0)
   }
 
   close(): void {
@@ -165,6 +222,8 @@ export class FurnaceRecipeView {
     if (this.npcLines[this.npcLines.length - 1] === line) return
     this.npcLines.push(line)
     this.npcLines = this.npcLines.slice(-8)
+    // 老君有新回话而抽屉收着 → 自动弹开（代炼结果/闲聊都别静默丢）。
+    if (!this.drawerOpen) this.setDrawerOpen(true)
     this.rebuildChat()
   }
 
@@ -179,6 +238,7 @@ export class FurnaceRecipeView {
     isOpen: boolean
     rows: { bookFillName: string; screenX: number; screenY: number; canCraftNow: boolean }[]
     chatInput: { present: boolean; disabled: boolean }
+    drawerOpen: boolean
   } {
     return {
       isOpen: this.isOpen,
@@ -189,7 +249,18 @@ export class FurnaceRecipeView {
         canCraftNow: row.canCraftNow,
       })),
       chatInput: { present: !!this.input, disabled: this.input.disabled },
+      drawerOpen: this.drawerOpen,
     }
+  }
+
+  private setDrawerOpen(open: boolean): void {
+    this.drawerOpen = open
+    this.chatDrawer.setVisible(open)
+    // DOM 输入框不完全跟随嵌套容器可见性（Phaser DOMElement 的已知坑），
+    // 显式同步 display。
+    ;(this.inputDom.node as HTMLElement).style.display = open && this.container.visible ? '' : 'none'
+    if (open && this.container.visible) setTimeout(() => this.input.focus(), 0)
+    else this.input.blur()
   }
 
   private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
@@ -200,6 +271,22 @@ export class FurnaceRecipeView {
       this.close()
       return
     }
+    if (withinRect(lx, ly, this.laojunRect)) {
+      this.setDrawerOpen(!this.drawerOpen)
+      return
+    }
+    if (this.drawerOpen) {
+      if (withinRect(lx, ly, this.drawerCloseRect)) {
+        this.setDrawerOpen(false)
+        return
+      }
+      if (!this.locked && withinRect(lx, ly, this.sendRect)) {
+        this.submitChat()
+        return
+      }
+      // 抽屉展开时挡住其覆盖区域内的列表点击。
+      if (lx >= 560 && lx <= 880 && ly >= 116 && ly <= 472) return
+    }
     if (!this.locked && withinRect(lx, ly, this.prevRect)) {
       this.page = Math.max(0, this.page - 1)
       this.refresh()
@@ -208,10 +295,6 @@ export class FurnaceRecipeView {
     if (!this.locked && withinRect(lx, ly, this.nextRect)) {
       this.page = Math.min(this.maxPage(), this.page + 1)
       this.refresh()
-      return
-    }
-    if (!this.locked && withinRect(lx, ly, this.sendRect)) {
-      this.submitChat()
       return
     }
     for (const row of this.rows) {
@@ -229,7 +312,9 @@ export class FurnaceRecipeView {
     const overRow = this.rows.some((row) => !this.locked && row.canCraftNow && withinRect(lx, ly, row.hitRect))
     const overControl =
       withinRect(lx, ly, this.closeRect) ||
-      (!this.locked && (withinRect(lx, ly, this.prevRect) || withinRect(lx, ly, this.nextRect) || withinRect(lx, ly, this.sendRect)))
+      withinRect(lx, ly, this.laojunRect) ||
+      (this.drawerOpen && (withinRect(lx, ly, this.drawerCloseRect) || (!this.locked && withinRect(lx, ly, this.sendRect)))) ||
+      (!this.locked && (withinRect(lx, ly, this.prevRect) || withinRect(lx, ly, this.nextRect)))
     this.scene.input.manager.canvas.style.cursor = overRow || overControl ? 'pointer' : ''
   }
 
@@ -246,60 +331,78 @@ export class FurnaceRecipeView {
     visible.forEach((recipe, index) => {
       const check = this.opts.checkFor(recipe.bookFillName)
       const canCraftNow = check.ok
-      const y = 126 + index * 48
+      const y = 130 + index * 48
       const bg = this.scene.add
-        .rectangle(350, y, 470, 42, canCraftNow ? 0x1d2a18 : INK, canCraftNow ? 0.82 : 0.68)
+        .rectangle(480, y, 700, 42, canCraftNow ? 0x1d2a18 : INK, canCraftNow ? 0.82 : 0.68)
         .setStrokeStyle(2, canCraftNow ? GOLD : 0x5c5141, canCraftNow ? 0.9 : 0.65)
-      const product = this.scene.add.text(126, y - 14, `${recipe.productName}`, {
+      const product = this.scene.add.text(150, y - 14, `${recipe.productName}`, {
         fontSize: '15px',
         color: rarityCss(qualityRarity(recipe.quality)),
         fontStyle: 'bold',
       })
-      const role = recipe.role ? `${recipe.role} · ` : ''
-      const detail = this.scene.add.text(126, y + 4, `${role}${recipe.quality} · ${materialLine(recipe, check)}`, {
+      const detail = this.scene.add.text(150, y + 4, `${recipe.quality} · ${materialLine(recipe, check)}`, {
         fontSize: '11px',
         color: HUD_COLORS.textDim,
       })
-      detail.setFixedSize(350, 16)
-      const status = this.scene.add.text(516, y - 13, checkStatus(check), {
+      detail.setFixedSize(500, 16)
+      const status = this.scene.add.text(756, y - 13, checkStatus(check), {
         fontSize: '11px',
         color: canCraftNow ? '#9cf58f' : '#e0b060',
       }).setOrigin(0.5, 0)
       const button = this.scene.add
-        .rectangle(516, y + 10, 70, 24, canCraftNow ? 0x4a3212 : 0x242026, canCraftNow ? 0.95 : 0.65)
+        .rectangle(756, y + 10, 70, 24, canCraftNow ? 0x4a3212 : 0x242026, canCraftNow ? 0.95 : 0.65)
         .setStrokeStyle(1, canCraftNow ? GOLD : 0x5c5141, 1)
-      const buttonLabel = this.scene.add.text(516, y + 10, '打造', {
+      const buttonLabel = this.scene.add.text(756, y + 10, '打造', {
         fontSize: '13px',
         color: canCraftNow ? HUD_COLORS.text : '#8d8790',
       }).setOrigin(0.5)
-      const row: RowView = {
-        recipe,
-        bg,
-        product,
-        detail,
-        status,
-        button,
-        buttonLabel,
-        hitRect: centerRect(516, y + 10, 70, 24),
-        canCraftNow,
-      }
-      this.rows.push(row)
+      this.rows.push({ recipe, hitRect: centerRect(756, y + 10, 70, 24), canCraftNow })
       this.rowLayer.add([bg, product, detail, status, button, buttonLabel])
     })
     this.pageText.setText(`${this.page + 1}/${this.maxPage() + 1}`)
   }
 
+  /** 动态堆叠 + 从旧往新裁剪：长回话按实测高度排版，放不下就丢最旧的，
+   * 修掉"老君聊天文本溢出面板"的旧账（此前固定 36px 行距，多行 wrap 会
+   * 叠字/出框）。 */
   private rebuildChat(): void {
     this.chatLayer.removeAll(true)
     const lines = this.npcLines.length ? this.npcLines : ['老君在炉旁闭目养神。']
-    lines.slice(-7).forEach((line, index) => {
-      const text = this.scene.add.text(624, 128 + index * 36, line, {
-        fontSize: '12px',
-        color: index === lines.length - 1 ? HUD_COLORS.textGold : HUD_COLORS.text,
-        wordWrap: { width: 226 },
-        lineSpacing: 2,
-      })
-      this.chatLayer.add(text)
+    const boxTop = 172
+    const boxBottom = 414
+    // 先从最新往回量高度，决定能塞下几条。
+    const texts: Phaser.GameObjects.Text[] = []
+    for (const line of lines) {
+      texts.push(
+        this.scene.add
+          .text(586, 0, line, {
+            fontSize: '12px',
+            color: HUD_COLORS.text,
+            wordWrap: { width: 266 },
+            lineSpacing: 3,
+          })
+          .setVisible(false),
+      )
+    }
+    const gap = 10
+    let need = 0
+    let firstShown = texts.length
+    for (let i = texts.length - 1; i >= 0; i--) {
+      const h = texts[i].height + gap
+      if (need + h > boxBottom - boxTop) break
+      need += h
+      firstShown = i
+    }
+    let y = boxTop
+    texts.forEach((t, i) => {
+      if (i < firstShown) {
+        t.destroy()
+        return
+      }
+      t.setY(y).setVisible(true)
+      if (i === texts.length - 1) t.setColor(HUD_COLORS.textGold)
+      y += t.height + gap
+      this.chatLayer.add(t)
     })
   }
 
