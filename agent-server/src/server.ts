@@ -40,12 +40,17 @@ wss.on("connection", (ws) => {
         }
         case "player_say": {
           send(ws, { type: "npc_thinking", npcId: msg.npcId });
+          let flavor = "";
           await askNpc(msg.npcId, msg.text, {
-            onSay: (text) => send(ws, { type: "npc_say", npcId: msg.npcId, text }),
+            onSay: (text) => {
+              flavor = text;
+              send(ws, { type: "npc_say", npcId: msg.npcId, text });
+            },
             onGiveItem: (item) => send(ws, { type: "give_item", npcId: msg.npcId, item }),
             onSetGoal: (goal) => send(ws, { type: "set_goal", npcId: msg.npcId, goal }),
             onCraftItem: (item) => send(ws, { type: "craft_item", npcId: msg.npcId, item }),
-          });
+            onCraftRecipe: (recipeId) => send(ws, { type: "craft_recipe", npcId: msg.npcId, recipeId, flavor }),
+          }, { materials: msg.materials, soul: msg.soul });
           break;
         }
         case "craft_request": {

@@ -69,6 +69,25 @@ describe('npc protocol codec', () => {
     expect(JSON.parse(raw)).toEqual({ type: 'player_say', npcId: 'laojun', text: '你好' })
   })
 
+  it('round-trips player_say material and soul snapshots for recipe tools', () => {
+    const raw = encodeClient({
+      type: 'player_say',
+      npcId: 'laojun',
+      playerId: 'p1',
+      text: '帮我炼尾火棍',
+      materials: [{ id: 'wptm', name: '檀木', rarity: 1, qty: 20 }],
+      soul: 200,
+    })
+    expect(JSON.parse(raw)).toEqual({
+      type: 'player_say',
+      npcId: 'laojun',
+      playerId: 'p1',
+      text: '帮我炼尾火棍',
+      materials: [{ id: 'wptm', name: '檀木', rarity: 1, qty: 20 }],
+      soul: 200,
+    })
+  })
+
   it('decodes valid server frames by type', () => {
     expect(decodeServer('{"type":"welcome","npcIds":["laojun"]}')).toEqual({
       type: 'welcome',
@@ -78,12 +97,19 @@ describe('npc protocol codec', () => {
       type: 'npc_say',
       text: '猴头',
     })
+    expect(decodeServer('{"type":"craft_recipe","npcId":"laojun","recipeId":"whgzzs","flavor":"炉火正旺。"}')).toEqual({
+      type: 'craft_recipe',
+      npcId: 'laojun',
+      recipeId: 'whgzzs',
+      flavor: '炉火正旺。',
+    })
   })
 
   it('rejects malformed or unknown frames as null', () => {
     expect(decodeServer('not json')).toBeNull()
     expect(decodeServer('{"type":"bogus"}')).toBeNull()
     expect(decodeServer('{"type":"npc_say","npcId":"laojun"}')).toBeNull() // missing text
+    expect(decodeServer('{"type":"craft_recipe","npcId":"laojun","recipeId":"whgzzs"}')).toBeNull()
     expect(decodeServer('42')).toBeNull()
   })
 })
@@ -134,6 +160,28 @@ describe('NpcClient connection lifecycle', () => {
     expect(h.client.playerSay('laojun', 'hi')).toBe(false)
     h.sockets[0].open()
     expect(h.client.worldEvent('monster_killed', { monster: '妖鸟' })).toBe(true)
+  })
+
+  it('playerSay forwards optional recipe material and soul context', () => {
+    const h = harness()
+    h.client.connect()
+    h.sockets[0].open()
+
+    expect(
+      h.client.playerSay('laojun', '帮我炼尾火棍', 'p1', {
+        materials: [{ id: 'wptm', name: '檀木', rarity: 1, qty: 20 }],
+        soul: 200,
+      }),
+    ).toBe(true)
+
+    expect(JSON.parse(h.sockets[0].sent[1])).toEqual({
+      type: 'player_say',
+      npcId: 'laojun',
+      text: '帮我炼尾火棍',
+      playerId: 'p1',
+      materials: [{ id: 'wptm', name: '檀木', rarity: 1, qty: 20 }],
+      soul: 200,
+    })
   })
 
   it('reconnects after a drop and re-sends hello', () => {

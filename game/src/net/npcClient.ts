@@ -86,6 +86,8 @@ export interface PlayerSayMessage {
   npcId: string
   playerId?: string
   text: string
+  materials?: CraftMaterialRef[]
+  soul?: number
 }
 /**
  * Structured furnace craft request. Distinct from the free-form `player_say`
@@ -139,6 +141,12 @@ export interface CraftItemMessage {
   npcId: string
   item: CraftedItem
 }
+export interface CraftRecipeMessage {
+  type: 'craft_recipe'
+  npcId: string
+  recipeId: string
+  flavor: string
+}
 /** Response to a `craft_request`: a server-forged item plus 太上老君's line.
  * The item is still untrusted — the game re-clamps it against the request's
  * budget (systems/furnace validateCraftedEquipment) before it enters the bag. */
@@ -169,6 +177,7 @@ export type ServerMessage =
   | GiveItemMessage
   | SetGoalMessage
   | CraftItemMessage
+  | CraftRecipeMessage
   | CraftResultMessage
   | CraftRejectMessage
   | ErrorMessage
@@ -180,6 +189,7 @@ const SERVER_TYPES = new Set([
   'give_item',
   'set_goal',
   'craft_item',
+  'craft_recipe',
   'craft_result',
   'craft_reject',
   'error',
@@ -224,6 +234,12 @@ export function decodeServer(raw: string): ServerMessage | null {
     case 'craft_item':
       return typeof m.npcId === 'string' && typeof m.item === 'object' && m.item !== null
         ? (m as unknown as CraftItemMessage)
+        : null
+    case 'craft_recipe':
+      return typeof m.npcId === 'string' &&
+        typeof m.recipeId === 'string' &&
+        typeof m.flavor === 'string'
+        ? (m as unknown as CraftRecipeMessage)
         : null
     case 'craft_result':
       return typeof m.npcId === 'string' &&
@@ -348,8 +364,13 @@ export class NpcClient {
     return this.send({ type: 'world_event', kind, data, at: Date.now() })
   }
 
-  playerSay(npcId: string, text: string, playerId?: string): boolean {
-    return this.send({ type: 'player_say', npcId, text, playerId })
+  playerSay(
+    npcId: string,
+    text: string,
+    playerId?: string,
+    context: { materials?: CraftMaterialRef[]; soul?: number } = {},
+  ): boolean {
+    return this.send({ type: 'player_say', npcId, text, playerId, materials: context.materials, soul: context.soul })
   }
 
   /** Send a structured furnace craft request. The caller is expected to have
