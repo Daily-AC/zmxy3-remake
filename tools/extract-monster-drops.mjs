@@ -362,6 +362,13 @@ function parseMonsterFile(fileName) {
       "stoneFallRate",
     ),
     isBoss: extractSimpleAssignments(body, branchRanges, /this\.isBoss\s*=\s*/g, parseBoolean, "isBoss"),
+    gxp: extractSimpleAssignments(
+      body,
+      branchRanges,
+      /this\.protectedParamsObject\.gxp\s*=\s*/g,
+      parseNumberExpression,
+      "gxp",
+    ),
     fallList: extractFallLists(body, branchRanges),
     sourceFallListAssignmentCount: countEffectiveFallListAssignmentsInSource(source),
   };
@@ -392,6 +399,7 @@ function main() {
   const withoutFallListAssignment = monsters.filter((monster) => monster.fallList.length === 0);
   const repeatedFallListSourceFiles = parsed.filter((monster) => monster.sourceFallListAssignmentCount > 1);
   const missingProbability = monsters.filter((monster) => monster.probability.length === 0);
+  const missingGxp = monsters.filter((monster) => monster.gxp.length === 0);
   const withStoneFallRate = monsters.filter((monster) => monster.stoneFallRate.length > 0);
 
   console.log("Monster drops extraction verification");
@@ -413,6 +421,11 @@ function main() {
   console.log(
     `  probability not set in constructor: ${
       missingProbability.length === 0 ? "none" : missingProbability.map((monster) => monster.file).join(", ")
+    }`,
+  );
+  console.log(
+    `  gxp not set in constructor: ${
+      missingGxp.length === 0 ? "none" : missingGxp.map((monster) => monster.file).join(", ")
     }`,
   );
   console.log(

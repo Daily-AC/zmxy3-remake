@@ -1,4 +1,4 @@
-// Phaser-independent Monster30 AI: patrol -> detect -> chase -> melee, plus
+// Phaser-independent monster AI: patrol -> detect -> chase -> attack, plus
 // hurt/dead reactions. Deterministic fixed-30fps stepping like heroSim.
 //
 // Fidelity notes (kagami monsters-index.md §Monster30 + BaseMonster AI):
@@ -7,12 +7,9 @@
 //  - Original AI: no target -> normalWalk + selectTarget(player within full
 //    2D alertRange); has target -> if x-distance <= attackRange, per-second roll
 //    normalAttackRate to play hit1 (else wait), otherwise followTarget (walk in).
-//  - DIVERGENCE (intentional, this slice): the original Monster30 is a FLYING
-//    ranged monster (isFly=true, graity=0) that hovers ~150px above the target
-//    and fires Monster30Bullet1. The task asks for a GROUND melee interpretation
-//    (patrol/chase/melee) and the hero takes no damage yet, so the hit1 swing is
-//    cosmetic here. Flight, hovering and the bullet are deliberately dropped;
-//    TODO-verify when the ranged/damage pass lands.
+//  - Monster30 is a FLYING ranged monster (isFly=true, graity=0) that fires
+//    Monster30Bullet1 from hit1. Configure `rangedAttack` for that species so
+//    hit1 emits a projectile-spawn event instead of melee damage.
 //  - Animation-driven durations (hurt/attack/dead) come from monster30.json
 //    stopCounts × tick; the scene computes and passes them in.
 //  - Damage model is simplified physics: max(1, damage - def) (combat-rules-index.md).
@@ -93,6 +90,18 @@ export interface MonsterConfig {
    * per the doHi1 bullet-spawn x-offsets in the same AS3 classes). Omit to
    * fall back to stats.attackRange (the old, overly generous behavior). */
   meleeReach?: number
+  /** If present, the hit frame spawns a projectile instead of resolving a
+   * melee-range attack-hit. Used by Monster30's AS3 Monster30Bullet1 chain. */
+  rangedAttack?: RangedAttackConfig
+}
+
+export interface RangedAttackConfig {
+  kind: string
+  speedPxPerSecond: number
+  radius: number
+  ttlMs: number
+  spawnOffsetX?: number
+  spawnOffsetY?: number
 }
 
 export interface MonsterState {
@@ -132,7 +141,9 @@ export interface MonsterInput {
   incomingHit: MonsterHit | null
 }
 
-export interface MonsterEvent {
+export type MonsterEvent = MonsterBasicEvent | MonsterProjectileSpawnEvent
+
+export interface MonsterBasicEvent {
   /** 'attack-start': the swing animation begins (frame 0) -- purely a cue
    * (anim/SFX), never resolves damage. 'attack-hit': the swing's real hit
    * frame (attackHitFraction into attackDurationMs) AND the hero was still
@@ -144,6 +155,16 @@ export interface MonsterEvent {
   type: 'hurt' | 'attack-start' | 'attack-hit' | 'death'
   x: number
   y: number
+}
+
+export interface MonsterProjectileSpawnEvent {
+  type: 'projectile-spawn'
+  x: number
+  y: number
+  facing: -1 | 1
+  targetX: number
+  targetY: number
+  projectile: RangedAttackConfig
 }
 
 export function initMonster(cfg: MonsterConfig, x: number, y: number): MonsterState {
@@ -242,11 +263,23 @@ function tickMonster(
       const hitFrameMs = cfg.attackDurationMs * (cfg.attackHitFraction ?? 0.5)
       if (!state.attackHitResolved && state.modeElapsedMs >= hitFrameMs) {
         state.attackHitResolved = true
-        const reach = cfg.meleeReach ?? cfg.stats.attackRange
-        const dist = Math.abs(heroX - state.x)
-        const heroSide = heroX < state.x ? -1 : 1
-        if (heroAlive && dist <= reach && heroSide === state.facing) {
-          events.push({ type: 'attack-hit', x: state.x, y: state.y })
+        if (cfg.rangedAttack && heroAlive) {
+          events.push({
+            type: 'projectile-spawn',
+            x: state.x + state.facing * (cfg.rangedAttack.spawnOffsetX ?? 0),
+            y: state.y + (cfg.rangedAttack.spawnOffsetY ?? 0),
+            facing: state.facing,
+            targetX: heroX,
+            targetY: heroY ?? state.y,
+            projectile: cfg.rangedAttack,
+          })
+        } else {
+          const reach = cfg.meleeReach ?? cfg.stats.attackRange
+          const dist = Math.abs(heroX - state.x)
+          const heroSide = heroX < state.x ? -1 : 1
+          if (heroAlive && dist <= reach && heroSide === state.facing) {
+            events.push({ type: 'attack-hit', x: state.x, y: state.y })
+          }
         }
       }
       if (state.modeElapsedMs >= cfg.attackDurationMs) {

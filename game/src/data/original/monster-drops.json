@@ -16,6 +16,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 30
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -56,6 +62,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 10
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -94,6 +106,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 4
         }
       ],
       "fallList": [
@@ -173,6 +191,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 10
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -207,6 +231,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 15
         }
       ],
       "fallList": [
@@ -245,6 +275,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 35
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -275,6 +311,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 2
         }
       ],
       "fallList": [
@@ -343,6 +385,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 3
         }
       ],
       "fallList": [
@@ -417,6 +465,16 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "gc.curStage == 9",
+          "value": 32
+        },
+        {
+          "condition": "default",
+          "value": 3
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -465,6 +523,16 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "gc.curStage == 9",
+          "value": 35
+        },
+        {
+          "condition": "default",
+          "value": 2
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -509,6 +577,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 35
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -543,6 +617,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 40
         }
       ],
       "fallList": [
@@ -581,6 +661,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 40
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -615,6 +701,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 45
         }
       ],
       "fallList": [
@@ -657,6 +749,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 65
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -693,6 +791,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 50
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -727,6 +831,20 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "gc.curStage == 5 && gc.curLevel == 1",
+          "value": 3
+        },
+        {
+          "condition": "gc.curStage == 9",
+          "value": 40
+        },
+        {
+          "condition": "default",
+          "value": 16
         }
       ],
       "fallList": [
@@ -777,6 +895,20 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "gc.curStage == 5 && gc.curLevel == 1",
+          "value": 4
+        },
+        {
+          "condition": "gc.curStage == 9",
+          "value": 50
+        },
+        {
+          "condition": "default",
+          "value": 15
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -823,6 +955,16 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "gc.curStage == 9",
+          "value": 48
+        },
+        {
+          "condition": "default",
+          "value": 14
         }
       ],
       "fallList": [
@@ -873,6 +1015,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 190
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -913,6 +1061,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 140
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -949,6 +1103,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 210
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -977,6 +1137,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 15
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1002,6 +1168,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 50
         }
       ],
       "fallList": [
@@ -1036,6 +1208,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 15
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1068,6 +1246,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 150
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1094,6 +1278,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 50
         }
       ],
       "fallList": [
@@ -1132,6 +1322,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 40
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1168,6 +1364,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 50
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1196,6 +1398,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 1
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1217,6 +1425,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 1000
         }
       ],
       "fallList": [
@@ -1245,6 +1459,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 500
         }
       ],
       "fallList": [
@@ -1287,6 +1507,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 750
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1315,6 +1541,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 200
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1341,6 +1573,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 250
         }
       ],
       "fallList": [
@@ -1375,6 +1613,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 250
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1407,6 +1651,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 250
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1435,6 +1685,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 250
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1461,6 +1717,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 100
         }
       ],
       "fallList": [
@@ -1499,6 +1761,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 108
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1533,6 +1801,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 116
         }
       ],
       "fallList": [
@@ -1571,6 +1845,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 80
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1603,6 +1883,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 250
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1631,6 +1917,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 50
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1652,6 +1944,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 50
         }
       ],
       "fallList": [
@@ -1677,6 +1975,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 100
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1700,6 +2004,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 250
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1721,6 +2031,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 500
         }
       ],
       "fallList": [
@@ -1749,6 +2065,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 500
         }
       ],
       "fallList": [
@@ -1791,6 +2113,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 156
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1817,6 +2145,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 148
         }
       ],
       "fallList": [
@@ -1847,6 +2181,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 164
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1873,6 +2213,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 500
         }
       ],
       "fallList": [
@@ -1919,6 +2265,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 164
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1947,6 +2299,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 250
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1970,6 +2328,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 100
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -1991,6 +2355,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 188
         }
       ],
       "fallList": [
@@ -2021,6 +2391,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 188
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -2042,6 +2418,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 500
         }
       ],
       "fallList": [
@@ -2084,6 +2466,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 500
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -2119,6 +2507,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 2
+        }
+      ],
       "fallList": []
     },
     {
@@ -2130,6 +2524,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 2
         }
       ],
       "fallList": []
@@ -2145,6 +2545,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 2
+        }
+      ],
       "fallList": []
     },
     {
@@ -2156,6 +2562,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 2
         }
       ],
       "fallList": []
@@ -2171,6 +2583,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 2
+        }
+      ],
       "fallList": []
     },
     {
@@ -2182,6 +2600,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 2
         }
       ],
       "fallList": []
@@ -2197,6 +2621,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 2
+        }
+      ],
       "fallList": []
     },
     {
@@ -2208,6 +2638,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 2
         }
       ],
       "fallList": []
@@ -2226,6 +2662,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 200
         }
       ],
       "fallList": [
@@ -2256,6 +2698,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 200
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -2284,6 +2732,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 200
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -2305,6 +2759,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 250
         }
       ],
       "fallList": [
@@ -2330,6 +2790,16 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "gc.curStage == 5 && gc.curLevel == 1",
+          "value": 3
+        },
+        {
+          "condition": "default",
+          "value": 16
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -2351,6 +2821,16 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "gc.curStage == 5 && gc.curLevel == 1",
+          "value": 4
+        },
+        {
+          "condition": "default",
+          "value": 15
         }
       ],
       "fallList": [
@@ -2376,6 +2856,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 200
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -2397,6 +2883,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 200
         }
       ],
       "fallList": [
@@ -2427,6 +2919,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 200
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -2455,6 +2953,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 200
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -2478,6 +2982,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 200
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -2494,6 +3004,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 200
         }
       ],
       "fallList": [
@@ -2517,6 +3033,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 200
         }
       ],
       "fallList": [
@@ -2547,6 +3069,12 @@
           "value": false
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 0
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -2568,6 +3096,12 @@
         {
           "condition": "default",
           "value": true
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 0
         }
       ],
       "fallList": [
@@ -2598,6 +3132,12 @@
           "value": true
         }
       ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 0
+        }
+      ],
       "fallList": [
         {
           "condition": "default",
@@ -2619,6 +3159,12 @@
         {
           "condition": "default",
           "value": false
+        }
+      ],
+      "gxp": [
+        {
+          "condition": "default",
+          "value": 0
         }
       ],
       "fallList": []

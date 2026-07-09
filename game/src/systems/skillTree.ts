@@ -167,18 +167,23 @@ export function createEmptySkillTreeState(): SkillTreeState {
   }
 }
 
-/**
- * Bootstrap default for a brand-new character AND for legacy saves written
- * before this system existed (save.ts's `skills` field was `null`) --
- * brief's decided fallback: "无绑定的旧存档回退默认5技（slz/lys/hytj/lyfb/jdy）".
- * This is a migration/bootstrap default, not a soul-spending event: it directly
- * constructs the state that would result from spending the souls (school 0 to
- * level 1 unlocks slz; school 1 to level 4 unlocks lys/hytj/lyfb/jdy) without
- * actually charging a SoulPurse, so existing saves/demo play keep exactly the
- * five-skill loadout the game shipped with pre-S5 (BattleScene's old
- * SKILL_DEMO_LEVELS), matching the same keys (Y/U/I/O/L) the dock already used.
- */
+/** Bootstrap default for a brand-new character: only the first school slot is
+ * unlocked/learned and bound to Y. The AS3 User constructor starts fully empty
+ * (`isstudyskill` xflevel 0, `skillbykey=[]`), but this project keeps one
+ * starter active skill so a new save can use the skill system immediately
+ * without resurrecting the old five-skill demo loadout. */
 export function createDefaultSkillTreeState(): SkillTreeState {
+  const state = createEmptySkillTreeState()
+  state.schools[0].level = 1 // unlocks allSklName[0][0] = slz
+  state.schools[0].learned.push({ skillName: 'slz', level: 1 })
+  state.bindings = { Y: 'slz', U: null, I: null, O: null, L: null }
+  return state
+}
+
+/** Migration fallback for saves written before `skills` existed (`skills:null`):
+ * preserve the pre-S5 demo loadout instead of silently stripping abilities from
+ * an existing player. Fresh saves must use `createDefaultSkillTreeState()`. */
+export function createLegacySkillTreeState(): SkillTreeState {
   const state = createEmptySkillTreeState()
   state.schools[0].level = 1 // unlocks allSklName[0][0] = slz
   state.schools[1].level = 4 // unlocks allSklName[1][0..3] = lys/hytj/lyfb/jdy

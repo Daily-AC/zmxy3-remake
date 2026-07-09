@@ -231,10 +231,10 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
       inventory: createInventory(4),
     })
     expect(save.pets).toEqual([])
-    // S5: skills defaults to createDefaultSkillTreeState() (not null) when the
-    // caller doesn't pass one -- see save.ts header re: this field's history.
+    // S5: fresh saves default to the starter single-skill state, not the old
+    // five-skill demo loadout.
     expect(save.skills).not.toBeNull()
-    expect(save.skills?.bindings).toEqual({ Y: 'slz', U: 'lys', I: 'hytj', O: 'lyfb', L: 'jdy' })
+    expect(save.skills?.bindings).toEqual({ Y: 'slz', U: null, I: null, O: null, L: null })
     expect(save.soul).toBe(0)
   })
 
@@ -259,7 +259,7 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
     expect(loaded.soul).toBe(1234)
   })
 
-  it('restoreGameState falls back to the default skillTree when skills is null (legacy save)', () => {
+  it('restoreGameState migrates skills:null legacy saves to the old five-skill loadout', () => {
     const legacy: GameSave = {
       ...createGameSave({ progression: createProgression(1), equipment: createEquipment(), inventory: createInventory(4) }),
       skills: null,
@@ -268,5 +268,31 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
     const loaded = restoreGameState(legacy)
     expect(loaded.skillTree.bindings).toEqual({ Y: 'slz', U: 'lys', I: 'hytj', O: 'lyfb', L: 'jdy' })
     expect(loaded.soul).toBe(0)
+  })
+
+  it('restoreGameState preserves a valid old five-skill saved state instead of re-defaulting it', () => {
+    const fiveSkillTree: import('../src/systems/skillTree').SkillTreeState = {
+      schools: [
+        { level: 1, learned: [{ skillName: 'slz', level: 1 }] },
+        {
+          level: 4,
+          learned: [
+            { skillName: 'lys', level: 1 },
+            { skillName: 'hytj', level: 1 },
+            { skillName: 'lyfb', level: 1 },
+            { skillName: 'jdy', level: 1 },
+          ],
+        },
+      ],
+      bindings: { Y: 'slz', U: 'lys', I: 'hytj', O: 'lyfb', L: 'jdy' },
+    }
+    const save = createGameSave({
+      progression: createProgression(1),
+      equipment: createEquipment(),
+      inventory: createInventory(4),
+      skillTree: fiveSkillTree,
+    })
+    const loaded = restoreGameState(save)
+    expect(loaded.skillTree).toEqual(fiveSkillTree)
   })
 })

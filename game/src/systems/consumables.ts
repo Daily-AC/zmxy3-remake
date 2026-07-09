@@ -26,9 +26,9 @@
 // `export.cure.SmallHP.as` (base class), `SmallMP.as`/`BigHP.as` (both
 // extend it, overriding only `cure()`):
 //
-//   SmallHP ("SHp"): flat +100 HP, instant, on first contact.
+//   SmallHP ("SHp"): +25% of max HP, instant, on first contact.
 //   BigHP   ("BHp"): +50% of max HP, instant, on first contact.
-//   SmallMP ("SMp"): flat +100 MP, instant, on first contact.
+//   SmallMP ("SMp"): +25% of max MP, instant, on first contact.
 //   (there is no "BigMP" -- confirmed by an exhaustive `-selectclass
 //   export.cure.*` decompile turning up exactly these 3 classes, nothing else)
 //
@@ -126,9 +126,9 @@ export interface ConsumableSpec {
 
 /** Source: export.cure.SmallHP.as / SmallMP.as / BigHP.as. */
 export const CONSUMABLE_SPECS: Record<ConsumableId, ConsumableSpec> = {
-  smallHp: { id: 'smallHp', sourceName: 'SHp', resource: 'hp', amount: { kind: 'flat', value: 100 }, healBlockable: true },
+  smallHp: { id: 'smallHp', sourceName: 'SHp', resource: 'hp', amount: { kind: 'fractionOfMax', fraction: 0.25 }, healBlockable: true },
   bigHp: { id: 'bigHp', sourceName: 'BHp', resource: 'hp', amount: { kind: 'fractionOfMax', fraction: 0.5 }, healBlockable: true },
-  smallMp: { id: 'smallMp', sourceName: 'SMp', resource: 'mp', amount: { kind: 'flat', value: 100 }, healBlockable: false },
+  smallMp: { id: 'smallMp', sourceName: 'SMp', resource: 'mp', amount: { kind: 'fractionOfMax', fraction: 0.25 }, healBlockable: false },
 }
 
 /** Source: export.cure.SmallHP.as step()'s `tcount >= gc.frameClips * 10` --
