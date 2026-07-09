@@ -161,7 +161,18 @@ import {
   CraftEffect,
   resolveNpcServerUrl,
 } from '../net/npcClient'
-import type { CoopSession } from '../net/socialClient'
+import { getSharedSocialClient, resolveSocialServerBaseUrl, type CoopSession, type SocialRoomConnection } from '../net/socialClient'
+import { CoopChannel, createSocialRoomTransport } from '../net/coopChannel'
+import {
+  applyCoopMessage,
+  createCoopSyncState,
+  encodeLevelEvent,
+  interpolatePosition,
+  type CoopInboundMessage,
+  type CoopSyncState,
+  type HitIntentPayload,
+  type MonsterStateSnapshot,
+} from '../systems/coopSync'
 import { DialogueBox } from '../ui/DialogueBox'
 import {
   HUD_TEXTURES,
@@ -602,6 +613,11 @@ interface MonsterEntity {
   skillOverlay?: SkillOverlayState
 }
 
+interface RemoteHeroPuppet {
+  sprite: Phaser.GameObjects.Sprite
+  label: Phaser.GameObjects.Text
+}
+
 /**
  * Milestone-3 battle scene: parallax level, a Monster30 the hero combos to
  * death with loot -> inventory, and an LLM-driven NPC (太上老君) the player can
@@ -700,6 +716,21 @@ export class BattleScene extends Phaser.Scene {
   private entryCampaignIndex: number | null = null
   // COOP-SEAM: stored for a future combat-sync pass; solo combat ignores it.
   protected coopSession: CoopSession | null = null
+  private coopConnection: SocialRoomConnection | null = null
+  private coopChannel: CoopChannel | null = null
+  private coopSyncState: CoopSyncState | null = null
+  private coopUnsubscribe: (() => void) | null = null
+  private coopSeq = 0
+  private coopHeroBroadcastAccMs = 0
+  private coopMonsterBroadcastAccMs = 0
+  private coopMonsterIds = new WeakMap<MonsterEntity, string>()
+  private coopMonsterById = new Map<string, MonsterEntity>()
+  private coopNextMonsterId = 1
+  private coopSentHitIntents = new Set<string>()
+  private coopRemoteAttackIds = new Map<string, number>()
+  private coopRemoteAttackIdSeq = 300000
+  private coopBossDefeatedSent = false
+  private remoteHeroes = new Map<string, RemoteHeroPuppet>()
   private playtimeSec = 0
   private playtimeAccMs = 0
   // Esc pause menu (continue / save & quit to main menu).
@@ -895,6 +926,7 @@ export class BattleScene extends Phaser.Scene {
     this.startAudioOnFirstInput()
     this.connectNpc()
     this.exposeDebugHooks()
+    this.startCoopSync()
 
     kb.on('keydown-ESC', () => this.togglePause())
     // A fresh scene (re)entry: no craft in flight, not paused.
@@ -904,6 +936,7 @@ export class BattleScene extends Phaser.Scene {
     // the dialogue so nothing (DOM input, reconnect timer) leaks into the shell.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.npcClient?.dispose()
+      this.disposeCoopSync()
       this.dialogue?.close()
     })
   }
@@ -1191,8 +1224,7 @@ export class BattleScene extends Phaser.Scene {
         if (!overlaps(box, mBox)) continue
         const attackId = ++this.skillAttackId
         if (e.state.resolvedAttackIds.includes(attackId)) continue
-        e.hitQueue.push({ attackId, damage: dmg })
-        this.floatText(e.state.x, e.state.y - 90, `-${dmg}`, 'damage')
+        if (this.queueOrSendHeroHit(e, attackId, dmg)) this.floatText(e.state.x, e.state.y - 90, `-${dmg}`, 'damage')
       }
     }
     if (hb.activeAfterMs > 0) this.time.delayedCall(hb.activeAfterMs, fire)
@@ -1217,6 +1249,11 @@ export class BattleScene extends Phaser.Scene {
     this.nextEnemyProjectileId = 1
     this.playedHitIds.clear()
     this.monsters = []
+    this.coopMonsterIds = new WeakMap<MonsterEntity, string>()
+    this.coopMonsterById.clear()
+    this.coopNextMonsterId = 1
+    this.coopSentHitIntents.clear()
+    this.coopBossDefeatedSent = false
     this.bossEntity = null
     this.activeMiniBoss = null
     this.bgBase = this.add
@@ -1557,7 +1594,8 @@ export class BattleScene extends Phaser.Scene {
       if (updateLevelSpawn(this.levelState, this.aliveGruntCount())) this.spawnActiveWave()
     }
 
-    for (const e of this.monsters) this.advanceEntity(e, delta, heroAlive)
+    if (!this.coopSession) for (const e of this.monsters) this.advanceEntity(e, delta, heroAlive)
+    else this.updateCoopMonsters(delta, heroAlive)
     this.reapMonsters()
 
     const door = currentSubStageDoor(this.level1Chain)
@@ -1692,6 +1730,7 @@ export class BattleScene extends Phaser.Scene {
       skillOverlay: skillGate ? createSkillOverlayState(skillGate) : undefined,
     }
     this.monsters.push(entity)
+    if (this.coopSession) this.coopMonsterId(entity)
     return entity
   }
 
@@ -2095,6 +2134,123 @@ export class BattleScene extends Phaser.Scene {
     this.playSfx('pickup', 0.7)
   }
 
+  private startCoopSync(): void {
+    if (!this.coopSession) return
+    const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+    const baseUrl = resolveSocialServerBaseUrl(window.location.search, env?.VITE_SOCIAL_SERVER_URL)
+    const client = getSharedSocialClient(baseUrl)
+
+    try {
+      this.coopConnection = client.openRoomConnection(this.coopSession.roomId)
+    } catch {
+      this.showToast('联机战斗连接不可用', '#e07a7a')
+      return
+    }
+
+    this.coopSyncState = createCoopSyncState({
+      localUserId: this.coopSession.myUserId,
+      hostUserId: this.coopSession.hostUserId,
+    })
+    this.coopChannel = new CoopChannel(createSocialRoomTransport(this.coopConnection))
+    this.coopUnsubscribe = this.coopChannel.subscribe((message) => this.onCoopMessage(message))
+    this.coopConnection.onStatus = (status) => {
+      if (!this.coopSession) return
+      if (status === 'error') this.showToast('联机战斗连接异常', '#e07a7a')
+      else if (status === 'closed') this.showToast('联机战斗连接已断开', '#e07a7a')
+    }
+    if (!this.coopConnection.isOpen()) this.coopConnection.connect()
+  }
+
+  private disposeCoopSync(): void {
+    this.coopUnsubscribe?.()
+    this.coopUnsubscribe = null
+    if (this.coopConnection) this.coopConnection.onStatus = () => {}
+    this.coopConnection?.dispose()
+    this.coopConnection = null
+    this.coopChannel = null
+    this.coopSyncState = null
+    for (const puppet of this.remoteHeroes.values()) {
+      puppet.sprite.destroy()
+      puppet.label.destroy()
+    }
+    this.remoteHeroes.clear()
+  }
+
+  private onCoopMessage(message: CoopInboundMessage): void {
+    if (!this.coopSession || !this.coopSyncState) return
+    const result = applyCoopMessage(this.coopSyncState, message)
+    this.coopSyncState = result.state
+    for (const outgoing of result.outgoing) this.coopChannel?.send(outgoing)
+    if (message.type === 'event' && message.name === 'hit_intent') this.applyRemoteHitIntent(message.payload)
+    for (const effect of result.effects) {
+      if (effect.type === 'level_event_received' && effect.kind === 'boss_defeated') this.mirrorBossDefeated()
+    }
+  }
+
+  private updateCoop(delta: number): void {
+    if (!this.coopSession || !this.coopChannel) return
+    this.coopHeroBroadcastAccMs += delta
+    if (this.coopHeroBroadcastAccMs >= 100) {
+      this.coopHeroBroadcastAccMs %= 100
+      this.broadcastHeroState()
+    }
+    this.updateRemoteHeroPuppets()
+  }
+
+  private broadcastHeroState(): void {
+    if (!this.coopSession || !this.coopChannel) return
+    const now = Date.now()
+    this.coopChannel.sendHeroState(
+      {
+        userId: this.coopSession.myUserId,
+        heroId: String(HERO_ID),
+        x: this.heroState.x,
+        y: this.heroState.vertical.y,
+        facing: this.heroState.facing,
+        action: this.heroState.action,
+        animState: this.hero.anims.currentAnim?.key ?? this.heroState.action,
+        hp: this.identity.combat.hp,
+        maxHp: this.identity.combat.maxHp,
+        alive: !isHeroDead(this.identity),
+      },
+      ++this.coopSeq,
+      now,
+    )
+  }
+
+  private updateRemoteHeroPuppets(): void {
+    if (!this.coopSession || !this.coopSyncState) return
+    for (const [userId, view] of Object.entries(this.coopSyncState.heroes)) {
+      if (userId === this.coopSession.myUserId) continue
+      const pos = interpolatePosition(view.positionSamples, Date.now())
+      if (!pos) continue
+      const puppet = this.remoteHeroes.get(userId) ?? this.createRemoteHeroPuppet(userId)
+      const action = view.snapshot.alive ? view.snapshot.action : 'hurt'
+      if (this.anims.exists(action) && puppet.sprite.anims.currentAnim?.key !== action) puppet.sprite.play(action)
+      puppet.sprite.setFlipX(view.snapshot.facing === 1)
+      puppet.sprite.setAngle(view.snapshot.alive ? 0 : view.snapshot.facing === 1 ? 90 : -90)
+      if (view.snapshot.alive) puppet.sprite.clearTint()
+      else puppet.sprite.setTint(0x777777)
+      const off = roleData.offset
+      const px = pos.x + off.x * HERO_SCALE
+      const py = pos.y + off.y * HERO_SCALE
+      puppet.sprite.setPosition(px, py)
+      puppet.label.setPosition(px, py - 118)
+    }
+  }
+
+  private createRemoteHeroPuppet(userId: string): RemoteHeroPuppet {
+    const peer = this.coopSession?.peers.find((candidate) => candidate.userId === userId)
+    const sprite = this.add.sprite(0, 0, HERO_TEX).setScale(HERO_SCALE).setDepth(9)
+    const label = this.add
+      .text(0, 0, peer?.username ?? userId, { fontSize: '14px', color: '#9fd8ff', fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setDepth(20)
+    const puppet = { sprite, label }
+    this.remoteHeroes.set(userId, puppet)
+    return puppet
+  }
+
   update(_time: number, delta: number): void {
     if (this.paused) return
     // Accrue play time (whole seconds) for the slot summary.
@@ -2137,6 +2293,7 @@ export class BattleScene extends Phaser.Scene {
     this.stepDropsAndPickup()
     this.stepEnemyProjectiles(delta)
 
+    if (this.coopSession) this.updateCoop(delta)
     this.applyHeroRender(this.heroState.action)
     this.renderMonsters()
     this.updateHud()
@@ -2148,6 +2305,82 @@ export class BattleScene extends Phaser.Scene {
 
   private aliveMonsters(): MonsterEntity[] {
     return this.monsters.filter((e) => e.state.mode !== 'dead' && e.state.mode !== 'gone')
+  }
+
+  private updateCoopMonsters(delta: number, heroAlive: boolean): void {
+    if (!this.coopSession) return
+    if (this.coopSession && !this.coopSession.isHost) {
+      this.applyRemoteMonsterSnapshots(delta)
+      return
+    }
+
+    for (const e of this.monsters) this.advanceEntity(e, delta, heroAlive)
+    this.coopMonsterBroadcastAccMs += delta
+    if (this.coopMonsterBroadcastAccMs >= 100) {
+      this.coopMonsterBroadcastAccMs %= 100
+      this.broadcastMonsterState(true)
+    }
+  }
+
+  private broadcastMonsterState(includeRecentlyDead = false): void {
+    if (!this.coopSession || !this.coopSession.isHost || !this.coopChannel) return
+    const candidates = this.monsters.filter((e) => e.state.mode !== 'gone' && (includeRecentlyDead || e.state.mode !== 'dead'))
+    const snapshots = candidates.map((e) => this.monsterSnapshot(e))
+    this.coopChannel.sendMonsterState(snapshots, ++this.coopSeq, Date.now())
+  }
+
+  private applyRemoteMonsterSnapshots(delta: number): void {
+    if (!this.coopSession || !this.coopSyncState) return
+    for (const e of this.monsters) {
+      const view = this.coopSyncState.monsters[this.coopMonsterId(e)]
+      if (!view) continue
+      const snapshot = view.snapshot
+      const pos = interpolatePosition(view.positionSamples, Date.now())
+      if (pos) {
+        e.state.x = pos.x
+        e.state.y = pos.y
+      }
+      e.state.facing = snapshot.facing
+      e.state.hp = Math.max(0, Math.min(snapshot.maxHp, snapshot.hp))
+      if (snapshot.alive) {
+        if (e.state.mode === 'dead' || e.state.mode === 'gone') {
+          e.state.mode = 'patrol'
+          e.state.modeElapsedMs = 0
+        }
+        e.state.action = snapshot.action
+      } else {
+        if (e.state.mode !== 'dead' && e.state.mode !== 'gone') {
+          e.state.mode = 'dead'
+          e.state.modeElapsedMs = 0
+        }
+        e.state.action = 'dead'
+        e.state.modeElapsedMs += delta
+        if (e.state.modeElapsedMs >= e.config.deadDurationMs) e.state.mode = 'gone'
+      }
+    }
+  }
+
+  private monsterSnapshot(e: MonsterEntity): MonsterStateSnapshot {
+    return {
+      monsterId: this.coopMonsterId(e),
+      x: e.state.x,
+      y: e.state.y,
+      facing: e.state.facing,
+      action: e.state.action,
+      hp: Math.max(0, e.state.hp),
+      maxHp: e.config.stats.hp,
+      alive: e.state.mode !== 'dead' && e.state.mode !== 'gone' && e.state.hp > 0,
+    }
+  }
+
+  private coopMonsterId(e: MonsterEntity): string {
+    let id = this.coopMonsterIds.get(e)
+    if (!id) {
+      id = `${e.species}-${this.coopNextMonsterId++}`
+      this.coopMonsterIds.set(e, id)
+    }
+    this.coopMonsterById.set(id, e)
+    return id
   }
 
   // hitstun-triad pen: shared coordinate helpers so every hit-test box is
@@ -2203,7 +2436,7 @@ export class BattleScene extends Phaser.Scene {
       if (!overlaps(box, mBox)) continue
       if (e.state.resolvedAttackIds.includes(s.attackId)) continue
       if (e.hitQueue.some((h) => h.attackId === s.attackId)) continue
-      e.hitQueue.push({ attackId: s.attackId, damage })
+      if (!this.queueOrSendHeroHit(e, s.attackId, damage)) continue
       this.floatText(e.state.x, e.state.y - 90, `-${damage}`, 'damage')
       if (!firstHit) firstHit = e
     }
@@ -2222,6 +2455,51 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  private queueOrSendHeroHit(target: MonsterEntity, attackId: number, damage: number): boolean {
+    if (!this.coopSession) {
+      target.hitQueue.push({ attackId, damage })
+      return true
+    }
+    if (this.coopSession.isHost) {
+      target.hitQueue.push({ attackId, damage })
+      return true
+    }
+
+    const targetMonsterId = this.coopMonsterId(target)
+    const sentKey = `${targetMonsterId}:${attackId}`
+    if (this.coopSentHitIntents.has(sentKey)) return false
+    const sent = !!this.coopChannel?.sendHitIntent({
+      attackerUserId: this.coopSession.myUserId,
+      targetMonsterId,
+      attackId: String(attackId),
+      damage,
+      clientTimeMs: Date.now(),
+    })
+    if (sent) this.coopSentHitIntents.add(sentKey)
+    return sent
+  }
+
+  private applyRemoteHitIntent(intent: HitIntentPayload): void {
+    if (!this.coopSession || !this.coopSession.isHost) return
+    if (intent.attackerUserId === this.coopSession.myUserId) return
+    const target = this.coopMonsterById.get(intent.targetMonsterId)
+    if (!target || target.state.mode === 'dead' || target.state.mode === 'gone') return
+    const attackId = this.remoteAttackId(intent)
+    if (target.state.resolvedAttackIds.includes(attackId)) return
+    if (target.hitQueue.some((hit) => hit.attackId === attackId)) return
+    target.hitQueue.push({ attackId, damage: intent.damage })
+    this.floatText(target.state.x, target.state.y - 90, `-${intent.damage}`, 'damage')
+  }
+
+  private remoteAttackId(intent: HitIntentPayload): number {
+    const key = `${intent.attackerUserId}:${intent.attackId}`
+    const existing = this.coopRemoteAttackIds.get(key)
+    if (existing !== undefined) return existing
+    const next = ++this.coopRemoteAttackIdSeq
+    this.coopRemoteAttackIds.set(key, next)
+    return next
+  }
+
   // ---------- level tick ----------
 
   private updateLevel(delta: number): void {
@@ -2233,7 +2511,8 @@ export class BattleScene extends Phaser.Scene {
       markBossTriggered(this.levelState)
       this.spawnBoss()
     }
-    for (const e of this.monsters) this.advanceEntity(e, delta, heroAlive)
+    if (!this.coopSession) for (const e of this.monsters) this.advanceEntity(e, delta, heroAlive)
+    else this.updateCoopMonsters(delta, heroAlive)
     this.reapMonsters()
     // Boss down -> stage-clear banner, then the portal on confirm/timeout. The
     // door is revealed now (so the portal is reachable the moment the banner is
@@ -2248,6 +2527,7 @@ export class BattleScene extends Phaser.Scene {
   /** Boss cleared: play the 挑战成功 banner with a short stat line, then hand
    * off to the portal on 继续 / timeout. */
   private showResultBanner(): void {
+    if (this.coopSession?.isHost) this.broadcastBossDefeated()
     const bossName = this.bossEntity ? MONSTER_NAMES[this.bossEntity.species] ?? '妖王' : '妖王'
     this.resultBanner.showSuccess({
       stats: [
@@ -2259,6 +2539,23 @@ export class BattleScene extends Phaser.Scene {
     this.playSfx('pickup', 0.7)
     this.bannerTimer?.remove(false)
     this.bannerTimer = this.time.delayedCall(6000, () => this.dismissResultBanner())
+  }
+
+  private broadcastBossDefeated(): void {
+    if (!this.coopSession || !this.coopSession.isHost || !this.coopChannel || this.coopBossDefeatedSent) return
+    this.coopBossDefeatedSent = true
+    this.coopChannel.send(encodeLevelEvent({ kind: 'boss_defeated' }))
+  }
+
+  private mirrorBossDefeated(): void {
+    if (!this.coopSession || this.coopSession.isHost) return
+    if (this.level1Chain) {
+      const door = currentSubStageDoor(this.level1Chain)
+      if (!door.visible) markCurrentSubStageCleared(this.level1Chain)
+    } else if (!this.levelState.arena.door.visible) {
+      revealTransferDoor(this.levelState)
+    }
+    if (!this.resultBanner.isOpen) this.showResultBanner()
   }
 
   /** Close the result banner and reveal the transfer portal glow. */
