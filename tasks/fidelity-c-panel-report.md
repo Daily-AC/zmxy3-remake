@@ -120,6 +120,8 @@ Limitations:
 
 Recommendation: not reproduced. Ask for a fresh screenshot if the gray block still appears; if it is outside `BackpackWindow.ts`, it likely belongs to the wiring/rendering layer and should be handled serially outside C-panel ownership.
 
+**Attribution update (main-session verdict, 2026-07-09)**: main session cross-referenced the user's screenshot against the known monster30 (crow) sprite-sheet mis-crop artifact already tracked under fidelity-b (out-of-bounds frame crop on the crow's action sheet produces the same flat gray rectangle texture, see `tasks/fidelity-r3-backlog.md` item 9). The backpack window renders over the live battle scene rather than replacing it, so a crow standing behind the player when the panel opens would show through in the same screen region the user flagged. This matches "not reproducible in BackpackWindow.ts" (there is no panel-owned gray rectangle) without contradicting the user's screenshot — the artifact belongs to the crow's rendering (fidelity-b ownership), not to this panel. No panel code should be changed to chase this; closed as a cross-branch attribution, not a C-panel defect.
+
 ## Tests
 
 TDD red check:
