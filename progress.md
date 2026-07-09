@@ -372,3 +372,22 @@
 **接手待办排序**：①coop 集成收口+双人两 tab 终审+部署（联机是提交硬需求）；②小尾巴：爬塔云影 alpha 0.12→0.3（BattleScene，等集成合入后动）、老君聊天文本溢出面板（FurnaceRecipeView）；③用户亲玩轮；④**19:00~21:00 终包窗口**：electron exe→home 真机（tools/acceptance/，wanctl 链路），提交材料含 keyart（tmp/keyart/ 两张终稿）；⑤提交叙事素材：progress.md 本身就是"CC 构建大型项目"的过程证据。
 **前端打磨专场素材**：定稿 mock=tmp/keyart/{keyart-v1-dawn,login-mock-v2}.png；入库件 game/public/assets/keyart/；手法=mock 即素材+PIL 测位+逐元素倾角（LoginScene.ts 是范例）；Phaser DOMElement rotation 无效须用 CSS transform；Phaser4 输入只认 mouse 事件；大厅 LobbyScene/选人/世界地图按钮仍是素面板待皮。
 **纪律**：实现类一律 codex；高流量文件改动即刻 commit；隔层转达要看到开跑证据；push 用 -c http.proxy；部署=push 后 ssh home-wsl 跑 ~/deploy-zm-frontend.sh；agent-server/social-server 改动需 systemctl restart zmxy-agent/zmxy-social；线上验收亲跑（本会话 CORS 事故教训：Node 脚本测不出浏览器跨域）。
+
+## 2026-07-09 session7 前端打磨专场（18:4x~22:2x，Fable 主持）
+
+接手第一件事按交接节核账：codex 的 coop 战斗内同步已完成但因沙箱 git 锁未提交（报告 tasks/coop-integration-report.md），测绿后分三个 commit 入库（3ae0cde/b4060f2/8696aa4）。**coop 双人两 tab 终审仍欠**（本场全花在 UI 打磨，未跑联机验收）。
+
+用户两批共 12 项 UI 反馈全部落地（线上 zaixu = 3eae38e，已部署验证可开）：
+1. 选人：按钮移到画下方黑带、原画模糊放大铺满两侧黑边（2bbe7b4）。
+2. 世界地图：联机共斗从右上悬浮钮收进 vendor 底栏（PIL 仿原版红球金环合成 btn_coop.png，双剑图标），走统一 onButton 分发（37435fd）。
+3. 联机大厅重做：暗化地图作底 + 双线金边墨面板 + 毛笔字标题 + MenuButton 木纹钮（fb63018）。
+4. L1"没贴图"根因=爬塔平台只有 debug 线框正常游玩不可见 + bg11 下半段本来就是空白云雾。修法：bg11 自裁羽化云片做平台云/塔底云海带/低视差漂云（cloud_puff1/2.png，e0f2c8b+3eae38e）。
+5. 无双条从头像下移到无双簇旁槽行正下（用户拍板推翻 07-08"无 baked 连接"判读）。
+6. 暂停页重做（墨金+毛笔字+木纹钮）+ 新增返回地图（returnToWorldMap，先落存档）。
+7. 炼丹炉页重做：老君收右上入口按需弹抽屉（有新回话自动弹开）、配方列表铺满、只显示悟空+无角色限定配方、聊天溢出旧账修掉（动态堆叠+旧行裁剪）（189d257）。
+8. 背包六点修缮（codex 棒，报告 tasks/backpack-polish-report.md，根因分析扎实）：立绘按聚光框实测 bbox 适配、昵称读社交会话用户名、全部值文本居中、backpack_bg.png 翻页钮烘焙尖刺像素修补、dim 遮罩容器偏移根因修复、武器格 star_blade 映射+人物持械 overlay（3845954）。**遗留：31 个武器 id 无专属图标，建议按 8 形制生图（清单在报告§6）**。
+9. 技能页重做+语义修正（codex 棒，报告 tasks/skilltree-redo-report.md）：per-skill「升级」UI 撤除（引擎函数 DORMANT 保留等技能书系统）、主操作=「激活」(learnSkill)、心法钮改「提升心法」、旧存档迁移 legacy→default（"四技能全激活"根因=createLegacySkillTreeState 预置，已改）（263ca30）。**注意：per-skill 升级灵魂公式代码注释引 SkillControl.as:295，与用户"原版升级需技能书"的记忆有出入，已按用户拍板撤 UI，赛后如要接回先对 AS3 复核**。
+
+验收方式：本地 5201 亲截图逐屏比对（选人/地图/L1 爬塔/暂停/背包），线上 zaixu 拉起确认 boot；技能页/大厅只做了代码审+测试绿，**浏览器细看欠一轮**。591 测试绿、tsc 干净。
+
+**未做/风险**：①终包窗口（electron exe→home 真机）整场没跑，22:2x 已过原计划窗口——待用户拍板是否还打包；②coop 战斗内同步无真机双人验收；③选人画幅为给按钮腾带缩到 470/540，五官变小一档，用户如不满可改叠层方案。
