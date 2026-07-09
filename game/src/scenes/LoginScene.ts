@@ -9,26 +9,35 @@ import {
 import { SCENE, REG, shellStorage } from './shellShared'
 import { readSlot } from '../systems/saveSlots'
 import { restoreGameState } from '../systems/save'
+import { addEmbers } from '../ui/embers'
 
+// 2026-07-09 用户拍板终稿 mock（login-mock-v2, 四人探头版）即素材：整张效果图
+// 铺满画布当背景，功能件（输入框/印章热区/模式切换）像素对位叠在画中对应元素
+// 上（生图 mock→代码复刻工作流，见 memory feedback-imggen-mock-then-code-
+// replicate）。坐标为 mock 原图 2048x1152 → 960x540 画布的 0.46875 缩放后手工
+// 对位值，调整时对照 game/public/assets/keyart/login-mock-ref.jpg。
 export const LOGIN_THEME = {
   w: 960,
   h: 540,
-  bg: 0x10131d,
-  panel: 0x1a130c,
-  panelAlpha: 0.94,
-  gold: 0xd9b45a,
-  text: '#f2eddf',
-  muted: '#b8aa8a',
-  active: '#ffd873',
+  bgTexKey: 'login_mock_scroll',
+  bgTexPath: 'assets/keyart/login-mock-ref.jpg',
+  // Painted-element overlay geometry (canvas px).
+  inputUser: { cx: 564, cy: 208, w: 250, h: 32 },
+  inputPass: { cx: 564, cy: 279, w: 250, h: 32 },
+  seal: { cx: 547, cy: 372, r: 46 },
+  // Painted link line measured via PIL dark-pixel scan: orig y 888-936 → canvas
+  // cy 426; local paper is warm tan (222,158,98), not pale parchment.
+  modeLink: { cx: 538, cy: 426, w: 175, h: 24 },
+  // Parchment palette sampled from the mock scroll.
+  parchment: '#e9dcbd',
+  parchmentPatch: 0xdc9e62,
+  ink: '#2f2418',
+  inkBorder: '#4a3a24',
+  sealRed: 0xb3271e,
   danger: '#e07a7a',
-  inputBg: 'rgba(14,16,26,0.82)',
-  inputBorder: '#d9b45a',
-  fontTitle: '28px',
-  fontBody: '17px',
-  fontSmall: '14px',
-  panelW: 440,
-  panelH: 330,
-  inputW: 260,
+  text: '#f2eddf',
+  fontBody: '16px',
+  fontSmall: '13px',
 } as const
 
 type LoginMode = 'register' | 'login'
@@ -46,6 +55,12 @@ export class LoginScene extends Phaser.Scene {
     super(SCENE.coopLogin)
   }
 
+  preload(): void {
+    if (!this.textures.exists(LOGIN_THEME.bgTexKey)) {
+      this.load.image(LOGIN_THEME.bgTexKey, LOGIN_THEME.bgTexPath)
+    }
+  }
+
   create(): void {
     this.client = runtimeSocialClient()
     if (this.client.getSession()) {
@@ -55,62 +70,82 @@ export class LoginScene extends Phaser.Scene {
 
     this.toastUi = new Toast(this)
     this.render()
+    this.cameras.main.fadeIn(450, 0, 0, 0)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.clearRoot())
   }
 
   private render(): void {
     this.clearRoot()
     const t = LOGIN_THEME
-    const cx = t.w / 2
-    const cy = t.h / 2
-    const left = cx - t.panelW / 2
 
-    const bg = this.add.rectangle(cx, cy, t.w, t.h, t.bg, 1)
-    const panel = this.add.graphics()
-    panel.fillStyle(t.panel, t.panelAlpha).fillRoundedRect(left, cy - t.panelH / 2, t.panelW, t.panelH, 8)
-    panel.lineStyle(2, t.gold, 0.85).strokeRoundedRect(left, cy - t.panelH / 2, t.panelW, t.panelH, 8)
+    const children: Phaser.GameObjects.GameObject[] = []
 
-    const title = this.add
-      .text(cx, cy - 128, '联机共斗', { fontSize: t.fontTitle, color: t.active, fontStyle: 'bold' })
-      .setOrigin(0.5)
-    const subtitle = this.add
-      .text(cx, cy - 94, this.mode === 'register' ? '注册账号' : '登录账号', { fontSize: t.fontBody, color: t.text })
-      .setOrigin(0.5)
+    if (this.textures.exists(t.bgTexKey)) {
+      const bg = this.add.image(t.w / 2, t.h / 2, t.bgTexKey)
+      bg.setScale(Math.max(t.w / bg.width, t.h / bg.height))
+      children.push(bg)
+      // Scroll unfurl illusion: the whole sheet settles down a few px while
+      // fading in (the mock's scroll reads as freshly unrolled).
+      bg.y -= 8
+      this.tweens.add({ targets: bg, y: t.h / 2, duration: 650, ease: 'Back.easeOut' })
+    } else {
+      children.push(this.add.rectangle(t.w / 2, t.h / 2, t.w, t.h, 0x1a130c, 1))
+    }
 
-    const registerToggle = this.toggleLabel(cx - 54, cy - 58, '注册', this.mode === 'register', () => {
-      this.mode = 'register'
-      this.render()
-    })
-    const loginToggle = this.toggleLabel(cx + 54, cy - 58, '登录', this.mode === 'login', () => {
-      this.mode = 'login'
-      this.render()
-    })
+    // DOM inputs sit exactly over the painted 仙号/符咒 boxes; opaque parchment
+    // background hides the painted placeholder glyphs beneath.
+    const userDom = this.buildInput(t.inputUser, 'text', '仙号')
+    const passDom = this.buildInput(t.inputPass, 'password', '符咒')
+    this.usernameInput = userDom.node as HTMLInputElement
+    this.passwordInput = passDom.node as HTMLInputElement
+    children.push(userDom, passDom)
 
-    const usernameLabel = this.add.text(cx - t.inputW / 2, cy - 18, '用户名', { fontSize: t.fontSmall, color: t.muted })
-    const passwordLabel = this.add.text(cx - t.inputW / 2, cy + 48, '密码', { fontSize: t.fontSmall, color: t.muted })
-    const usernameDom = this.buildInput(cx - t.inputW / 2, cy + 12, t.inputW, 'text', '输入用户名')
-    const passwordDom = this.buildInput(cx - t.inputW / 2, cy + 78, t.inputW, 'password', '输入密码')
-    this.usernameInput = usernameDom.node as HTMLInputElement
-    this.passwordInput = passwordDom.node as HTMLInputElement
-
-    const submit = this.button(cx, cy + 138, 150, 36, this.mode === 'register' ? '注册进入' : '登录进入', () => {
+    // 入界 seal: painted art is the button; add an invisible circular hit zone
+    // plus a press "stamp" animation overlay.
+    const sealZone = this.add
+      .circle(t.seal.cx, t.seal.cy, t.seal.r, 0xffffff, 0.001)
+      .setInteractive({ useHandCursor: true })
+    sealZone.on('pointerdown', () => {
+      this.stampSeal()
       void this.submit()
     })
+    children.push(sealZone)
 
-    this.root = this.add.container(0, 0, [
-      bg,
-      panel,
-      title,
-      subtitle,
-      registerToggle,
-      loginToggle,
-      usernameLabel,
-      passwordLabel,
-      usernameDom,
-      passwordDom,
-      submit,
-    ])
+    // Mode toggle: parchment patch covers the painted register line, dynamic
+    // text offers the OTHER mode.
+    const patch = this.add.rectangle(t.modeLink.cx, t.modeLink.cy, t.modeLink.w, t.modeLink.h, t.parchmentPatch, 1)
+    const link = this.add
+      .text(t.modeLink.cx, t.modeLink.cy, this.mode === 'register' ? '已有仙籍 · 直接入界' : '初来乍到 · 立名造册', {
+        fontSize: t.fontSmall,
+        color: t.ink,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        this.mode = this.mode === 'register' ? 'login' : 'register'
+        this.render()
+      })
+    children.push(patch, link)
+
+    this.root = this.add.container(0, 0, children)
+    addEmbers(this, { w: t.w, h: t.h, count: 14 })
     setTimeout(() => this.usernameInput?.focus(), 0)
+  }
+
+  /** Red ripple + squash on the painted seal -- the "stamp" feedback. */
+  private stampSeal(): void {
+    const t = LOGIN_THEME
+    const ring = this.add.circle(t.seal.cx, t.seal.cy, t.seal.r * 0.7, t.sealRed, 0.5)
+    ring.setBlendMode(Phaser.BlendModes.ADD)
+    this.tweens.add({
+      targets: ring,
+      radius: t.seal.r * 1.7,
+      alpha: 0,
+      duration: 420,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy(),
+    })
   }
 
   private clearRoot(): void {
@@ -120,64 +155,46 @@ export class LoginScene extends Phaser.Scene {
     this.passwordInput = undefined
   }
 
-  private toggleLabel(
-    x: number,
-    y: number,
-    label: string,
-    active: boolean,
-    onClick: () => void,
-  ): Phaser.GameObjects.Text {
-    return this.add
-      .text(x, y, label, {
-        fontSize: LOGIN_THEME.fontBody,
-        color: active ? LOGIN_THEME.active : LOGIN_THEME.muted,
-        fontStyle: active ? 'bold' : '',
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', onClick)
-  }
-
-  private button(x: number, y: number, w: number, h: number, label: string, onClick: () => void): Phaser.GameObjects.Container {
-    const rect = this.add.rectangle(0, 0, w, h, 0x3a2c12, 0.95).setStrokeStyle(2, LOGIN_THEME.gold, 1)
-    const text = this.add
-      .text(0, 0, label, { fontSize: LOGIN_THEME.fontBody, color: LOGIN_THEME.active, fontStyle: 'bold' })
-      .setOrigin(0.5)
-    const container = this.add.container(x, y, [rect, text]).setSize(w, h).setInteractive({ useHandCursor: true })
-    container.on('pointerdown', onClick)
-    return container
-  }
-
   private buildInput(
-    leftX: number,
-    cy: number,
-    width: number,
+    box: { cx: number; cy: number; w: number; h: number },
     type: 'text' | 'password',
     placeholder: string,
   ): Phaser.GameObjects.DOMElement {
+    const t = LOGIN_THEME
     const input = document.createElement('input')
     input.type = type
     input.maxLength = 40
     input.placeholder = placeholder
     Object.assign(input.style, {
-      width: `${width}px`,
+      width: `${box.w}px`,
+      height: `${box.h}px`,
       boxSizing: 'border-box',
-      padding: '7px 10px',
+      padding: '4px 10px',
       fontSize: '15px',
-      border: `1px solid ${LOGIN_THEME.inputBorder}`,
-      borderRadius: '8px',
-      background: LOGIN_THEME.inputBg,
-      color: LOGIN_THEME.text,
+      fontFamily: '"Kaiti SC", "STKaiti", KaiTi, serif',
+      border: 'none',
+      borderBottom: `2px solid ${t.inkBorder}`,
+      borderRadius: '2px',
+      background: t.parchment,
+      color: t.ink,
       outline: 'none',
+      transition: 'box-shadow 160ms ease',
+    })
+    input.addEventListener('focus', () => {
+      input.style.boxShadow = '0 0 0 2px rgba(179,39,30,0.45)'
+    })
+    input.addEventListener('blur', () => {
+      input.style.boxShadow = 'none'
     })
     input.addEventListener('keydown', (event) => {
       event.stopPropagation()
       if (event.key === 'Enter') {
         event.preventDefault()
+        this.stampSeal()
         void this.submit()
       }
     })
-    return this.add.dom(leftX, cy, input).setOrigin(0, 0.5)
+    return this.add.dom(box.cx, box.cy, input).setOrigin(0.5)
   }
 
   private async submit(): Promise<void> {
@@ -185,7 +202,7 @@ export class LoginScene extends Phaser.Scene {
     const username = this.usernameInput?.value.trim() ?? ''
     const password = this.passwordInput?.value.trim() ?? ''
     if (!username || !password) {
-      this.toastUi.show('请填写用户名和密码', LOGIN_THEME.danger)
+      this.toastUi.show('请填写仙号和符咒', LOGIN_THEME.danger)
       return
     }
 
@@ -228,12 +245,12 @@ export class LoginScene extends Phaser.Scene {
 
 export function authErrorMessage(error: unknown, mode: LoginMode): string {
   if (error instanceof SocialRestError) {
-    if (error.code === 'username_taken') return '用户名已存在'
-    if (error.code === 'invalid_credentials') return '用户名或密码错误'
-    if (error.code === 'invalid_input') return '请填写用户名和密码'
+    if (error.code === 'username_taken') return '此仙号已有人立名'
+    if (error.code === 'invalid_credentials') return '仙号或符咒有误'
+    if (error.code === 'invalid_input') return '请填写仙号和符咒'
     if (error.code === 'fetch_unavailable') return '当前环境无法发起网络请求'
   }
-  return mode === 'register' ? '注册失败，请稍后再试' : '登录失败，请稍后再试'
+  return mode === 'register' ? '立名失败，请稍后再试' : '入界失败，请稍后再试'
 }
 
 function runtimeSocialClient(): SocialClient {
