@@ -4,8 +4,8 @@
 // Fidelity notes (kagami monsters-index.md §Monster30 + BaseMonster AI):
 //  - Stats are authoritative: hp 150, horizenSpeed 7, attackRange 250,
 //    alertRange 1000, normalAttackRate 0.5, def 3.
-//  - Original AI: no target -> normalWalk + selectTarget(nearest player within
-//    alertRange); has target -> if x-distance <= attackRange, per-second roll
+//  - Original AI: no target -> normalWalk + selectTarget(player within full
+//    2D alertRange); has target -> if x-distance <= attackRange, per-second roll
 //    normalAttackRate to play hit1 (else wait), otherwise followTarget (walk in).
 //  - DIVERGENCE (intentional, this slice): the original Monster30 is a FLYING
 //    ranged monster (isFly=true, graity=0) that hovers ~150px above the target
@@ -258,9 +258,12 @@ function tickMonster(
     }
   }
 
-  // patrol / chase: target acquisition first.
-  const dist = Math.abs(heroX - state.x)
-  const hasTarget = heroAlive && dist <= cfg.stats.alertRange
+  // patrol / chase: target acquisition first. BaseMonster.selectTarget() uses
+  // full 2D distance for alertRange, while hasAttackTarget() gates the engaged
+  // hit1 attack on x-distance only.
+  const xDist = Math.abs(heroX - state.x)
+  const acquisitionDist = Math.hypot(heroX - state.x, (heroY ?? state.y) - state.y)
+  const hasTarget = heroAlive && acquisitionDist <= cfg.stats.alertRange
 
   state.decisionAccMs += cfg.tickMs
   const decide = state.decisionAccMs >= cfg.decisionIntervalMs
@@ -269,7 +272,7 @@ function tickMonster(
   if (hasTarget) {
     state.mode = 'chase'
     if (cfg.verticalFollow) stepVertical(state, heroY, cfg.verticalFollow)
-    if (dist <= cfg.stats.attackRange) {
+    if (xDist <= cfg.stats.attackRange) {
       faceHero(state, heroX)
       // In range: per-second roll to attack; otherwise hold position.
       if (decide && state.cooldownMs <= 0 && cfg.rng() < cfg.stats.normalAttackRate) {

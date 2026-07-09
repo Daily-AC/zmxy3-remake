@@ -124,6 +124,16 @@ describe('Level 2 天王关 — real 2.swf wave/boss port', () => {
     }
   })
 
+  it('normalAttackRate table uses only literal AS3 overrides or BaseMonster.as:28 default 0.3', () => {
+    const s = LEVEL2_MONSTER_STATS
+    expect(s.monster9.normalAttackRate).toBe(0.3)
+    expect(s.monster10.normalAttackRate).toBe(0.3)
+    expect(s.monster19.normalAttackRate).toBe(0.3)
+    expect(s.monster6.normalAttackRate).toBe(0.8)
+    expect(s.monster16.normalAttackRate).toBe(0.3)
+    expect(s.monster15.normalAttackRate).toBe(0.3)
+  })
+
   it('tier separation: grunt waves are pure, each Heavenly King appears solo, 多闻天王 only in the arena', () => {
     // 增长/广目 are boss-grade — they must never spawn inside a grunt roster.
     const SUBBOSS = new Set(['monster6', 'monster16'])

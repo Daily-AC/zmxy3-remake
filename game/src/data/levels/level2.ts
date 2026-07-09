@@ -21,12 +21,11 @@
 //     elite form (hp 25000-33000).
 //   - kings (6/16/15): the `else`/isBoss=true branch — their level-2 boss
 //     form, NOT the `gc.curStage==3&&curLevel==3 || curStage==8` elite form.
-// The one adaptation: `normalAttackRate`. Monster6 sets a literal
-// `normalAttackRate = 0.8`; Monster15/16 expose only `probability` (special-
-// skill chance) which we reuse as the rate (0.4 / 0.45). The grunts set
-// `probability = 0` (they melee on contact, no ranged-skill roll) — mapping
-// that to a 0 attack rate would make them inert in monsterSim, so grunts use
-// 0.35 as a faithful "they do melee" stand-in (documented, not recovered).
+// normalAttackRate mapping: BaseMonster.as:28 defaults to 0.3. A species uses
+// a different value only when its own constructor assigns a literal
+// `this.normalAttackRate = X`: Monster6.as:14 -> 0.8. Monster9/10/15/16/19 do
+// not override it; `protectedParamsObject.probability` is a separate
+// special-skill chance, not the base hit1 roll.
 //
 // BALANCE CAVEAT: these are the original game's absolute magnitudes (boss hp
 // up to 16000). The current remake hero (BattleScene) is tuned against
@@ -49,13 +48,13 @@ import type { LevelDef, MonsterSpawnSpec, WaveSpec } from '../../systems/level'
 /** Real recovered per-species stats for level 2 (see file header). */
 export const LEVEL2_MONSTER_STATS: Record<string, MonsterStats> = {
   // grunts (else-branch)
-  monster9: { hp: 1500, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.35, def: 10 },
-  monster10: { hp: 1800, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.35, def: 12 },
-  monster19: { hp: 1200, speed: 4, attackRange: 300, alertRange: 250, normalAttackRate: 0.35, def: 9 },
+  monster9: { hp: 1500, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 10 },
+  monster10: { hp: 1800, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 12 },
+  monster19: { hp: 1200, speed: 4, attackRange: 300, alertRange: 250, normalAttackRate: 0.3, def: 9 },
   // Heavenly Kings (level-2 boss branch)
   monster6: { hp: 7874, speed: 5, attackRange: 250, alertRange: 1000, normalAttackRate: 0.8, def: 15 },
-  monster16: { hp: 12000, speed: 5, attackRange: 150, alertRange: 1000, normalAttackRate: 0.45, def: 18 },
-  monster15: { hp: 16000, speed: 5, attackRange: 250, alertRange: 1000, normalAttackRate: 0.4, def: 24 },
+  monster16: { hp: 12000, speed: 5, attackRange: 150, alertRange: 1000, normalAttackRate: 0.3, def: 18 },
+  monster15: { hp: 16000, speed: 5, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 24 },
 }
 
 // Human-readable boss names, for HP-bar labels (recovered `monsterName`).

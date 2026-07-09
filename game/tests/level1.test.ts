@@ -9,6 +9,8 @@ import {
   tryAdvanceSubStage,
   updateLevelSpawn,
 } from '../src/systems/level'
+import { advanceMonster, initMonster, type MonsterConfig } from '../src/systems/monsterSim'
+import { TICK_MS } from '../src/systems/tick'
 import { LEVEL_1_SL12, LEVEL_1_SL13, LEVEL_1_WUYING, LEVEL1_MONSTER_STATS } from '../src/data/levels/level1'
 
 function clearAllWaves(def: typeof LEVEL_1_SL12) {
@@ -21,6 +23,21 @@ function clearAllWaves(def: typeof LEVEL_1_SL12) {
     updateLevelSpawn(state, 0)
   }
   return state
+}
+
+function cfgFor(stats: MonsterConfig['stats'], rng: () => number): MonsterConfig {
+  return {
+    stats,
+    patrolMin: 90,
+    patrolMax: 1460,
+    hurtDurationMs: 500,
+    attackDurationMs: 333,
+    deadDurationMs: 466,
+    attackCooldownMs: 1000,
+    decisionIntervalMs: 1000,
+    tickMs: TICK_MS,
+    rng,
+  }
 }
 
 describe('Level 1 九重天 — AS3 three-substage structure', () => {
@@ -77,6 +94,30 @@ describe('Level 1 九重天 — AS3 three-substage structure', () => {
     expect(s.monster4.hp).toBeLessThan(s.monster2.hp) // 千里眼 1500 < 顺风耳 2000
     expect(s.monster2.hp).toBeLessThan(s.monster5.hp) // 顺风耳 2000 < 巨灵神 4000
     expect(s.monster3.hp).toBe(300) // 巫鹰 boss, verbatim
+  })
+
+  it('normalAttackRate uses literal species overrides or BaseMonster.as:28 default, never protectedParamsObject.probability', () => {
+    const s = LEVEL1_MONSTER_STATS
+    expect(s.monster8.normalAttackRate).toBe(0.3)
+    expect(s.monster7.normalAttackRate).toBe(0.3)
+    expect(s.monster30.normalAttackRate).toBe(0.25)
+    expect(s.monster4.normalAttackRate).toBe(0.3)
+    expect(s.monster2.normalAttackRate).toBe(0.3)
+    expect(s.monster5.normalAttackRate).toBe(0.8)
+    expect(s.monster3.normalAttackRate).toBe(0.3)
+  })
+
+  it('Monster7 grunt attacks within one decision cycle when rng 0.29 is under the corrected BaseMonster default 0.3', () => {
+    const cfg = cfgFor(LEVEL1_MONSTER_STATS.monster7, () => 0.29)
+    const m = initMonster(cfg, 500, 400)
+    const events = []
+
+    for (let i = 0; i < 32; i++) {
+      events.push(...advanceMonster(m, { heroX: 600, heroAlive: true, incomingHit: null }, TICK_MS, cfg))
+    }
+
+    expect(m.mode).toBe('attack')
+    expect(events.some((e) => e.type === 'attack-start')).toBe(true)
   })
 
   it('tier separation: mini-bosses live in sl12/sl13 waves, 巫鹰 only in sl11 height trigger', () => {

@@ -26,6 +26,11 @@ export interface PickupConfig {
   groundY: number
   pickupRadius: number
   tickMs: number
+  /** Optional platform resolver. Absent preserves the original single-groundY behavior. */
+  platformResolver?: (query: { x: number; fromY: number; toY: number; vy: number }) => {
+    kind: 'land' | 'head'
+    y: number
+  } | null
 }
 
 // TODO-verify: not decompiled; chosen so walking up to a drop collects it.
@@ -55,9 +60,15 @@ export function stepDrops(
   const picked: PickedStack[] = []
   for (const d of drops) {
     if (!d.grounded) {
+      const fromY = d.y
       d.vy += cfg.gravity
       d.y += d.vy
-      if (d.y >= cfg.groundY) {
+      const platformHit = cfg.platformResolver?.({ x: d.x, fromY, toY: d.y, vy: d.vy }) ?? null
+      if (platformHit?.kind === 'land') {
+        d.y = platformHit.y
+        d.vy = 0
+        d.grounded = true
+      } else if (d.y >= cfg.groundY) {
         d.y = cfg.groundY
         d.vy = 0
         d.grounded = true

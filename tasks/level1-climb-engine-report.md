@@ -120,3 +120,106 @@ There was no stale `.git/index.lock` to remove. Current pre-existing log head:
 25edea0 docs: session5 overnight ledger + session5->6 handover
 f9c150c feat(drops): fill in L2 monster drop tables from real AS3 fallEquip() probability
 ```
+
+## 扩单三件 (follow-up)
+
+### Changed Files
+
+- `game/src/systems/pickup.ts` - added optional platform landing resolver for drops; flat `groundY` fallback remains.
+- `game/src/scenes/BattleScene.ts` - wired pickup physics to L1 walls and passed `heroVisualCenter().y` into `stepDrops`.
+- `game/src/systems/monsterSim.ts` - split target acquisition to full 2D `alertRange`; kept engaged attack gate x-only.
+- `game/src/data/levels/level1.ts` - corrected `normalAttackRate` derivation and header citation.
+- `game/src/data/levels/level2.ts` - boundary exception: same narrow `normalAttackRate` audit/fix requested for the copied table pattern.
+- `game/tests/pickup.test.ts`
+- `game/tests/battleScenePickupWiring.test.ts`
+- `game/tests/monsterSim.test.ts`
+- `game/tests/level1.test.ts`
+- `game/tests/level2.test.ts`
+- `tasks/level1-climb-engine-report.md`
+
+### Fix Evidence
+
+Item 1 pickup:
+
+- `pickup drop physics + auto-pickup (掉落拾取) > lands falling drops on the local platform resolver before the flat ground fallback`
+- `pickup drop physics + auto-pickup (掉落拾取) > does not auto-collect a ground drop when the hero is nearby in x but far above in y`
+- `BattleScene pickup wiring > passes heroVisualCenter().y to stepDrops instead of the flat GROUND_Y constant`
+
+Item 2 monster acquisition:
+
+- `monsterSim Monster30 AI (巡逻/索敌/追击/近战) > target acquisition uses full 2D distance against alertRange (BaseMonster.as:466); the attack-range gate stays x-only (BaseMonster.as:369)`
+
+Item 3 normal attack rates:
+
+- `Level 1 九重天 — AS3 three-substage structure > normalAttackRate uses literal species overrides or BaseMonster.as:28 default, never protectedParamsObject.probability`
+- `Level 1 九重天 — AS3 three-substage structure > Monster7 grunt attacks within one decision cycle when rng 0.29 is under the corrected BaseMonster default 0.3`
+- `Level 2 天王关 — real 2.swf wave/boss port > normalAttackRate table uses only literal AS3 overrides or BaseMonster.as:28 default 0.3`
+
+Targeted run:
+
+```text
+cd game && ./node_modules/.bin/vitest run tests/pickup.test.ts tests/battleScenePickupWiring.test.ts tests/monsterSim.test.ts tests/level1.test.ts tests/level2.test.ts
+
+✓ tests/battleScenePickupWiring.test.ts (1 test)
+✓ tests/pickup.test.ts (5 tests)
+✓ tests/monsterSim.test.ts (17 tests)
+✓ tests/level2.test.ts (5 tests)
+✓ tests/level1.test.ts (7 tests)
+
+Test Files  5 passed (5)
+Tests  35 passed (35)
+```
+
+Full regression:
+
+```text
+cd game && ./node_modules/.bin/vitest run
+
+Test Files  46 passed (46)
+Tests  511 passed | 1 skipped (512)
+```
+
+TypeScript:
+
+```text
+cd game && ./node_modules/.bin/tsc --noEmit -p tsconfig.json
+# passed with no output
+```
+
+### normalAttackRate Audit
+
+L1:
+
+- `monster8`: `0.15 -> 0.3`; `Monster8.as` has no `this.normalAttackRate = ...`; `BaseMonster.as:28` default.
+- `monster7`: `0.15 -> 0.3`; `Monster7.as` has no `this.normalAttackRate = ...`; `BaseMonster.as:28` default.
+- `monster30`: `0.25 -> 0.25`; `Monster30.as:17` literal.
+- `monster4`: `0.6 -> 0.3`; `Monster4.as` has no `this.normalAttackRate = ...`; `BaseMonster.as:28` default.
+- `monster2`: `0.6 -> 0.3`; `Monster2.as` has no `this.normalAttackRate = ...`; `BaseMonster.as:28` default.
+- `monster5`: `0.8 -> 0.8`; `Monster5.as:14` literal.
+- `monster3`: `1 -> 0.3`; `Monster3.as` has no `this.normalAttackRate = ...`; `BaseMonster.as:28` default. Its `probability = 1` remains a special-skill probability, not the hit1 roll.
+
+L2 boundary exception:
+
+- `level2.ts` was touched only for the explicitly requested copied `normalAttackRate` table audit. The L2 regression file was included in the targeted run and the full suite.
+- `monster9`: `0.35 -> 0.3`; no species override; `BaseMonster.as:28` default.
+- `monster10`: `0.35 -> 0.3`; no species override; `BaseMonster.as:28` default.
+- `monster19`: `0.35 -> 0.3`; no species override; `BaseMonster.as:28` default.
+- `monster6`: `0.8 -> 0.8`; `Monster6.as:14` literal.
+- `monster16`: `0.45 -> 0.3`; no species override; `BaseMonster.as:28` default.
+- `monster15`: `0.4 -> 0.3`; no species override; `BaseMonster.as:28` default.
+
+### Doubts And Risks
+
+- `BattleScene` cannot be imported in node Vitest because Phaser touches `window` at module load, so the exact scene pickup wiring is covered by a narrow source-level guard. The pickup physics and proximity behavior are covered by normal runtime system tests.
+- `monsterSim` still does not persist a `curAttackTarget` object like AS3. This pass only corrects the acquisition distance and keeps the existing state-machine shape.
+
+### Commit Status
+
+No commit was created in this environment. Explicit scoped staging failed on the sandbox's `.git` permission wall:
+
+```text
+git add game/src/systems/pickup.ts game/src/systems/monsterSim.ts game/src/scenes/BattleScene.ts game/src/data/levels/level1.ts game/src/data/levels/level2.ts game/tests/pickup.test.ts game/tests/battleScenePickupWiring.test.ts game/tests/monsterSim.test.ts game/tests/level1.test.ts game/tests/level2.test.ts tasks/level1-climb-engine-report.md
+fatal: Unable to create '/Users/e0_7/projects/zmxy3-remake/.git/index.lock': Operation not permitted
+```
+
+There was no stale `.git/index.lock` to remove.
