@@ -19,18 +19,20 @@ import { addEmbers } from '../ui/embers'
 export const LOGIN_THEME = {
   w: 960,
   h: 540,
-  bgTexKey: 'login_mock_scroll',
-  bgTexPath: 'assets/keyart/login-mock-ref.jpg',
-  // Painted-element overlay geometry (canvas px).
-  inputUser: { cx: 564, cy: 208, w: 250, h: 32 },
-  inputPass: { cx: 564, cy: 279, w: 250, h: 32 },
+  // login-bg.jpg = login-mock-v2 with painted 仙号/符咒 glyphs and the painted
+  // register line ERASED via texture clone (tools: inline PIL, see progress
+  // 17:2x) so transparent inputs can live inside the painted frames without
+  // covering them with flat patches (用户打回的糊弄点).
+  bgTexKey: 'login_bg_clean',
+  bgTexPath: 'assets/keyart/login-bg.jpg',
+  // Painted-element overlay geometry (canvas px), PIL-measured. The hand-drawn
+  // scroll leans: per-element rotations (rad) measured from ink borders.
+  inputUser: { cx: 564, cy: 207, w: 248, h: 30, rot: 0.028 },
+  inputPass: { cx: 566, cy: 283, w: 248, h: 30, rot: 0.026 },
   seal: { cx: 547, cy: 372, r: 46 },
-  // Painted link line measured via PIL dark-pixel scan: orig y 888-936 → canvas
-  // cy 426; local paper is warm tan (222,158,98), not pale parchment.
-  modeLink: { cx: 538, cy: 426, w: 175, h: 24 },
+  modeLink: { cx: 540, cy: 427, rot: 0.049 },
   // Parchment palette sampled from the mock scroll.
   parchment: '#e9dcbd',
-  parchmentPatch: 0xdc9e62,
   ink: '#2f2418',
   inkBorder: '#4a3a24',
   sealRed: 0xb3271e,
@@ -111,22 +113,23 @@ export class LoginScene extends Phaser.Scene {
     })
     children.push(sealZone)
 
-    // Mode toggle: parchment patch covers the painted register line, dynamic
-    // text offers the OTHER mode.
-    const patch = this.add.rectangle(t.modeLink.cx, t.modeLink.cy, t.modeLink.w, t.modeLink.h, t.parchmentPatch, 1)
+    // Mode toggle: the painted register line is erased from login-bg.jpg, so
+    // dynamic ink text draws straight on parchment, tilted with the scroll.
     const link = this.add
       .text(t.modeLink.cx, t.modeLink.cy, this.mode === 'register' ? '已有仙籍 · 直接入界' : '初来乍到 · 立名造册', {
         fontSize: t.fontSmall,
+        fontFamily: '"Kaiti SC", "STKaiti", KaiTi, serif',
         color: t.ink,
         fontStyle: 'bold',
       })
       .setOrigin(0.5)
+      .setRotation(t.modeLink.rot)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
         this.mode = this.mode === 'register' ? 'login' : 'register'
         this.render()
       })
-    children.push(patch, link)
+    children.push(link)
 
     this.root = this.add.container(0, 0, children)
     addEmbers(this, { w: t.w, h: t.h, count: 14 })
@@ -156,35 +159,38 @@ export class LoginScene extends Phaser.Scene {
   }
 
   private buildInput(
-    box: { cx: number; cy: number; w: number; h: number },
+    box: { cx: number; cy: number; w: number; h: number; rot: number },
     type: 'text' | 'password',
     placeholder: string,
   ): Phaser.GameObjects.DOMElement {
     const t = LOGIN_THEME
+    ensurePlaceholderStyle()
     const input = document.createElement('input')
     input.type = type
     input.maxLength = 40
     input.placeholder = placeholder
+    input.className = 'wendie-input'
+    // Fully transparent: the painted frame IS the input chrome. Focus feedback
+    // is a soft ink underline, not a box.
     Object.assign(input.style, {
       width: `${box.w}px`,
       height: `${box.h}px`,
       boxSizing: 'border-box',
       padding: '4px 10px',
-      fontSize: '15px',
+      fontSize: '16px',
       fontFamily: '"Kaiti SC", "STKaiti", KaiTi, serif',
       border: 'none',
-      borderBottom: `2px solid ${t.inkBorder}`,
-      borderRadius: '2px',
-      background: t.parchment,
+      background: 'transparent',
       color: t.ink,
+      caretColor: '#8a1f18',
       outline: 'none',
-      transition: 'box-shadow 160ms ease',
+      transition: 'text-shadow 160ms ease',
     })
     input.addEventListener('focus', () => {
-      input.style.boxShadow = '0 0 0 2px rgba(179,39,30,0.45)'
+      input.style.textShadow = '0 0 6px rgba(179,39,30,0.35)'
     })
     input.addEventListener('blur', () => {
-      input.style.boxShadow = 'none'
+      input.style.textShadow = 'none'
     })
     input.addEventListener('keydown', (event) => {
       event.stopPropagation()
@@ -194,7 +200,7 @@ export class LoginScene extends Phaser.Scene {
         void this.submit()
       }
     })
-    return this.add.dom(box.cx, box.cy, input).setOrigin(0.5)
+    return this.add.dom(box.cx, box.cy, input).setOrigin(0.5).setRotation(box.rot)
   }
 
   private async submit(): Promise<void> {
@@ -251,6 +257,15 @@ export function authErrorMessage(error: unknown, mode: LoginMode): string {
     if (error.code === 'fetch_unavailable') return '当前环境无法发起网络请求'
   }
   return mode === 'register' ? '立名失败，请稍后再试' : '入界失败，请稍后再试'
+}
+
+/** Inject the ::placeholder rule once (inline styles can't target it). */
+function ensurePlaceholderStyle(): void {
+  if (document.getElementById('wendie-input-style')) return
+  const style = document.createElement('style')
+  style.id = 'wendie-input-style'
+  style.textContent = '.wendie-input::placeholder { color: rgba(47,36,24,0.42); font-family: "Kaiti SC","STKaiti",KaiTi,serif; }'
+  document.head.appendChild(style)
 }
 
 function runtimeSocialClient(): SocialClient {
