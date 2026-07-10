@@ -69,10 +69,19 @@ describe('BattleScene pickup wiring', () => {
     expect(source).toMatch(/collectWorldPickup\(\s*pickedDrop\.consumableId,/)
   })
 
-  it('passes current hero level into monsterExp for Monster30 level-10 anti-farm gating', () => {
+  it('passes local and remote hero levels into Monster30 anti-farm gating', () => {
     const source = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
 
-    expect(source).toMatch(/monsterExp\(species, \{ heroLevel: this\.identity\.progression\.level \}\)/)
+    expect(source).toMatch(/const heroLevels = \[\s*this\.identity\.progression\.level,/)
+    expect(source).toMatch(/monsterExp\(species, \{ heroLevel: this\.identity\.progression\.level, heroLevels \}\)/)
+  })
+
+  it('routes backpack equip and single-item sell through the validated scene entry points', () => {
+    const source = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
+
+    expect(source).toMatch(/onSellItem: \(item\) => this\.doSellEquipmentItem\(item\)/)
+    expect(source).toMatch(/equip\(this\.equipment, this\.inventory, item, this\.identity\.heroId\)/)
+    expect(source).toMatch(/sellEquipmentItem\(this\.inventory, this\.soulPurse, item\.id\)/)
   })
 
   it('routes Monster30 projectile-spawn through enemy projectile entities before damaging the hero', () => {

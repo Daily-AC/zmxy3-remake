@@ -54,8 +54,10 @@ import {
   EquipSlot,
   createEquipment,
   equip,
+  equipEligibility,
   unequip,
   equippedList,
+  isSupportedEquipmentForHero,
   slotForItem,
 } from '../systems/equipment'
 import {
@@ -75,7 +77,13 @@ import {
 } from '../systems/heroIdentity'
 import { rollDailyLuck } from '../systems/heroGrowth'
 import { computeCombatPower } from '../systems/combatPower'
-import { SoulPurse, addSoul, createSoulPurse, sellCommonEquipment } from '../systems/soulPurse'
+import {
+  SoulPurse,
+  addSoul,
+  createSoulPurse,
+  sellCommonEquipment,
+  sellEquipmentItem,
+} from '../systems/soulPurse'
 import {
   AttackKind,
   NormalAttackHit,
@@ -2277,6 +2285,7 @@ export class BattleScene extends Phaser.Scene {
       onClose: () => this.backpack.close(),
       onEquip: (item) => this.doEquip(item),
       onUnequip: (slot) => this.doUnequip(slot),
+      onSellItem: (item) => this.doSellEquipmentItem(item),
       onSell: () => this.doSellCommonEquipment(),
     })
     // 炼丹炉 forge window (replaces the old ink-dialogue craft overlay). Same
@@ -3417,7 +3426,16 @@ export class BattleScene extends Phaser.Scene {
   // hero's stats. 2026-07-10 拍板：不再飘 +EXP 数字（玩家看左上黄条），仅
   // 升级时给 toast + LEVEL UP。
   private awardKillExp(_x: number, _y: number, species: string): void {
-    const result = gainHeroExp(this.identity, monsterExp(species, { heroLevel: this.identity.progression.level }))
+    const heroLevels = [
+      this.identity.progression.level,
+      ...Object.values(this.coopSyncState?.heroes ?? {}).flatMap((view) =>
+        typeof view.snapshot.level === 'number' ? [view.snapshot.level] : [],
+      ),
+    ]
+    const result = gainHeroExp(
+      this.identity,
+      monsterExp(species, { heroLevel: this.identity.progression.level, heroLevels }),
+    )
     if (result.levelsGained > 0) {
       this.showToast(`升级！ Lv.${result.levelAfter}`, '#ffe066')
       this.floatText(this.heroVisualCenter().x, this.heroVisibleTopY() - 10, 'LEVEL UP!', 'exp')
@@ -3906,12 +3924,21 @@ export class BattleScene extends Phaser.Scene {
   private equipFirstFromBag(): void {
     const equipItem = listStacks(this.inventory)
       .map((s) => s.item)
-      .find((it) => slotForItem(it) !== null)
+      .find((it) => isSupportedEquipmentForHero(it, this.identity.heroId))
     if (equipItem) this.doEquip(equipItem)
   }
 
   private doEquip(item: Item): boolean {
-    if (!equip(this.equipment, this.inventory, item)) {
+    const eligibility = equipEligibility(item, this.identity.heroId)
+    if (eligibility === 'wrong_role') {
+      this.showToast('悟空无法穿戴其他角色的装备', '#ff8a6b')
+      return false
+    }
+    if (eligibility === 'unsupported_slot' || eligibility === 'missing_type') {
+      this.showToast('当前只支持武器和防具', '#ff8a6b')
+      return false
+    }
+    if (!equip(this.equipment, this.inventory, item, this.identity.heroId)) {
       // equip() now also rejects the swap (rather than deleting the worn
       // item) when the bag can't take it back -- surface that to the player
       // instead of a silent no-op (equipment.ts capacity-guard fix).
@@ -3923,6 +3950,17 @@ export class BattleScene extends Phaser.Scene {
     this.saveToSlot() // autosave: equipment/bag changed
     if (this.backpack.isOpen) this.refreshBackpackData()
     return true
+  }
+
+  private doSellEquipmentItem(item: Item): void {
+    const result = sellEquipmentItem(this.inventory, this.soulPurse, item.id)
+    if (!result.sold) {
+      this.showToast('这件物品无法出售', '#c8cfe6')
+      return
+    }
+    this.showToast(`卖掉【${item.name}】，获得灵魂 +${result.soulGained}`, '#ffd873')
+    this.saveToSlot()
+    if (this.backpack.isOpen) this.refreshBackpackData()
   }
 
   private doUnequip(slot: EquipSlot): boolean {

@@ -7,6 +7,8 @@ import {
   heroAtk,
   comboHitDamage,
   slotForItem,
+  equipEligibility,
+  sanitizeEquipmentForHero,
 } from '../src/systems/equipment'
 import { createInventory, addItem, countItem } from '../src/systems/inventory'
 import { equipmentItemByFillName } from '../src/systems/furnaceRecipe'
@@ -17,33 +19,54 @@ const staff: Item = {
   name: '赤炎噬血杖',
   kind: 'equip',
   rarity: 3,
+  sourceType: 'zbwq',
+  sourceUser: '悟空',
   effects: [
     { type: 'stat', stat: 'atk', value: 40 },
     { type: 'onHit', effect: 'lifesteal', chance: 0.5, power: 20 },
   ],
 }
-const plainStaff: Item = { id: 'stick', name: '木棍', kind: 'equip', rarity: 1 }
+const plainStaff: Item = {
+  id: 'stick',
+  name: '木棍',
+  kind: 'equip',
+  rarity: 1,
+  sourceType: 'zbwq',
+  sourceUser: '悟空',
+}
 const herb: Item = { id: 'herb', name: '妖草', kind: 'material', rarity: 1 }
 
 describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
-  it('maps recovered source types to their original equipment slots', () => {
+  it('maps only implemented weapon and armor source types to active slots', () => {
     expect(slotForItem(equipmentItemByFillName('ptdxzg')!)).toBe('weapon')
     expect(slotForItem(equipmentItemByFillName('ptdxzf')!)).toBe('armor')
-    expect(slotForItem(equipmentItemByFillName('xhz')!)).toBe('accessory')
-    expect(slotForItem({ ...staff, sourceType: 'zbfb' })).toBe('talisman')
+    expect(slotForItem(equipmentItemByFillName('xhz')!)).toBe(null)
+    expect(slotForItem({ ...staff, sourceType: 'zbfb' })).toBe(null)
   })
 
-  it('rejects materials and keeps source-less custom equipment in the weapon slot', () => {
+  it('rejects materials and source-less custom equipment instead of guessing weapon', () => {
     expect(slotForItem(herb)).toBe(null)
     expect(slotForItem(equipmentItemByFillName('wptm')!)).toBe(null)
-    expect(slotForItem(staff)).toBe('weapon')
+    expect(slotForItem({ id: 'mystery', name: '无类型装备', kind: 'equip', rarity: 1 })).toBe(null)
+  })
+
+  it('rejects equipment belonging to another hero', () => {
+    const shaSengWeapon = equipmentItemByFillName('ptdyyc')!
+    expect(equipEligibility(shaSengWeapon, 1)).toBe('wrong_role')
+
+    const eq = createEquipment()
+    const inv = createInventory(8)
+    addItem(inv, shaSengWeapon, 1)
+    expect(equip(eq, inv, shaSengWeapon, 1)).toBe(false)
+    expect(eq.weapon).toBeNull()
+    expect(countItem(inv, 'ptdyyc')).toBe(1)
   })
 
   it('equips an item out of the bag into the weapon slot', () => {
     const eq = createEquipment()
     const inv = createInventory(8)
     addItem(inv, staff, 1)
-    expect(equip(eq, inv, staff)).toBe(true)
+    expect(equip(eq, inv, staff, 1)).toBe(true)
     expect(eq.weapon?.id).toBe('chiyan')
     expect(countItem(inv, 'chiyan')).toBe(0) // left the bag
     expect(equippedList(eq)).toHaveLength(1)
@@ -52,7 +75,7 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
   it('cannot equip an item that is not in the bag', () => {
     const eq = createEquipment()
     const inv = createInventory(8)
-    expect(equip(eq, inv, staff)).toBe(false)
+    expect(equip(eq, inv, staff, 1)).toBe(false)
     expect(eq.weapon).toBe(null)
   })
 
@@ -60,7 +83,7 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
     const eq = createEquipment()
     const inv = createInventory(8)
     addItem(inv, herb, 1)
-    expect(equip(eq, inv, herb)).toBe(false)
+    expect(equip(eq, inv, herb, 1)).toBe(false)
   })
 
   it('swapping weapons returns the old one to the bag', () => {
@@ -68,8 +91,8 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
     const inv = createInventory(8)
     addItem(inv, staff, 1)
     addItem(inv, plainStaff, 1)
-    equip(eq, inv, staff)
-    equip(eq, inv, plainStaff)
+    equip(eq, inv, staff, 1)
+    equip(eq, inv, plainStaff, 1)
     expect(eq.weapon?.id).toBe('stick')
     expect(countItem(inv, 'chiyan')).toBe(1) // displaced back to the bag
   })
@@ -78,7 +101,7 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
     const eq = createEquipment()
     const inv = createInventory(8)
     addItem(inv, staff, 1)
-    equip(eq, inv, staff)
+    equip(eq, inv, staff, 1)
     expect(unequip(eq, inv, 'weapon')).toBe(true)
     expect(eq.weapon).toBe(null)
     expect(countItem(inv, 'chiyan')).toBe(1)
@@ -99,7 +122,7 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
     addItem(inv, herb, 1) // fills the bag's second (and last) slot
     expect(inv.stacks).toHaveLength(2) // bag is full at capacity 2
 
-    expect(equip(eq, inv, plainStaff)).toBe(false)
+    expect(equip(eq, inv, plainStaff, 1)).toBe(false)
     expect(eq.weapon?.id).toBe('chiyan') // staff is still worn, not lost
     expect(countItem(inv, 'stick')).toBe(2) // rolled back to its original qty
     expect(countItem(inv, 'herb')).toBe(1)
@@ -112,10 +135,30 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
     const inv = createInventory(2)
     addItem(inv, plainStaff, 2)
     // Only one stack this time -- one free slot for the displaced staff.
-    expect(equip(eq, inv, plainStaff)).toBe(true)
+    expect(equip(eq, inv, plainStaff, 1)).toBe(true)
     expect(eq.weapon?.id).toBe('stick')
     expect(countItem(inv, 'chiyan')).toBe(1) // staff displaced back into the bag
     expect(countItem(inv, 'stick')).toBe(1) // one copy left in the bag, one equipped
+  })
+
+  it('repairs old wrong-slot gear and removes unsupported gear from equipment and bag', () => {
+    const eq = createEquipment()
+    eq.weapon = equipmentItemByFillName('ptdxzf')! // old bug put armor in weapon
+    eq.accessory = equipmentItemByFillName('xhz')!
+    const inv = createInventory(8)
+    addItem(inv, equipmentItemByFillName('ptdyyc')!, 1)
+    addItem(inv, equipmentItemByFillName('ptdxzg')!, 1)
+    addItem(inv, herb, 2)
+
+    const result = sanitizeEquipmentForHero(eq, inv, 1)
+
+    expect(result).toEqual({ migratedCount: 1, removedCount: 2 })
+    expect(eq.weapon).toBeNull()
+    expect(eq.armor?.id).toBe('ptdxzf')
+    expect(eq.accessory).toBeNull()
+    expect(countItem(inv, 'ptdyyc')).toBe(0)
+    expect(countItem(inv, 'ptdxzg')).toBe(1)
+    expect(countItem(inv, 'herb')).toBe(2)
   })
 })
 
@@ -125,7 +168,7 @@ describe('equipment combat numbers (装备接入伤害)', () => {
     const inv = createInventory(8)
     expect(comboHitDamage(30, eq)).toBe(30) // bare-handed
     addItem(inv, staff, 1)
-    equip(eq, inv, staff)
+    equip(eq, inv, staff, 1)
     expect(comboHitDamage(30, eq)).toBe(70) // +40 atk from the staff
     expect(heroAtk(0, eq)).toBe(40)
   })
@@ -136,7 +179,7 @@ describe('equipment combat numbers (装备接入伤害)', () => {
     const recoveredStaff = equipmentItemByFillName('ptdxzg')!
 
     addItem(inv, recoveredStaff, 1)
-    expect(equip(eq, inv, recoveredStaff)).toBe(true)
+    expect(equip(eq, inv, recoveredStaff, 1)).toBe(true)
     expect(heroAtk(10, eq)).toBe(12)
   })
 })

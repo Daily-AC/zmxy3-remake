@@ -39,6 +39,9 @@ const sword: Item = {
   name: '赤炎噬血杖',
   kind: 'equip',
   rarity: 3,
+  sourceType: 'zbwq',
+  sourceUser: '悟空',
+  sourceSaleValue: 160,
   effects: [
     { type: 'stat', stat: 'atk', value: 40 },
     { type: 'onHit', effect: 'lifesteal', chance: 0.5, power: 20 },
@@ -54,7 +57,7 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
   })
 
   it('round-trips progression + equipment + inventory through save/load', () => {
-    const progression = createProgression(3, 1)
+    const progression = createProgression(1, 1)
     gainExp(progression, 500)
 
     const equipment: Equipment = createEquipment()
@@ -197,6 +200,36 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
     expect(restored.equipment).toEqual(createEquipment())
     expect(restored.inventory.capacity).toBe(0)
     expect(listStacks(restored.inventory)).toEqual([])
+  })
+
+  it('repairs old wrong-slot equipment and drops unsupported-role gear during restore', async () => {
+    const { equipmentItemByFillName } = await import('../src/systems/furnaceRecipe')
+    const armor = equipmentItemByFillName('ptdxzf')!
+    const shaSengWeapon = equipmentItemByFillName('ptdyyc')!
+    const accessory = equipmentItemByFillName('xhz')!
+    const save = createGameSave({
+      progression: createProgression(1),
+      equipment: {
+        weapon: armor,
+        armor: null,
+        accessory,
+        talisman: null,
+      },
+      inventory: {
+        capacity: 8,
+        stacks: [
+          { item: shaSengWeapon, qty: 1 },
+          { item: herb, qty: 2 },
+        ],
+      },
+    })
+
+    const restored = restoreGameState(save)
+
+    expect(restored.equipment.weapon).toBeNull()
+    expect(restored.equipment.armor?.id).toBe('ptdxzf')
+    expect(restored.equipment.accessory).toBeNull()
+    expect(restored.inventory.stacks).toEqual([{ item: herb, qty: 2 }])
   })
 
   it('two injected storages stay isolated from each other', () => {

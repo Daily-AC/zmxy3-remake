@@ -48,7 +48,7 @@
       "probability": [
         {
           "condition": "default",
-          "value": 0.6
+          "value": 0.45
         }
       ],
       "stoneFallRate": [],
@@ -177,7 +177,7 @@
       "probability": [
         {
           "condition": "default",
-          "value": 0.6
+          "value": 0.45
         }
       ],
       "stoneFallRate": [],
@@ -303,7 +303,7 @@
       "probability": [
         {
           "condition": "default",
-          "value": 0.15
+          "value": 0.1
         }
       ],
       "stoneFallRate": [],
@@ -377,7 +377,7 @@
       "probability": [
         {
           "condition": "default",
-          "value": 0.15
+          "value": 0.1
         }
       ],
       "stoneFallRate": [],

@@ -1,6 +1,7 @@
 import originalMonsterDrops from '../data/original/monster-drops.json'
 import type { Item } from './items'
 import { equipmentItemByFillName } from './furnaceRecipe'
+import { isSupportedEquipmentForHero } from './equipment'
 
 export interface DropRollContext {
   stage?: number
@@ -88,6 +89,11 @@ function fallListItemToItem(entry: OriginalFallListItem): Item {
   }
 }
 
+function isCurrentMvpDrop(entry: OriginalFallListItem): boolean {
+  if (entry.bigtype !== 'zb') return entry.name === 'wptm'
+  return isSupportedEquipmentForHero(fallListItemToItem(entry), 1)
+}
+
 export function rollDrops(
   monsterId: string,
   rng: () => number,
@@ -98,7 +104,7 @@ export function rollDrops(
 
   const isBoss = resolveIsBoss(monster, context)
   const probability = resolveConditional(monster.probability, context, isBoss, 0) * (isBoss ? 1.5 : 1)
-  const fallList = resolveConditional(monster.fallList, context, isBoss, [])
+  const fallList = resolveConditional(monster.fallList, context, isBoss, []).filter(isCurrentMvpDrop)
   if (probability <= 0 || fallList.length === 0 || rng() > probability) return []
 
   const index = Math.max(0, Math.min(fallList.length - 1, Math.round(rng() * (fallList.length - 1))))

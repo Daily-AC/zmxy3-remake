@@ -32,6 +32,8 @@ describe('furnace recipe catalog', () => {
       id: 'ptdxzf',
       kind: 'equip',
       sourceType: 'zbfj',
+      sourceUser: '悟空',
+      sourceSaleValue: 20,
       effects: [
         { type: 'stat', stat: 'def', value: 2 },
         { type: 'stat', stat: 'hp', value: 20 },
@@ -181,6 +183,9 @@ describe('craft', () => {
       name: '尾火棍',
       kind: 'equip',
       rarity: 2,
+      sourceType: 'zbwq',
+      sourceUser: '悟空',
+      sourceSaleValue: 40,
       effects: [{ type: 'stat', stat: 'atk', value: 10 }],
     })
   })

@@ -1,10 +1,28 @@
 import { describe, it, expect } from 'vitest'
-import { createSoulPurse, addSoul, sellCommonEquipment, SELL_COMMON_EQUIP_SOUL_VALUE } from '../src/systems/soulPurse'
+import {
+  createSoulPurse,
+  addSoul,
+  sellCommonEquipment,
+  sellEquipmentItem,
+  SELL_COMMON_EQUIP_SOUL_VALUE,
+} from '../src/systems/soulPurse'
 import { createInventory, addItem, listStacks } from '../src/systems/inventory'
 import type { Item } from '../src/systems/items'
 
-const commonSword: Item = { id: 'stick', name: '木棍', kind: 'equip', rarity: 1 }
-const rareSword: Item = { id: 'chiyan', name: '赤炎噬血杖', kind: 'equip', rarity: 3 }
+const commonSword: Item = {
+  id: 'stick',
+  name: '木棍',
+  kind: 'equip',
+  rarity: 1,
+  sourceSaleValue: 20,
+}
+const rareSword: Item = {
+  id: 'chiyan',
+  name: '赤炎噬血杖',
+  kind: 'equip',
+  rarity: 3,
+  sourceSaleValue: 160,
+}
 const commonHerb: Item = { id: 'herb', name: '妖草', kind: 'material', rarity: 1 }
 
 describe('soul purse', () => {
@@ -65,5 +83,43 @@ describe('sellCommonEquipment (ports export.pack.BackPack.as deleteWhiteEquipmen
       { item: rareSword, qty: 1 },
       { item: commonHerb, qty: 9 },
     ])
+  })
+})
+
+describe('sellEquipmentItem (ports PackThings.as mdClick)', () => {
+  it('sells one selected equipment unit for its original quality value', () => {
+    const inv = createInventory(8)
+    const purse = createSoulPurse(5)
+    addItem(inv, rareSword, 2)
+
+    expect(sellEquipmentItem(inv, purse, rareSword.id)).toEqual({ sold: true, soulGained: 160 })
+    expect(purse.value).toBe(165)
+    expect(listStacks(inv)).toEqual([{ item: rareSword, qty: 1 }])
+  })
+
+  it('does not sell materials or missing items', () => {
+    const inv = createInventory(8)
+    const purse = createSoulPurse()
+    addItem(inv, commonHerb, 1)
+
+    expect(sellEquipmentItem(inv, purse, commonHerb.id)).toEqual({ sold: false, soulGained: 0 })
+    expect(sellEquipmentItem(inv, purse, 'missing')).toEqual({ sold: false, soulGained: 0 })
+    expect(purse.value).toBe(0)
+  })
+
+  it('derives the original price from source quality for pre-metadata saves', () => {
+    const legacy: Item = {
+      id: 'legacy-stick',
+      name: '旧行者棍',
+      kind: 'equip',
+      rarity: 1,
+      sourceQuality: '普 通',
+    }
+    const inv = createInventory(8)
+    const purse = createSoulPurse()
+    addItem(inv, legacy, 1)
+
+    expect(sellEquipmentItem(inv, purse, legacy.id)).toEqual({ sold: true, soulGained: 20 })
+    expect(purse.value).toBe(20)
   })
 })
