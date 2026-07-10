@@ -62,6 +62,16 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
     expect(countItem(inv, 'ptdyyc')).toBe(1)
   })
 
+  it('uses the recovered catalog role instead of trusting forged save metadata', () => {
+    const forgedShaSengWeapon = {
+      ...equipmentItemByFillName('ptdyyc')!,
+      sourceType: 'zbwq',
+      sourceUser: '悟空',
+    }
+
+    expect(equipEligibility(forgedShaSengWeapon, 1)).toBe('wrong_role')
+  })
+
   it('equips an item out of the bag into the weapon slot', () => {
     const eq = createEquipment()
     const inv = createInventory(8)
@@ -70,6 +80,20 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
     expect(eq.weapon?.id).toBe('chiyan')
     expect(countItem(inv, 'chiyan')).toBe(0) // left the bag
     expect(equippedList(eq)).toHaveLength(1)
+  })
+
+  it('equips the selected same-fillName instance without copying another roll', () => {
+    const weakStaff = { ...staff, effects: [{ type: 'stat', stat: 'atk', value: 10 }] } as Item
+    const strongStaff = { ...staff, effects: [{ type: 'stat', stat: 'atk', value: 15 }] } as Item
+    const eq = createEquipment()
+    const inv = createInventory(8)
+    addItem(inv, weakStaff, 1)
+    addItem(inv, strongStaff, 1)
+
+    expect(equip(eq, inv, strongStaff, 1)).toBe(true)
+    expect(eq.weapon).toBe(strongStaff)
+    expect(inv.stacks).toEqual([{ item: weakStaff, qty: 1 }])
+    expect(heroAtk(0, eq)).toBe(15)
   })
 
   it('cannot equip an item that is not in the bag', () => {
@@ -118,8 +142,8 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
     const eq = createEquipment()
     eq.weapon = staff // already worn, NOT taking up a bag slot
     const inv = createInventory(2)
-    addItem(inv, plainStaff, 2) // qty>=2 stack: removing 1 won't free a slot
-    addItem(inv, herb, 1) // fills the bag's second (and last) slot
+    // Simulate a pre-migration save from before equipment became non-stackable.
+    inv.stacks.push({ item: plainStaff, qty: 2 }, { item: herb, qty: 1 })
     expect(inv.stacks).toHaveLength(2) // bag is full at capacity 2
 
     expect(equip(eq, inv, plainStaff, 1)).toBe(false)
@@ -133,7 +157,7 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
     const eq = createEquipment()
     eq.weapon = staff
     const inv = createInventory(2)
-    addItem(inv, plainStaff, 2)
+    inv.stacks.push({ item: plainStaff, qty: 2 })
     // Only one stack this time -- one free slot for the displaced staff.
     expect(equip(eq, inv, plainStaff, 1)).toBe(true)
     expect(eq.weapon?.id).toBe('stick')

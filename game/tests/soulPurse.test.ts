@@ -8,6 +8,7 @@ import {
 } from '../src/systems/soulPurse'
 import { createInventory, addItem, listStacks } from '../src/systems/inventory'
 import type { Item } from '../src/systems/items'
+import { equipmentItemByFillName } from '../src/systems/furnaceRecipe'
 
 const commonSword: Item = {
   id: 'stick',
@@ -92,7 +93,7 @@ describe('sellEquipmentItem (ports PackThings.as mdClick)', () => {
     const purse = createSoulPurse(5)
     addItem(inv, rareSword, 2)
 
-    expect(sellEquipmentItem(inv, purse, rareSword.id)).toEqual({ sold: true, soulGained: 160 })
+    expect(sellEquipmentItem(inv, purse, rareSword)).toEqual({ sold: true, soulGained: 160 })
     expect(purse.value).toBe(165)
     expect(listStacks(inv)).toEqual([{ item: rareSword, qty: 1 }])
   })
@@ -102,8 +103,8 @@ describe('sellEquipmentItem (ports PackThings.as mdClick)', () => {
     const purse = createSoulPurse()
     addItem(inv, commonHerb, 1)
 
-    expect(sellEquipmentItem(inv, purse, commonHerb.id)).toEqual({ sold: false, soulGained: 0 })
-    expect(sellEquipmentItem(inv, purse, 'missing')).toEqual({ sold: false, soulGained: 0 })
+    expect(sellEquipmentItem(inv, purse, commonHerb)).toEqual({ sold: false, soulGained: 0 })
+    expect(sellEquipmentItem(inv, purse, { ...rareSword, id: 'missing' })).toEqual({ sold: false, soulGained: 0 })
     expect(purse.value).toBe(0)
   })
 
@@ -119,7 +120,28 @@ describe('sellEquipmentItem (ports PackThings.as mdClick)', () => {
     const purse = createSoulPurse()
     addItem(inv, legacy, 1)
 
-    expect(sellEquipmentItem(inv, purse, legacy.id)).toEqual({ sold: true, soulGained: 20 })
+    expect(sellEquipmentItem(inv, purse, legacy)).toEqual({ sold: true, soulGained: 20 })
     expect(purse.value).toBe(20)
+  })
+
+  it('sells the selected same-fillName instance and leaves the other roll untouched', () => {
+    const cheap = { ...rareSword, sourceSaleValue: 40 }
+    const valuable = { ...rareSword, sourceSaleValue: 160 }
+    const inv = createInventory(8)
+    const purse = createSoulPurse()
+    addItem(inv, cheap, 1)
+    addItem(inv, valuable, 1)
+
+    expect(sellEquipmentItem(inv, purse, valuable)).toEqual({ sold: true, soulGained: 160 })
+    expect(listStacks(inv)).toEqual([{ item: cheap, qty: 1 }])
+  })
+
+  it('uses the recovered per-item sale value for known equipment', () => {
+    const legendary = { ...equipmentItemByFillName('ryjgb')!, sourceSaleValue: 1 }
+    const inv = createInventory(8)
+    const purse = createSoulPurse()
+    addItem(inv, legendary, 1)
+
+    expect(sellEquipmentItem(inv, purse, legendary)).toEqual({ sold: true, soulGained: 1280 })
   })
 })

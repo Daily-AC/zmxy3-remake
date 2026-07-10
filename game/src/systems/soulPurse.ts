@@ -34,24 +34,21 @@
 //     eligible (mirrors zblist being an equipment-only array in AS3).
 
 import type { Inventory } from './inventory'
-import { removeItem } from './inventory'
+import type { Item } from './items'
+import { removeItemInstance } from './inventory'
+import originalEquipment from '../data/original/equipment.json'
 
 /** AS3 BackPack.as:359 -- `this.player.setLhValue(this.player.getLhValue() + 20)`,
  * once per sold item. */
 export const SELL_COMMON_EQUIP_SOUL_VALUE = 20
 
-const EQUIPMENT_SALE_VALUE_BY_QUALITY: Record<string, number> = {
-  '粗 糙': 10,
-  '普 通': 20,
-  '优 秀': 40,
-  '精 良': 80,
-  '史 诗': 160,
-  '传 说': 320,
-  '邪 灵': 640,
-  '渊 邪': 640,
-  '魂 器': 1280,
-  '神 器': 2560,
+interface SaleCatalog {
+  qualitySaleValueTable: Record<string, number>
+  items: { fillName: string; saleValue: number }[]
 }
+
+const saleCatalog = originalEquipment as SaleCatalog
+const saleValueByFillName = new Map(saleCatalog.items.map((entry) => [entry.fillName, entry.saleValue]))
 
 export interface SoulPurse {
   value: number
@@ -88,10 +85,11 @@ export interface SellCommonEquipResult {
  * 道具) are left untouched -- AS3's zblist never held them either. */
 export function sellCommonEquipment(inv: Inventory, purse: SoulPurse): SellCommonEquipResult {
   let soldCount = 0
-  for (const stack of [...inv.stacks]) {
+  for (let index = inv.stacks.length - 1; index >= 0; index -= 1) {
+    const stack = inv.stacks[index]
     if (stack.item.kind !== 'equip' || stack.item.rarity !== 1) continue
     soldCount += stack.qty
-    removeItem(inv, stack.item.id, stack.qty)
+    inv.stacks.splice(index, 1)
   }
   const soulGained = soldCount * SELL_COMMON_EQUIP_SOUL_VALUE
   if (soulGained > 0) addSoul(purse, soulGained)
@@ -102,18 +100,20 @@ export function sellCommonEquipment(inv: Inventory, purse: SoulPurse): SellCommo
 export function sellEquipmentItem(
   inv: Inventory,
   purse: SoulPurse,
-  itemId: string,
+  item: Item,
 ): { sold: boolean; soulGained: number } {
-  const stack = inv.stacks.find((entry) => entry.item.id === itemId)
-  if (!stack || stack.item.kind !== 'equip') return { sold: false, soulGained: 0 }
+  const stack = inv.stacks.find((entry) => entry.item === item)
+  if (!stack || item.kind !== 'equip') return { sold: false, soulGained: 0 }
   const soulGained = Math.max(
     0,
     Math.floor(
-      stack.item.sourceSaleValue ??
-        (stack.item.sourceQuality ? EQUIPMENT_SALE_VALUE_BY_QUALITY[stack.item.sourceQuality] ?? 0 : 0),
+      saleValueByFillName.get(item.id) ??
+        saleValueByFillName.get(item.sourceFillName ?? '') ??
+        item.sourceSaleValue ??
+        (item.sourceQuality ? saleCatalog.qualitySaleValueTable[item.sourceQuality] ?? 0 : 0),
     ),
   )
-  if (!removeItem(inv, itemId, 1)) return { sold: false, soulGained: 0 }
+  if (!removeItemInstance(inv, item)) return { sold: false, soulGained: 0 }
   addSoul(purse, soulGained)
   return { sold: true, soulGained }
 }

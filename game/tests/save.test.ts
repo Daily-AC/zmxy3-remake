@@ -232,6 +232,31 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
     expect(restored.inventory.stacks).toEqual([{ item: herb, qty: 2 }])
   })
 
+  it('preserves independently rolled copies of the same equipment across restore', async () => {
+    const { equipmentItemByFillName } = await import('../src/systems/furnaceRecipe')
+    const weak = equipmentItemByFillName('whg', () => 0)!
+    const strong = equipmentItemByFillName('whg', () => 1)!
+    const save = createGameSave({
+      progression: createProgression(1),
+      equipment: createEquipment(),
+      inventory: {
+        capacity: 8,
+        stacks: [
+          { item: weak, qty: 1 },
+          { item: strong, qty: 1 },
+        ],
+      },
+    })
+
+    const restored = restoreGameState(save)
+
+    expect(restored.inventory.stacks).toHaveLength(2)
+    expect(restored.inventory.stacks.map((stack) => stack.item.effects)).toEqual([
+      weak.effects,
+      strong.effects,
+    ])
+  })
+
   it('two injected storages stay isolated from each other', () => {
     const storageA = createMemoryStorage()
     const storageB = createMemoryStorage()

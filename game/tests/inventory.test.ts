@@ -13,6 +13,28 @@ const ore: Item = { id: 'silver_ore', name: '白银矿石', kind: 'material', ra
 const pill: Item = { id: 'minor_pill', name: '小还丹', kind: 'consumable', rarity: 1 }
 
 describe('inventory stacks', () => {
+  it('keeps equipment as independent one-item stacks even when fillName matches', () => {
+    const inv = createInventory(3)
+    const weakStaff: Item = {
+      id: 'whg',
+      name: '尾火棍',
+      kind: 'equip',
+      rarity: 2,
+      effects: [{ type: 'stat', stat: 'atk', value: 10 }],
+    }
+    const strongStaff: Item = {
+      ...weakStaff,
+      effects: [{ type: 'stat', stat: 'atk', value: 15 }],
+    }
+
+    expect(addItem(inv, weakStaff, 1)).toEqual({ ok: true, overflow: 0 })
+    expect(addItem(inv, strongStaff, 1)).toEqual({ ok: true, overflow: 0 })
+    expect(listStacks(inv)).toEqual([
+      { item: weakStaff, qty: 1 },
+      { item: strongStaff, qty: 1 },
+    ])
+  })
+
   it('stacks to 99 then opens a new slot for overflow from the stack', () => {
     const inv = createInventory(3)
 

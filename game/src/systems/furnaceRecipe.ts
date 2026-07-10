@@ -10,6 +10,7 @@ interface OriginalEquipmentRecord {
   type: string
   user: string
   quality: string
+  saleValue: number
   sourceArray?: string
   stats: {
     ehp: RawStat
@@ -78,19 +79,6 @@ const SOUL_BY_QUALITY: Record<string, number> = {
   '精 良': 400,
   '史 诗': 800,
   '传 说': 1600,
-}
-
-const SALE_VALUE_BY_QUALITY: Record<string, number> = {
-  '粗 糙': 10,
-  '普 通': 20,
-  '优 秀': 40,
-  '精 良': 80,
-  '史 诗': 160,
-  '传 说': 320,
-  '邪 灵': 640,
-  '渊 邪': 640,
-  '魂 器': 1280,
-  '神 器': 2560,
 }
 
 const STAT_EFFECTS: { source: keyof OriginalEquipmentRecord['stats']; stat: Extract<Effect, { type: 'stat' }>['stat'] }[] = [
@@ -165,7 +153,7 @@ function baseItemFromEquipment(source: OriginalEquipmentRecord): Item {
     sourceType: source.type,
     sourceUser: source.user,
     sourceQuality: source.quality,
-    sourceSaleValue: SALE_VALUE_BY_QUALITY[source.quality] ?? 0,
+    sourceSaleValue: source.saleValue,
     sourceArray: source.sourceArray,
   }
 }
