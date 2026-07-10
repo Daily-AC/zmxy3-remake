@@ -31,6 +31,11 @@ import {
 } from '../systems/monsterBehaviors'
 import { heroAttackBox, centeredBox, overlaps, type Rect } from '../systems/hitbox'
 import {
+  fallbackMonsterAttackSpec,
+  monsterAttackSpecFor,
+  resolveAttackSpec,
+} from '../systems/attackSpec'
+import {
   DropEntity,
   PickupConfig,
   DEFAULT_PICKUP_RADIUS,
@@ -243,40 +248,6 @@ const MONSTER_NAMES: Record<string, string> = {
   ...LEVEL3_MONSTER_NAMES,
   ...LEVEL4_MONSTER_NAMES,
 }
-// Real per-species melee hit timing, decompiled from BaseMonster.as subclasses
-// (export.monster.MonsterN, tmp/l4work/mscripts/scripts/export/monster/).
-// Each MonsterN plays "hit1" as a bbdc (bitmap-clip) animation whose frames
-// are held for species-specific tick counts (setFrameStopCount); enterFrameFunc
-// checks a specific (bank sub-frame index, curFrameCount) pair and, when it
-// matches, spawns a SpecialEffectBullet at (this.x ± offsetX, this.y ± offsetY)
-// -- THAT bullet, not attack-start, is what actually hit-tests the hero. This
-// is the real root cause of "怪物挥剑明显没碰到悟空但悟空掉血" (battle-fidelity
-// 追加单, 2026-07-08): the old code resolved damage unconditionally on
-// attack-start (frame 0) using stats.attackRange (250px, the AI's "decide to
-// engage" sensing radius) as if it were melee reach.
-//
-// fraction = (sum of hold-ticks up to and including the trigger sub-frame) /
-// (sum of all hold-ticks in the hit1 bank) -- i.e. how far through the swing
-// the real game spawns the hit. reach = the doHi1 bullet's spawn x-offset
-// (the real "sword tip" distance from the monster's own x).
-// L1 species (2/3/4/5/7/8/30) are all decompiled directly. L2 species
-// (6/9/10/15/16/19) are NOT yet decompiled -- TODO-verify, they fall back to
-// the 0.5/attackRange defaults below, same as before this fix for them
-// specifically (still strictly better than L1's old behavior since at least
-// L1 -- the level the user actually caught the bug on -- is now correct).
-const MONSTER_ATTACK_TIMING: Record<string, { fraction: number; reach: number }> = {
-  monster2: { fraction: 19 / 35, reach: 75 }, // Monster2 (顺风耳) hit1 bank4=[2,2,15,16], trigger x=2
-  monster3: { fraction: 7 / 15, reach: 105 }, // Monster3 hit1 bank4=[2,2,2,1,1,7], trigger x=3
-  monster4: { fraction: 14 / 21, reach: 155 }, // Monster4 hit1 bank4=[4,4,4,2,7], trigger x=3
-  monster5: { fraction: 8 / 15, reach: 155 }, // Monster5 hit1 bank4=[2,2,2,2,7], trigger x=3
-  monster7: { fraction: 0.6, reach: 80 }, // Monster7 hit1 bank4=[2,2,2,4], trigger x=2
-  monster8: { fraction: 1, reach: 97 }, // Monster8 hit1 bank4=[2,2,2,2,5], trigger x=4 (last sub-frame)
-  // Monster30 is ranged: AS3 hit1 spawns Monster30Bullet1 at offsetX=0, and
-  // the bullet hitbox checks the hero. `reach` is therefore intentionally 0;
-  // monsterConfigFor adds rangedAttack so monsterSim does not use meleeReach.
-  monster30: { fraction: 1, reach: 0 },
-}
-
 const MONSTER30_BULLET = {
   kind: 'Monster30Bullet1',
   speedPxPerSecond: 620,
@@ -341,10 +312,7 @@ const MONSTER_SKILL_GATES: Record<string, MonsterSkillGate> = {
   monster3: Monster3Spec.skill!, // 巫鹰 hit2 (real AS3 magic nova, see report)
 }
 
-// Hero hurtbox for enemy *skill* hitboxes (Monster3's hit2 etc.) -- the
-// project's existing incoming-melee model (monsterSim's meleeReach) is a pure
-// x-distance+facing check with no y-axis at all, which can't express "stand
-// in this AoE box or dodge it". Size matches the hero's own melee attack box
+// Hero hurtbox for enemy attacks. Size matches the hero's own melee attack box
 // height (hitbox.ts's DEFAULT_ATTACK_BOX) and a plausible hero silhouette
 // width -- project-chosen, not from AS3 (which resolves hits with per-pixel
 // HitTest, see hitbox.ts's own header note).
@@ -2003,7 +1971,7 @@ export class BattleScene extends Phaser.Scene {
     const data = MONSTER_DATA[species] ?? MONSTER_DATA.monster30
     const dur = (a: string, fallback: number): number =>
       data.actions[a] ? actionDurationMs(data.actions[a] as ActionSpec, TICK_MS) : fallback
-    const timing = MONSTER_ATTACK_TIMING[species]
+    const attackSpec = monsterAttackSpecFor(species, 'hit1') ?? fallbackMonsterAttackSpec('hit1', stats.attackRange)
     const bounds = this.level1Chain ? currentSubStage(this.level1Chain).bounds : { left: MIN_X, right: MAX_X }
     return {
       stats,
@@ -2016,11 +1984,7 @@ export class BattleScene extends Phaser.Scene {
       decisionIntervalMs: 1000,
       tickMs: TICK_MS,
       rng: Math.random,
-      // Real per-species hit-frame timing where decompiled (MONSTER_ATTACK_TIMING
-      // above); omitted fields fall back to monsterSim's own 0.5/attackRange
-      // defaults for species not yet decompiled (L2+, TODO-verify).
-      attackHitFraction: timing?.fraction,
-      meleeReach: timing?.reach,
+      attackSpec,
       rangedAttack: species === 'monster30' ? MONSTER30_BULLET : undefined,
       // StageListener11: Monster30 is a flying, gravity-free climb threat.
       // Keep vertical pursuit opt-in so ground waves and L2-L4 remain on the
@@ -3199,12 +3163,7 @@ export class BattleScene extends Phaser.Scene {
     )
     for (const ev of events) {
       if (ev.type === 'hurt') this.playSfx('monHurt', 0.6)
-      // 'attack-hit' (not 'attack-start'): monsterSim already re-checked
-      // meleeReach + facing at the swing's real hit frame before emitting
-      // this -- attack-start fired earlier (frame 0) and would apply damage
-      // no matter how far away the hero stood (battle-fidelity 追加单 fix,
-      // 2026-07-08). See MONSTER_ATTACK_TIMING's header comment.
-      else if (ev.type === 'attack-hit') this.monsterHitsHero(e)
+      else if (ev.type === 'attack-frame') this.resolveMonsterAttackFrame(e)
       else if (ev.type === 'projectile-spawn') this.spawnMonsterProjectile(e, ev)
       else if (ev.type === 'death') {
         this.spawnDrops(ev.x, ev.y, e.species)
@@ -3222,10 +3181,26 @@ export class BattleScene extends Phaser.Scene {
    * entity's hit1 attackPower/attackKind. */
   private resolveEnemySkillHit(e: MonsterEntity, spawn: SpawnedHitbox): void {
     if (isHeroDead(this.identity)) return
-    const heroCenter = this.heroVisualCenter()
-    const heroBox = centeredBox(heroCenter.x, heroCenter.y, HERO_HURTBOX_W, HERO_HURTBOX_H)
-    if (!overlaps(spawnedHitboxToRect(spawn), heroBox)) return // dodged: out of the AoE at the hit instant
+    const spec = monsterAttackSpecFor(e.species, spawn.actionName)
+    const hitbox = spec
+      ? resolveAttackSpec(spec, this.monsterVisualCenter(e), e.state.facing).hitbox
+      : spawnedHitboxToRect(spawn)
+    if (!overlaps(hitbox, this.currentHeroHurtbox())) return
     this.monsterHitsHero(e, spawn.damage, spawn.attackKind)
+  }
+
+  private currentHeroHurtbox(): Rect {
+    const center = this.heroVisualCenter()
+    return centeredBox(center.x, center.y, HERO_HURTBOX_W, HERO_HURTBOX_H)
+  }
+
+  private resolveMonsterAttackFrame(e: MonsterEntity): void {
+    // Monster30's frame launches a projectile; its moving bullet owns damage.
+    if (e.config.rangedAttack) return
+    const spec = e.config.attackSpec
+    if (!spec) return
+    const resolved = resolveAttackSpec(spec, this.monsterVisualCenter(e), e.state.facing)
+    if (overlaps(resolved.hitbox, this.currentHeroHurtbox())) this.monsterHitsHero(e)
   }
 
   private reapMonsters(): void {
@@ -3282,12 +3257,8 @@ export class BattleScene extends Phaser.Scene {
   // A monster swing lands: route its raw attack power through the original
   // two-way defense formula (heroScale.resolveIncomingHeroDamage; heroCombat
   // applies none itself), then into the combat model (i-frames/death/respawn).
-  // Only called from the 'attack-hit' event -- monsterSim.tickMonster already
-  // re-checked meleeReach + facing against the hero's position at the real
-  // swing hit frame before emitting it, so no distance check is repeated here
-  // (the old `> attackRange` check here was the actual bug: attackRange is a
-  // 250px AI sensing radius, not melee reach, and it ran at attack-start
-  // instead of the hit frame -- see MONSTER_ATTACK_TIMING's header comment).
+  // Normal attacks reach this only after resolveMonsterAttackFrame intersects
+  // their shared AttackSpec with the hero's current two-dimensional hurtbox.
   // `overridePower`/`overrideKind` (behavior-wiring pen): a skill overlay hit
   // (Monster3's hit2, real AS3 magic power 7) has different power/kind than
   // this entity's own hit1 attackPower/attackKind -- resolveEnemySkillHit

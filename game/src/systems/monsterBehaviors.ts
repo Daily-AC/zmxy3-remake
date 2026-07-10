@@ -492,11 +492,9 @@ export function advanceMonsterBehavior(
 //   bank4 (hit1, setFrameStopCount row index 4, confirmed against this
 //   project's own monster3.json) = [2,2,2,1,1,7] (6 cells, 15 ticks total);
 //   enterFrameFunc fires doHi1() at cell index 3 / curFrameCount 1 ->
-//   cumulative 2+2+2+1 = 7 ticks in. (This hit1 timing/reach already matches
-//   what BattleScene.ts's own independently-decompiled MONSTER_ATTACK_TIMING
-//   table carries for monster3 — 7/15 fraction, reach 105 — cross-confirming
-//   both decompiles; monsterSim.ts + that table already drive the boss's real
-//   hit1 melee correctly, so only hit2 below is new wiring.)
+//   cumulative 2+2+2+1 = 7 ticks in. (This hit1 timing/reach also matches
+//   systems/attackSpec.ts's independently-decompiled MONSTER_ATTACKS entry —
+//   7/15 fraction, offset 105 — cross-confirming both decompiles.)
 //   hit2: attackBackInfoDict = {power:7, attackKind:"magic",
 //   attackBackSpeed:[-5,0], attackInterval:4, hitMaxCount:99}. Animation
 //   bank5 (hit2) = [2,2,1,26] (4 cells, 31 ticks total); enterFrameFunc fires
