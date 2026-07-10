@@ -1,0 +1,675 @@
+{
+  "source": {
+    "swf": "out_res/1.swf",
+    "sha256": "14470fa742917ebd902763ddee7971876c458478a7b2711f1eeb8beaea2b0d7e",
+    "xfl": "official-1-dec",
+    "renderer": "JPEXS FFDec sprite:png"
+  },
+  "effects": {
+    "Monster30Bullet1": {
+      "monsterId": "Monster30",
+      "sourceSymbol": "Monster30Bullet1",
+      "symbolId": 21,
+      "kind": "visual",
+      "timelineFrames": 10,
+      "shippedFrames": 10,
+      "visibleFrames": 10,
+      "fps": 24,
+      "canvasPx": {
+        "width": 254,
+        "height": 144
+      },
+      "sourceBoundsPx": {
+        "xmin": -185.5,
+        "ymin": -60.45,
+        "xmax": 68,
+        "ymax": 82.9
+      },
+      "pivotPx": {
+        "x": 185.5,
+        "y": 60.45
+      },
+      "assetPath": "assets/extracted/level1/hit1-effects/Monster30Bullet1",
+      "framePixels": [
+        {
+          "alphaBoundsPx": [
+            132,
+            6,
+            235,
+            87
+          ],
+          "nonTransparentPixels": 2655
+        },
+        {
+          "alphaBoundsPx": [
+            95,
+            14,
+            222,
+            105
+          ],
+          "nonTransparentPixels": 4252
+        },
+        {
+          "alphaBoundsPx": [
+            59,
+            20,
+            208,
+            123
+          ],
+          "nonTransparentPixels": 5456
+        },
+        {
+          "alphaBoundsPx": [
+            39,
+            41,
+            166,
+            132
+          ],
+          "nonTransparentPixels": 4257
+        },
+        {
+          "alphaBoundsPx": [
+            20,
+            61,
+            123,
+            142
+          ],
+          "nonTransparentPixels": 2663
+        },
+        {
+          "alphaBoundsPx": [
+            15,
+            64,
+            130,
+            125
+          ],
+          "nonTransparentPixels": 2661
+        },
+        {
+          "alphaBoundsPx": [
+            29,
+            46,
+            167,
+            118
+          ],
+          "nonTransparentPixels": 4260
+        },
+        {
+          "alphaBoundsPx": [
+            43,
+            29,
+            204,
+            111
+          ],
+          "nonTransparentPixels": 5458
+        },
+        {
+          "alphaBoundsPx": [
+            85,
+            20,
+            223,
+            91
+          ],
+          "nonTransparentPixels": 4244
+        },
+        {
+          "alphaBoundsPx": [
+            127,
+            10,
+            242,
+            71
+          ],
+          "nonTransparentPixels": 2708
+        }
+      ]
+    },
+    "Monster8Bullet1": {
+      "monsterId": "Monster8",
+      "sourceSymbol": "Monster8Bullet1",
+      "symbolId": 23,
+      "kind": "hitbox-only",
+      "timelineFrames": 1,
+      "shippedFrames": 0,
+      "visibleFrames": 0,
+      "fps": 24,
+      "canvasPx": {
+        "width": 150,
+        "height": 150
+      },
+      "sourceBoundsPx": {
+        "xmin": 0,
+        "ymin": 0,
+        "xmax": 150,
+        "ymax": 150
+      },
+      "pivotPx": {
+        "x": 0,
+        "y": 0
+      },
+      "assetPath": null,
+      "framePixels": []
+    },
+    "Monster7Bullet1": {
+      "monsterId": "Monster7",
+      "sourceSymbol": "Monster7Bullet1",
+      "symbolId": 75,
+      "kind": "hitbox-only",
+      "timelineFrames": 1,
+      "shippedFrames": 0,
+      "visibleFrames": 0,
+      "fps": 24,
+      "canvasPx": {
+        "width": 150,
+        "height": 150
+      },
+      "sourceBoundsPx": {
+        "xmin": 0,
+        "ymin": 0,
+        "xmax": 150,
+        "ymax": 150
+      },
+      "pivotPx": {
+        "x": 0,
+        "y": 0
+      },
+      "assetPath": null,
+      "framePixels": []
+    },
+    "Monster4Bullet1": {
+      "monsterId": "Monster4",
+      "sourceSymbol": "Monster4Bullet1",
+      "symbolId": 52,
+      "kind": "visual",
+      "timelineFrames": 13,
+      "shippedFrames": 13,
+      "visibleFrames": 12,
+      "fps": 24,
+      "canvasPx": {
+        "width": 502,
+        "height": 8
+      },
+      "sourceBoundsPx": {
+        "xmin": -418.95,
+        "ymin": 0,
+        "xmax": 83,
+        "ymax": 7.9
+      },
+      "pivotPx": {
+        "x": 418.95,
+        "y": 0
+      },
+      "assetPath": "assets/extracted/level1/hit1-effects/Monster4Bullet1",
+      "framePixels": [
+        {
+          "alphaBoundsPx": [
+            418,
+            0,
+            502,
+            8
+          ],
+          "nonTransparentPixels": 425
+        },
+        {
+          "alphaBoundsPx": [
+            371,
+            0,
+            456,
+            8
+          ],
+          "nonTransparentPixels": 426
+        },
+        {
+          "alphaBoundsPx": [
+            325,
+            0,
+            410,
+            8
+          ],
+          "nonTransparentPixels": 425
+        },
+        {
+          "alphaBoundsPx": [
+            278,
+            0,
+            363,
+            8
+          ],
+          "nonTransparentPixels": 426
+        },
+        {
+          "alphaBoundsPx": [
+            232,
+            0,
+            317,
+            8
+          ],
+          "nonTransparentPixels": 425
+        },
+        {
+          "alphaBoundsPx": [
+            185,
+            0,
+            270,
+            8
+          ],
+          "nonTransparentPixels": 425
+        },
+        {
+          "alphaBoundsPx": [
+            139,
+            0,
+            224,
+            8
+          ],
+          "nonTransparentPixels": 425
+        },
+        {
+          "alphaBoundsPx": [
+            92,
+            0,
+            177,
+            8
+          ],
+          "nonTransparentPixels": 426
+        },
+        {
+          "alphaBoundsPx": [
+            46,
+            0,
+            131,
+            8
+          ],
+          "nonTransparentPixels": 426
+        },
+        {
+          "alphaBoundsPx": [
+            0,
+            0,
+            84,
+            8
+          ],
+          "nonTransparentPixels": 423
+        },
+        {
+          "alphaBoundsPx": [
+            0,
+            0,
+            84,
+            8
+          ],
+          "nonTransparentPixels": 423
+        },
+        {
+          "alphaBoundsPx": [
+            0,
+            0,
+            84,
+            8
+          ],
+          "nonTransparentPixels": 422
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        }
+      ]
+    },
+    "Monster3Bullet1": {
+      "monsterId": "Monster3",
+      "sourceSymbol": "Monster3Bullet1",
+      "symbolId": 70,
+      "kind": "visual",
+      "timelineFrames": 5,
+      "shippedFrames": 5,
+      "visibleFrames": 5,
+      "fps": 24,
+      "canvasPx": {
+        "width": 127,
+        "height": 107
+      },
+      "sourceBoundsPx": {
+        "xmin": 0,
+        "ymin": 0,
+        "xmax": 126.85,
+        "ymax": 106.35
+      },
+      "pivotPx": {
+        "x": 0,
+        "y": 0
+      },
+      "assetPath": "assets/extracted/level1/hit1-effects/Monster3Bullet1",
+      "framePixels": [
+        {
+          "alphaBoundsPx": [
+            5,
+            1,
+            104,
+            106
+          ],
+          "nonTransparentPixels": 1733
+        },
+        {
+          "alphaBoundsPx": [
+            8,
+            47,
+            127,
+            106
+          ],
+          "nonTransparentPixels": 837
+        },
+        {
+          "alphaBoundsPx": [
+            8,
+            47,
+            127,
+            106
+          ],
+          "nonTransparentPixels": 837
+        },
+        {
+          "alphaBoundsPx": [
+            22,
+            72,
+            127,
+            106
+          ],
+          "nonTransparentPixels": 564
+        },
+        {
+          "alphaBoundsPx": [
+            22,
+            72,
+            127,
+            106
+          ],
+          "nonTransparentPixels": 564
+        }
+      ]
+    },
+    "Monster2Bullet1_1": {
+      "monsterId": "Monster2",
+      "sourceSymbol": "Monster2Bullet1_1",
+      "symbolId": 49,
+      "kind": "visual",
+      "timelineFrames": 14,
+      "shippedFrames": 14,
+      "visibleFrames": 14,
+      "fps": 24,
+      "canvasPx": {
+        "width": 126,
+        "height": 137
+      },
+      "sourceBoundsPx": {
+        "xmin": -71.45,
+        "ymin": 8.4,
+        "xmax": 54.55,
+        "ymax": 144.9
+      },
+      "pivotPx": {
+        "x": 71.45,
+        "y": -8.4
+      },
+      "assetPath": "assets/extracted/level1/hit1-effects/Monster2Bullet1_1",
+      "framePixels": [
+        {
+          "alphaBoundsPx": [
+            12,
+            7,
+            89,
+            127
+          ],
+          "nonTransparentPixels": 3974
+        },
+        {
+          "alphaBoundsPx": [
+            12,
+            7,
+            89,
+            127
+          ],
+          "nonTransparentPixels": 3974
+        },
+        {
+          "alphaBoundsPx": [
+            15,
+            7,
+            94,
+            126
+          ],
+          "nonTransparentPixels": 5222
+        },
+        {
+          "alphaBoundsPx": [
+            15,
+            7,
+            94,
+            126
+          ],
+          "nonTransparentPixels": 5222
+        },
+        {
+          "alphaBoundsPx": [
+            16,
+            6,
+            92,
+            126
+          ],
+          "nonTransparentPixels": 4980
+        },
+        {
+          "alphaBoundsPx": [
+            16,
+            6,
+            92,
+            126
+          ],
+          "nonTransparentPixels": 4980
+        },
+        {
+          "alphaBoundsPx": [
+            17,
+            25,
+            95,
+            126
+          ],
+          "nonTransparentPixels": 4340
+        },
+        {
+          "alphaBoundsPx": [
+            17,
+            25,
+            95,
+            126
+          ],
+          "nonTransparentPixels": 4340
+        },
+        {
+          "alphaBoundsPx": [
+            22,
+            27,
+            105,
+            110
+          ],
+          "nonTransparentPixels": 4165
+        },
+        {
+          "alphaBoundsPx": [
+            22,
+            27,
+            105,
+            110
+          ],
+          "nonTransparentPixels": 4165
+        },
+        {
+          "alphaBoundsPx": [
+            20,
+            29,
+            103,
+            108
+          ],
+          "nonTransparentPixels": 3836
+        },
+        {
+          "alphaBoundsPx": [
+            20,
+            29,
+            103,
+            108
+          ],
+          "nonTransparentPixels": 3836
+        },
+        {
+          "alphaBoundsPx": [
+            22,
+            33,
+            102,
+            96
+          ],
+          "nonTransparentPixels": 2903
+        },
+        {
+          "alphaBoundsPx": [
+            22,
+            33,
+            102,
+            96
+          ],
+          "nonTransparentPixels": 2903
+        }
+      ]
+    },
+    "Monster2Bullet1_2": {
+      "monsterId": "Monster2",
+      "sourceSymbol": "Monster2Bullet1_2",
+      "symbolId": 34,
+      "kind": "visual",
+      "timelineFrames": 20,
+      "shippedFrames": 20,
+      "visibleFrames": 5,
+      "fps": 24,
+      "canvasPx": {
+        "width": 157,
+        "height": 68
+      },
+      "sourceBoundsPx": {
+        "xmin": -68.4,
+        "ymin": 0.2,
+        "xmax": 88.1,
+        "ymax": 67.6
+      },
+      "pivotPx": {
+        "x": 68.4,
+        "y": -0.2
+      },
+      "assetPath": "assets/extracted/level1/hit1-effects/Monster2Bullet1_2",
+      "framePixels": [
+        {
+          "alphaBoundsPx": [
+            68,
+            0,
+            156,
+            67
+          ],
+          "nonTransparentPixels": 3431
+        },
+        {
+          "alphaBoundsPx": [
+            56,
+            0,
+            144,
+            67
+          ],
+          "nonTransparentPixels": 3441
+        },
+        {
+          "alphaBoundsPx": [
+            43,
+            0,
+            131,
+            67
+          ],
+          "nonTransparentPixels": 3447
+        },
+        {
+          "alphaBoundsPx": [
+            30,
+            0,
+            118,
+            67
+          ],
+          "nonTransparentPixels": 3431
+        },
+        {
+          "alphaBoundsPx": [
+            15,
+            0,
+            103,
+            67
+          ],
+          "nonTransparentPixels": 3434
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        },
+        {
+          "alphaBoundsPx": null,
+          "nonTransparentPixels": 0
+        }
+      ]
+    }
+  }
+}
