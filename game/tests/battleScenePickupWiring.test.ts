@@ -83,6 +83,7 @@ describe('BattleScene pickup wiring', () => {
     expect(source).toMatch(/equip\(this\.equipment, this\.inventory, item, this\.identity\.heroId\)/)
     expect(source).toMatch(/sellEquipmentItem\(this\.inventory, this\.soulPurse, item\.id\)/)
     expect(source).toMatch(/id: 'test_chiyan',[\s\S]*sourceType: 'zbwq',[\s\S]*sourceUser: '悟空'/)
+    expect(source).toMatch(/this\.weaponSprite\.setVisible\(Boolean\(this\.equipment\.weapon\)\)/)
   })
 
   it('routes Monster30 projectile-spawn through enemy projectile entities before damaging the hero', () => {
