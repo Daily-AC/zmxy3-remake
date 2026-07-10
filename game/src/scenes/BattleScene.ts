@@ -1971,7 +1971,7 @@ export class BattleScene extends Phaser.Scene {
       this.floorImg
         .setVisible(true)
         .setTexture(stage.background.floor)
-        .setPosition(stage.background.floorX ?? 0, GROUND_Y - 5)
+        .setPosition(stage.background.floorX ?? 0, stage.id === 'sl12' ? GROUND_Y + STAND_SINK : GROUND_Y - 5)
         .setScale(1)
         .setScrollFactor(1, 1)
         .setDepth(stage.id === 'sl12' ? -7 : -10)
