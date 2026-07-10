@@ -13,14 +13,35 @@ describe('BattleScene pickup wiring', () => {
   it('spawns collectible soul drops on monster death and routes picked souls into soulPurse', () => {
     const source = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
 
-    expect(source).toMatch(/spawnSoulDrop\(monsterSoulDropAmount\(species, this\.dropRollContext\(\)\), x, y\)/)
+    expect(source).toMatch(/spawnSoulDrop\(monsterSoulDropAmount\(species, context\), x, y\)/)
     expect(source).toMatch(/if \(pickedDrop\.kind === 'soul'\)\s*{\s*addSoul\(this\.soulPurse, pickedDrop\.amount\)/)
   })
 
   it('passes the current AS3 stage/level context into rollDrops', () => {
     const source = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
 
-    expect(source).toMatch(/rollDrops\(species, Math\.random, this\.dropRollContext\(\)\)/)
+    expect(source).toMatch(/const context = this\.dropRollContext\(\)/)
+    expect(source).toMatch(/rollDrops\(species, Math\.random, context\)/)
+  })
+
+  it('appends L1 starter rewards as real offset world pickups after ordinary drops', () => {
+    const source = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
+    const spawnDrops = source.slice(source.indexOf('private spawnDrops('), source.indexOf('private dropRollContext('))
+
+    expect(source).toMatch(/import \{ l1StarterRewards \} from '\.\.\/systems\/starterRewards'/)
+    expect(spawnDrops).toMatch(/const context = this\.dropRollContext\(\)/)
+    expect(spawnDrops).toMatch(/rollDrops\(species, Math\.random, context\)/)
+    expect(spawnDrops).toMatch(
+      /l1StarterRewards\(species, context\)\.forEach\(\(\{ item, qty \}, index\) => \{\s*const drop = spawnDrop\(item, qty, x \+ \(index - 1\) \* 34, y\)\s*this\.drops\.push\(drop\)\s*this\.dropSprites\.set\(drop, this\.makeDropSprite\(drop\)\)/,
+    )
+    expect(spawnDrops.indexOf('l1StarterRewards(')).toBeGreaterThan(spawnDrops.indexOf('rollDrops('))
+  })
+
+  it('labels the no-book beginner recipe without presenting a fake inventory book', () => {
+    const source = readFileSync(new URL('../src/ui/hud/FurnaceRecipeView.ts', import.meta.url), 'utf8')
+
+    expect(source).toMatch(/const book = recipe\.requiresBook \? recipe\.bookName : '无需制作书'/)
+    expect(source).toMatch(/return `\$\{book\} · \$\{mats\.join\(' · '\)\} · 灵魂 \$\{recipe\.soulCost\}`/)
   })
 
   it('spawns AS3 cure pickups on death and applies them through collectWorldPickup', () => {

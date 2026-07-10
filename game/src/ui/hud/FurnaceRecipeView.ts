@@ -93,7 +93,8 @@ function materialLine(recipe: FurnaceRecipe, check: CraftCheck): string {
     const miss = missing.get(m.fillName)
     return miss ? `${m.name} ${miss.have}/${miss.needed}` : `${m.name} ≥${m.qty}/${m.qty}`
   })
-  return `${recipe.bookName} · ${mats.join(' · ')} · 灵魂 ${recipe.soulCost}`
+  const book = recipe.requiresBook ? recipe.bookName : '无需制作书'
+  return `${book} · ${mats.join(' · ')} · 灵魂 ${recipe.soulCost}`
 }
 
 export class FurnaceRecipeView {

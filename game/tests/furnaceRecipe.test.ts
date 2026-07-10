@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import originalEquipment from '../src/data/original/equipment.json'
 import { addItem, countItem, createInventory, listStacks } from '../src/systems/inventory'
 import {
+  BEGINNER_RECIPE,
   RECIPE_MATERIALS,
   canCraft,
   craft,
@@ -69,16 +70,29 @@ describe('furnace recipe catalog', () => {
     expect(equipmentItemByFillName('wptm')).not.toHaveProperty('effects')
   })
 
-  it('lists all 39 制作书 recipes and keeps the material table in sync with equipment.json', () => {
+  it('prepends the no-book beginner recipe before all 39 recovered 制作书 recipes', () => {
     const recipes = listRecipes()
     const bookFillNames = (originalEquipment as { items: { fillName: string; ename: string }[] }).items
       .filter((item) => item.ename.endsWith('制作书'))
       .map((item) => item.fillName)
       .sort()
 
-    expect(recipes).toHaveLength(39)
+    expect(recipes).toHaveLength(40)
+    expect(recipes[0]).toEqual(BEGINNER_RECIPE)
+    expect(recipes[0]).toMatchObject({
+      bookFillName: 'starter_whg',
+      bookName: '新手锻造：尾火棍',
+      productFillName: 'whg',
+      productName: '尾火棍',
+      role: '悟空',
+      quality: '优 秀',
+      materials: [{ fillName: 'wptm', name: '檀木', qty: 3 }],
+      soulCost: 20,
+      requiresBook: false,
+    })
     expect(Object.keys(RECIPE_MATERIALS).sort()).toEqual(bookFillNames)
-    expect(recipes.map((r) => r.bookFillName).sort()).toEqual(bookFillNames)
+    expect(recipes.slice(1).map((r) => r.bookFillName).sort()).toEqual(bookFillNames)
+    expect(recipes.slice(1).every((recipe) => recipe.requiresBook)).toBe(true)
   })
 
   it('derives the 尾火棍 recipe shape from equipment.json plus the material table', () => {
@@ -91,6 +105,7 @@ describe('furnace recipe catalog', () => {
       quality: '优 秀',
       materials: [{ fillName: 'wptm', name: '檀木', qty: 20 }],
       soulCost: 200,
+      requiresBook: true,
     })
   })
 
@@ -101,6 +116,13 @@ describe('furnace recipe catalog', () => {
 })
 
 describe('canCraft', () => {
+  it('allows the beginner recipe with only three 檀木 and 20 soul', () => {
+    const inv = createInventory(4)
+    give(inv, 'wptm', 3)
+
+    expect(canCraft(inv, 20, 'starter_whg')).toEqual({ ok: true })
+  })
+
   it('reports a missing book before checking materials or soul', () => {
     const inv = createInventory(4)
     give(inv, 'wptm', 20)
@@ -143,6 +165,26 @@ describe('canCraft', () => {
 })
 
 describe('craft', () => {
+  it('crafts a fixed minimum-stat 尾火棍 without requiring or consuming a book', () => {
+    const inv = createInventory(4)
+    give(inv, 'wptm', 3)
+
+    const result = craft(inv, 20, 'starter_whg', () => 1)
+
+    expect(result).toMatchObject({ ok: true, soulSpent: 20, newSoul: 0 })
+    if (!result.ok) return
+    expect(countItem(inv, 'starter_whg')).toBe(0)
+    expect(countItem(inv, 'wptm')).toBe(0)
+    expect(countItem(inv, 'whg')).toBe(1)
+    expect(result.item).toMatchObject({
+      id: 'whg',
+      name: '尾火棍',
+      kind: 'equip',
+      rarity: 2,
+      effects: [{ type: 'stat', stat: 'atk', value: 10 }],
+    })
+  })
+
   it('crafts 尾火棍 transactionally with the minimum random stat roll', () => {
     const inv = createInventory(4)
     give(inv, 'whgzzs', 1)

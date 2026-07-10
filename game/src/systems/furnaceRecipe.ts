@@ -97,6 +97,19 @@ export interface FurnaceRecipe {
   quality: string
   materials: { fillName: string; name: string; qty: number }[]
   soulCost: number
+  requiresBook: boolean
+}
+
+export const BEGINNER_RECIPE: FurnaceRecipe = {
+  bookFillName: 'starter_whg',
+  bookName: '新手锻造：尾火棍',
+  productFillName: 'whg',
+  productName: '尾火棍',
+  role: '悟空',
+  quality: '优 秀',
+  materials: [{ fillName: 'wptm', name: '檀木', qty: 3 }],
+  soulCost: 20,
+  requiresBook: false,
 }
 
 export type CraftCheck =
@@ -192,14 +205,16 @@ function buildRecipe(book: OriginalEquipmentRecord): FurnaceRecipe | undefined {
       qty,
     })),
     soulCost: SOUL_BY_QUALITY[product.quality] ?? SOUL_BY_QUALITY['传 说'],
+    requiresBook: true,
   }
 }
 
 export function listRecipes(): FurnaceRecipe[] {
-  return originalEquipmentItems
+  const recoveredRecipes = originalEquipmentItems
     .filter((item) => item.ename.endsWith('制作书'))
     .map(buildRecipe)
     .filter((recipe): recipe is FurnaceRecipe => recipe !== undefined)
+  return [BEGINNER_RECIPE, ...recoveredRecipes]
 }
 
 export function findRecipe(bookFillName: string): FurnaceRecipe | undefined {
@@ -209,7 +224,9 @@ export function findRecipe(bookFillName: string): FurnaceRecipe | undefined {
 export function canCraft(inventory: Inventory, soul: number, recipeFill: string): CraftCheck {
   const recipe = findRecipe(recipeFill)
   if (!recipe) return { ok: false, reason: 'unknown_recipe' }
-  if (countItem(inventory, recipe.bookFillName) < 1) return { ok: false, reason: 'missing_book' }
+  if (recipe.requiresBook && countItem(inventory, recipe.bookFillName) < 1) {
+    return { ok: false, reason: 'missing_book' }
+  }
 
   const missing = recipe.materials
     .map((material) => ({
@@ -237,10 +254,10 @@ export function craft(
   if (!recipe) return { ok: false, reason: 'unknown_recipe' }
 
   const beforeStacks = inventory.stacks.map((stack) => ({ item: stack.item, qty: stack.qty }))
-  removeItem(inventory, recipe.bookFillName, 1)
+  if (recipe.requiresBook) removeItem(inventory, recipe.bookFillName, 1)
   for (const material of recipe.materials) removeItem(inventory, material.fillName, material.qty)
 
-  const item = craftedItemFromRecipe(recipe, rng)
+  const item = craftedItemFromRecipe(recipe, recipe.requiresBook ? rng : () => 0)
   const added = addItem(inventory, item, 1)
   if (!added.ok) {
     inventory.stacks.splice(0, inventory.stacks.length, ...beforeStacks)
