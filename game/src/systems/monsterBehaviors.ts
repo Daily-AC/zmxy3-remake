@@ -80,6 +80,7 @@
 
 import { TICK_MS } from './tick'
 import { centeredBox, type Rect } from './hitbox'
+import { MONSTER_ATTACKS } from './attackSpec'
 
 export type AttackKind = 'physics' | 'magic'
 
@@ -536,10 +537,10 @@ export const Monster3Spec: MonsterBehaviorSpec = {
     spawnAtMs: 7 * TICK_MS, // was 100ms (kagami) -- AS3 doHi1() fires at cumulative tick 7 (2+2+2+1)
     attack: {
       kind: 'hitbox',
-      offsetX: 105, // AS3 doHi1(): this.x ± 105 -- matches kagami's number, kept
-      offsetY: -60, // AS3 doHi1(): this.y - 60 -- matches kagami's number, kept
-      width: 120, // kagami placeholder geometry -- SpecialEffectBullet's real hitbox size not decompiled this pass, TODO-verify
-      height: 90, // same TODO-verify as width
+      offsetX: MONSTER_ATTACKS.monster3.hit1.hitbox.forward,
+      offsetY: MONSTER_ATTACKS.monster3.hit1.hitbox.y,
+      width: MONSTER_ATTACKS.monster3.hit1.hitbox.width,
+      height: MONSTER_ATTACKS.monster3.hit1.hitbox.height,
       activeDurationMs: 380 - 100, // kagami placeholder active window -- not decompiled this pass, TODO-verify
       damage: 14, // was 40 (kagami) -- AS3 attackBackInfoDict.hit1.power
       attackKind: 'physics', // unchanged -- matches AS3 attackKind
@@ -556,10 +557,10 @@ export const Monster3Spec: MonsterBehaviorSpec = {
       spawnAtMs: 30 * TICK_MS, // was 200ms (kagami) -- AS3 doHi2() fires at the last tick (31 of 31), fired 1 tick early, see header
       attack: {
         kind: 'hitbox',
-        offsetX: 155, // AS3 doHi2(): this.x ± 155 -- matches kagami's number, kept
-        offsetY: -30, // AS3 doHi2(): this.y - 30 -- matches kagami's number, kept
-        width: 140, // kagami placeholder geometry, TODO-verify (see header)
-        height: 100, // same TODO-verify
+        offsetX: MONSTER_ATTACKS.monster3.hit2.hitbox.forward,
+        offsetY: MONSTER_ATTACKS.monster3.hit2.hitbox.y,
+        width: MONSTER_ATTACKS.monster3.hit2.hitbox.width,
+        height: MONSTER_ATTACKS.monster3.hit2.hitbox.height,
         activeDurationMs: 650 - 200, // kagami placeholder active window, TODO-verify (see header)
         damage: 7, // was 18 (kagami) -- AS3 attackBackInfoDict.hit2.power
         attackKind: 'magic', // unchanged -- matches AS3 attackKind
@@ -621,10 +622,10 @@ export const Monster7Spec: MonsterBehaviorSpec = {
     spawnAtMs: (2 + 2 + 2) * TICK_MS,
     attack: {
       kind: 'hitbox',
-      offsetX: 80,
-      offsetY: -86,
-      width: 170, // Monster7's own colipse is a plain ObjectBaseSprite (no explicit size found); reused the sheet cell size (150) plus a small margin as a TODO-verify placeholder box.
-      height: 150,
+      offsetX: MONSTER_ATTACKS.monster7.hit1.hitbox.forward,
+      offsetY: MONSTER_ATTACKS.monster7.hit1.hitbox.y,
+      width: MONSTER_ATTACKS.monster7.hit1.hitbox.width,
+      height: MONSTER_ATTACKS.monster7.hit1.hitbox.height,
       activeDurationMs: (2 + 4) * TICK_MS,
       damage: 14,
       attackKind: 'physics',
