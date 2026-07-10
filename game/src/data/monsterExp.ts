@@ -23,19 +23,17 @@
 //     the `gc.curStage==9` elite form (60/70/80).
 //   - Monster20 (袁洪): 380 in both hp branches (the line-484 exp=0 is a
 //     never-reached fsCount==99999999 self-destruct edge).
-//   - Monster30 (swarm imp): base 4, but Monster30.as zeroes it once either
+//   - Monster30 (swarm imp): base 5, but Monster30.as zeroes it once either
 //     hero is level >= 10 (an anti-farm gate on the hp-1 imp). `monsterExp`
-//     takes the current hero level so the runtime can apply that SWF cutoff.
-//
-// See tasks/hero-survivability-report.md §exp for the recovered-value table and
-// the natural-playthrough level trajectory this produces.
+//     accepts both the local level and the room's hero levels so the runtime
+//     can apply that SWF cutoff in single-player and co-op.
 
 /** Real (normal-difficulty) base kill-exp per monster species. */
 export const MONSTER_BASE_EXP: Record<string, number> = {
   // L1 巫鹰关
-  monster8: 5,
+  monster8: 3,
   monster7: 6,
-  monster30: 4,
+  monster30: 5,
   monster4: 20, // 千里眼
   monster2: 20, // 顺风耳
   monster5: 35, // 巨灵神
@@ -68,33 +66,21 @@ export const MONSTER_BASE_EXP: Record<string, number> = {
  * accidentally inflate leveling. */
 export const DEFAULT_MONSTER_EXP = 10
 
-/**
- * Campaign-wide exp multiplier. NOT a fudge on the original per-monster exp —
- * those (MONSTER_BASE_EXP) are the faithful recovered values, kept as-is. This
- * is a named, reversible compensation for a STRUCTURAL choice this project made:
- * it compresses each of the original's multi-stage tower climbs into 4-6 waves
- * (L4 is 4 kills), so the original's swarm+replay kill count — which its exp
- * curve (progression.ts, untouched) is calibrated for — never happens. Same
- * nature as heroSurvivability's growth-substitute scale: an explicit stand-in
- * for a missing layer, to be lowered when the campaign gets real wave density
- * post-hackathon.
- *
- * Set to 6 (team-lead sign-off 2026-07-07). Rationale/derivation: a natural
- * single playthrough at 1 reaches only ~lv3 / lv8 / lv11 by the L2 / L3 / L4
- * boss — short of the survivability model's winnable 到关等级 (L3 ~lv15,
- * L4 ~lv21). The steep curve makes no single multiplier hit both milestones
- * exactly, but 6 lands L3≈16 / L4≈20, inside the lv15±1 / lv21±2 target band.
- * See tasks/hero-survivability-report.md 续单二.
- */
-export const CAMPAIGN_EXP_MULTIPLIER = 6
+/** Original normal-difficulty campaign economy: award constructor exp as-is. */
+export const CAMPAIGN_EXP_MULTIPLIER = 1
 
 export interface MonsterExpContext {
   heroLevel?: number
+  /** All active heroes in a co-op room. Monster30 checks either hero in AS3. */
+  heroLevels?: readonly number[]
 }
 
 /** Kill-exp awarded for a monster species, after the campaign multiplier. */
 export function monsterExp(species: string, context: MonsterExpContext = {}): number {
-  if (species === 'monster30' && Math.floor(context.heroLevel ?? 0) >= 10) return 0
+  const anyHeroAtAntiFarmLevel = [context.heroLevel, ...(context.heroLevels ?? [])].some(
+    (level) => Math.floor(level ?? 0) >= 10,
+  )
+  if (species === 'monster30' && anyHeroAtAntiFarmLevel) return 0
   const base = MONSTER_BASE_EXP[species] ?? DEFAULT_MONSTER_EXP
   return Math.round(base * CAMPAIGN_EXP_MULTIPLIER)
 }
