@@ -1,7 +1,33 @@
 {
   "hit1": {
     "sourceSymbol": "Role1Bullet1",
-    "frameCount": 4,
+    "frames": 4,
+    "fps": 24,
+    "scale": 1,
+    "pivotPx": {
+      "x": 18.3,
+      "y": 11
+    },
+    "sourceBoundsPx": {
+      "xmin": -11.3,
+      "ymin": 0,
+      "xmax": 127.1,
+      "ymax": 33.2,
+      "w": 138.4,
+      "h": 33.2
+    },
+    "exportBoundsPx": {
+      "xmin": -36.3,
+      "ymin": -25,
+      "xmax": 152.1,
+      "ymax": 58.2,
+      "w": 188.4,
+      "h": 83.2
+    },
+    "filterPaddingPx": {
+      "x": 25,
+      "y": 25
+    },
     "sourceSize": [
       189,
       84
@@ -15,11 +41,43 @@
     "outputSize": [
       151,
       57
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": 120,
+      "y": 5
+    },
+    "followAnchor": true
   },
   "hit3": {
     "sourceSymbol": "Role1Bullet3",
-    "frameCount": 5,
+    "frames": 5,
+    "fps": 24,
+    "scale": 1,
+    "pivotPx": {
+      "x": 108.8,
+      "y": 13.95
+    },
+    "sourceBoundsPx": {
+      "xmin": -99.8,
+      "ymin": -4.95,
+      "xmax": 89.2,
+      "ymax": 180.1,
+      "w": 189,
+      "h": 185.05
+    },
+    "exportBoundsPx": {
+      "xmin": -112.8,
+      "ymin": -19.95,
+      "xmax": 102.2,
+      "ymax": 195.1,
+      "w": 215,
+      "h": 215.05
+    },
+    "filterPaddingPx": {
+      "x": 13,
+      "y": 15
+    },
     "sourceSize": [
       215,
       216
@@ -33,11 +91,43 @@
     "outputSize": [
       206,
       205
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": 30,
+      "y": -110
+    },
+    "followAnchor": true
   },
   "hit4": {
     "sourceSymbol": "Role1Bullet4",
-    "frameCount": 4,
+    "frames": 4,
+    "fps": 24,
+    "scale": 1,
+    "pivotPx": {
+      "x": 8,
+      "y": 13.85
+    },
+    "sourceBoundsPx": {
+      "xmin": 0,
+      "ymin": -4.85,
+      "xmax": 305.7,
+      "ymax": 41.1,
+      "w": 305.7,
+      "h": 45.95
+    },
+    "exportBoundsPx": {
+      "xmin": -13,
+      "ymin": -19.85,
+      "xmax": 318.7,
+      "ymax": 56.1,
+      "w": 331.7,
+      "h": 75.95
+    },
+    "filterPaddingPx": {
+      "x": 13,
+      "y": 15
+    },
     "sourceSize": [
       332,
       76
@@ -51,11 +141,43 @@
     "outputSize": [
       324,
       66
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": 160,
+      "y": -10
+    },
+    "followAnchor": true
   },
   "hit5": {
     "sourceSymbol": "Role1Bullet5",
-    "frameCount": 4,
+    "frames": 4,
+    "fps": 24,
+    "scale": 1,
+    "pivotPx": {
+      "x": 43.35,
+      "y": 13.35
+    },
+    "sourceBoundsPx": {
+      "xmin": -31.35,
+      "ymin": -1.35,
+      "xmax": 263.1,
+      "ymax": 60.2,
+      "w": 294.45,
+      "h": 61.55
+    },
+    "exportBoundsPx": {
+      "xmin": -56.35,
+      "ymin": -26.35,
+      "xmax": 288.1,
+      "ymax": 85.2,
+      "w": 344.45,
+      "h": 111.55
+    },
+    "filterPaddingPx": {
+      "x": 25,
+      "y": 25
+    },
     "sourceSize": [
       345,
       112
@@ -69,11 +191,43 @@
     "outputSize": [
       313,
       88
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": 165,
+      "y": -20
+    },
+    "followAnchor": true
   },
   "hit6": {
     "sourceSymbol": "Role1Bullet6",
-    "frameCount": 6,
+    "frames": 6,
+    "fps": 24,
+    "scale": 1,
+    "pivotPx": {
+      "x": 64.45,
+      "y": 179.65
+    },
+    "sourceBoundsPx": {
+      "xmin": -64.45,
+      "ymin": -179.65,
+      "xmax": 77.65,
+      "ymax": 13.65,
+      "w": 142.1,
+      "h": 193.3
+    },
+    "exportBoundsPx": {
+      "xmin": -64.45,
+      "ymin": -179.65,
+      "xmax": 77.65,
+      "ymax": 13.65,
+      "w": 142.1,
+      "h": 193.3
+    },
+    "filterPaddingPx": {
+      "x": 0,
+      "y": 0
+    },
     "sourceSize": [
       143,
       194
@@ -87,11 +241,43 @@
     "outputSize": [
       143,
       194
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": 30,
+      "y": 40
+    },
+    "followAnchor": true
   },
   "hit7": {
     "sourceSymbol": "Role1Bullet7",
-    "frameCount": 15,
+    "frames": 15,
+    "fps": 30,
+    "scale": 1,
+    "pivotPx": {
+      "x": 1.35,
+      "y": -9.3
+    },
+    "sourceBoundsPx": {
+      "xmin": -1.35,
+      "ymin": 9.3,
+      "xmax": 288,
+      "ymax": 98.4,
+      "w": 289.35,
+      "h": 89.1
+    },
+    "exportBoundsPx": {
+      "xmin": -1.35,
+      "ymin": 9.3,
+      "xmax": 288,
+      "ymax": 98.4,
+      "w": 289.35,
+      "h": 89.1
+    },
+    "filterPaddingPx": {
+      "x": 0,
+      "y": 0
+    },
     "sourceSize": [
       290,
       90
@@ -105,11 +291,43 @@
     "outputSize": [
       290,
       90
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": 175,
+      "y": -30
+    },
+    "followAnchor": true
   },
   "hit8": {
     "sourceSymbol": "Role1Bullet8",
-    "frameCount": 10,
+    "frames": 10,
+    "fps": 24,
+    "scale": 1,
+    "pivotPx": {
+      "x": 177.6,
+      "y": 105.8
+    },
+    "sourceBoundsPx": {
+      "xmin": -177.6,
+      "ymin": -105.8,
+      "xmax": 191.3,
+      "ymax": 52.5,
+      "w": 368.9,
+      "h": 158.3
+    },
+    "exportBoundsPx": {
+      "xmin": -177.6,
+      "ymin": -105.8,
+      "xmax": 191.3,
+      "ymax": 52.5,
+      "w": 368.9,
+      "h": 158.3
+    },
+    "filterPaddingPx": {
+      "x": 0,
+      "y": 0
+    },
     "sourceSize": [
       369,
       159
@@ -123,11 +341,43 @@
     "outputSize": [
       369,
       159
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": -20,
+      "y": 30
+    },
+    "followAnchor": true
   },
   "hit9": {
     "sourceSymbol": "Role1Bullet9",
-    "frameCount": 10,
+    "frames": 10,
+    "fps": 30,
+    "scale": 1,
+    "pivotPx": {
+      "x": 0,
+      "y": -12.65
+    },
+    "sourceBoundsPx": {
+      "xmin": 0,
+      "ymin": 12.65,
+      "xmax": 225,
+      "ymax": 110.65,
+      "w": 225,
+      "h": 98
+    },
+    "exportBoundsPx": {
+      "xmin": 0,
+      "ymin": 12.65,
+      "xmax": 225,
+      "ymax": 110.65,
+      "w": 225,
+      "h": 98
+    },
+    "filterPaddingPx": {
+      "x": 0,
+      "y": 0
+    },
     "sourceSize": [
       225,
       98
@@ -141,11 +391,43 @@
     "outputSize": [
       225,
       98
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": 120,
+      "y": -50
+    },
+    "followAnchor": true
   },
   "hit10": {
     "sourceSymbol": "Role1Bullet10_2",
-    "frameCount": 44,
+    "frames": 44,
+    "fps": 30,
+    "scale": 1,
+    "pivotPx": {
+      "x": 220.55,
+      "y": 121.55
+    },
+    "sourceBoundsPx": {
+      "xmin": -220.55,
+      "ymin": -121.55,
+      "xmax": 148,
+      "ymax": 109.9,
+      "w": 368.55,
+      "h": 231.45
+    },
+    "exportBoundsPx": {
+      "xmin": -220.55,
+      "ymin": -121.55,
+      "xmax": 148,
+      "ymax": 109.9,
+      "w": 368.55,
+      "h": 231.45
+    },
+    "filterPaddingPx": {
+      "x": 0,
+      "y": 0
+    },
     "sourceSize": [
       369,
       232
@@ -159,11 +441,43 @@
     "outputSize": [
       369,
       232
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": 150,
+      "y": -35
+    },
+    "followAnchor": false
   },
   "hit11_1": {
     "sourceSymbol": "Role1Bullet11_1",
-    "frameCount": 35,
+    "frames": 35,
+    "fps": 30,
+    "scale": 1,
+    "pivotPx": {
+      "x": 49.1,
+      "y": -24.15
+    },
+    "sourceBoundsPx": {
+      "xmin": -49.1,
+      "ymin": 24.15,
+      "xmax": 187.3,
+      "ymax": 206.4,
+      "w": 236.4,
+      "h": 182.25
+    },
+    "exportBoundsPx": {
+      "xmin": -49.1,
+      "ymin": 24.15,
+      "xmax": 187.3,
+      "ymax": 206.4,
+      "w": 236.4,
+      "h": 182.25
+    },
+    "filterPaddingPx": {
+      "x": 0,
+      "y": 0
+    },
     "sourceSize": [
       237,
       183
@@ -177,11 +491,43 @@
     "outputSize": [
       237,
       159
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": 50,
+      "y": -50
+    },
+    "followAnchor": true
   },
   "hit11_2": {
     "sourceSymbol": "Role1Bullet11_2",
-    "frameCount": 35,
+    "frames": 35,
+    "fps": 30,
+    "scale": 1,
+    "pivotPx": {
+      "x": 122.75,
+      "y": 52.65
+    },
+    "sourceBoundsPx": {
+      "xmin": -122.75,
+      "ymin": -52.65,
+      "xmax": 87.1,
+      "ymax": 170.65,
+      "w": 209.85,
+      "h": 223.3
+    },
+    "exportBoundsPx": {
+      "xmin": -122.75,
+      "ymin": -52.65,
+      "xmax": 87.1,
+      "ymax": 170.65,
+      "w": 209.85,
+      "h": 223.3
+    },
+    "filterPaddingPx": {
+      "x": 0,
+      "y": 0
+    },
     "sourceSize": [
       210,
       224
@@ -195,11 +541,43 @@
     "outputSize": [
       210,
       224
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": 0,
+      "y": -50
+    },
+    "followAnchor": true
   },
   "hit12": {
     "sourceSymbol": "Role1Bullet12",
-    "frameCount": 15,
+    "frames": 15,
+    "fps": 24,
+    "scale": 1,
+    "pivotPx": {
+      "x": 99,
+      "y": 99
+    },
+    "sourceBoundsPx": {
+      "xmin": -864,
+      "ymin": -480,
+      "xmax": 864,
+      "ymax": 480,
+      "w": 1728,
+      "h": 960
+    },
+    "exportBoundsPx": {
+      "xmin": -864,
+      "ymin": -480,
+      "xmax": 864,
+      "ymax": 480,
+      "w": 1728,
+      "h": 960
+    },
+    "filterPaddingPx": {
+      "x": 0,
+      "y": 0
+    },
     "sourceSize": [
       1728,
       960
@@ -213,11 +591,43 @@
     "outputSize": [
       198,
       198
-    ]
+    ],
+    "anchor": "target",
+    "offset": {
+      "forward": 0,
+      "y": 0
+    },
+    "followAnchor": false
   },
   "hit13": {
     "sourceSymbol": "Role1Bullet13",
-    "frameCount": 30,
+    "frames": 30,
+    "fps": 30,
+    "scale": 1,
+    "pivotPx": {
+      "x": 155,
+      "y": 134.2
+    },
+    "sourceBoundsPx": {
+      "xmin": -855,
+      "ymin": -925.2,
+      "xmax": 873,
+      "ymax": 926.5,
+      "w": 1728,
+      "h": 1851.7
+    },
+    "exportBoundsPx": {
+      "xmin": -855,
+      "ymin": -925.2,
+      "xmax": 873,
+      "ymax": 926.5,
+      "w": 1728,
+      "h": 1851.7
+    },
+    "filterPaddingPx": {
+      "x": 0,
+      "y": 0
+    },
     "sourceSize": [
       1728,
       1852
@@ -231,11 +641,43 @@
     "outputSize": [
       276,
       281
-    ]
+    ],
+    "anchor": "target",
+    "offset": {
+      "forward": 0,
+      "y": 0
+    },
+    "followAnchor": false
   },
   "hit14": {
     "sourceSymbol": "Role1Bullet14_1",
-    "frameCount": 15,
+    "frames": 15,
+    "fps": 24,
+    "scale": 1,
+    "pivotPx": {
+      "x": 78.15,
+      "y": 78.15
+    },
+    "sourceBoundsPx": {
+      "xmin": -674.15,
+      "ymin": -374.15,
+      "xmax": 675.85,
+      "ymax": 375.85,
+      "w": 1350,
+      "h": 750
+    },
+    "exportBoundsPx": {
+      "xmin": -674.15,
+      "ymin": -374.15,
+      "xmax": 675.85,
+      "ymax": 375.85,
+      "w": 1350,
+      "h": 750
+    },
+    "filterPaddingPx": {
+      "x": 0,
+      "y": 0
+    },
     "sourceSize": [
       1350,
       750
@@ -249,6 +691,12 @@
     "outputSize": [
       159,
       159
-    ]
+    ],
+    "anchor": "hero",
+    "offset": {
+      "forward": -15,
+      "y": -85
+    },
+    "followAnchor": false
   }
 }
