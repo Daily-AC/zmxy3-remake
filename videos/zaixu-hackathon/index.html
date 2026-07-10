@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "QiuHongKai";
+        src: url("media/QiuHongKai-Regular.ttf") format("truetype");
+      }
+
+      @font-face {
+        font-family: "MaShanZheng";
+        src: url("media/MaShanZheng-Regular.ttf") format("truetype");
+      }
+
+      @font-face {
+        font-family: "PingFang SC";
+        src: local("PingFang SC");
+      }
+
+      @font-face {
+        font-family: "Microsoft YaHei";
+        src: local("Microsoft YaHei");
+      }
+
+      @font-face {
+        font-family: "STKaiti";
+        src: local("STKaiti");
+      }
+
+      :root {
+        --shell: #0b0a0d;
+        --ink: #3b2217;
+        --deep: #602e1c;
+        --umber: #83442d;
+        --red: #c55c36;
+        --orange: #e48f4f;
+        --gold: #f1be82;
+        --cloud: #f9d6a4;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        letter-spacing: 0;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--shell);
+        color: var(--cloud);
+        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--shell);
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        opacity: 0;
+        background: var(--shell);
+      }
+
+      .visual,
+      .scene video,
+      .scene img.full {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .vignette {
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(90deg, rgba(11, 10, 13, 0.84) 0%, rgba(11, 10, 13, 0.16) 46%, rgba(11, 10, 13, 0.42) 100%),
+          linear-gradient(0deg, rgba(11, 10, 13, 0.7) 0%, transparent 32%, rgba(11, 10, 13, 0.24) 100%);
+        z-index: 2;
+      }
+
+      .warm-grade {
+        position: absolute;
+        inset: 0;
+        background: rgba(197, 92, 54, 0.08);
+        mix-blend-mode: color;
+        z-index: 2;
+      }
+
+      .chapter {
+        position: absolute;
+        top: 72px;
+        left: 82px;
+        z-index: 8;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        color: var(--cloud);
+        font: 700 25px/1 Menlo, monospace;
+        text-shadow: 0 3px 12px rgba(11, 10, 13, 0.8);
+      }
+
+      .chapter::before {
+        content: "";
+        width: 52px;
+        height: 5px;
+        background: var(--red);
+        box-shadow: 0 0 20px rgba(228, 143, 79, 0.7);
+      }
+
+      .display {
+        font-family: "QiuHongKai", "STKaiti", serif;
+        font-weight: 400;
+        text-shadow: 0 5px 28px rgba(11, 10, 13, 0.9);
+      }
+
+      .brush {
+        font-family: "MaShanZheng", "STKaiti", serif;
+      }
+
+      .proof-rail {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 12;
+        height: 100px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--cloud);
+        background: rgba(11, 10, 13, 0.88);
+        border-top: 2px solid rgba(241, 190, 130, 0.72);
+        font-size: 30px;
+        font-weight: 700;
+        text-shadow: 0 2px 10px #000;
+      }
+
+      .proof-rail strong {
+        margin: 0 14px;
+        color: #fff2cb;
+        font-size: 38px;
+      }
+
+      .stamp {
+        display: inline-flex;
+        min-width: 118px;
+        height: 64px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 24px;
+        border: 3px solid var(--cloud);
+        border-radius: 4px;
+        color: #fff2cb;
+        background: rgba(131, 68, 45, 0.9);
+        box-shadow: 0 8px 24px rgba(11, 10, 13, 0.42);
+        font: 400 39px/1 "MaShanZheng", serif;
+      }
+
+      .game-frame {
+        position: absolute;
+        inset: 24px;
+        overflow: hidden;
+        border: 2px solid rgba(241, 190, 130, 0.72);
+        box-shadow: inset 0 0 0 1px rgba(59, 34, 23, 0.9), 0 0 38px rgba(228, 143, 79, 0.2);
+      }
+
+      .game-frame video,
+      .game-frame img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .feature-title {
+        position: absolute;
+        z-index: 10;
+        color: #fff4d6;
+        font-family: "QiuHongKai", serif;
+        font-weight: 400;
+        text-shadow: 0 6px 24px #000;
+      }
+
+      .feature-subtitle {
+        position: absolute;
+        z-index: 10;
+        color: var(--gold);
+        font-size: 31px;
+        font-weight: 700;
+        text-shadow: 0 3px 14px #000;
+      }
+
+      #hook-copy {
+        position: absolute;
+        z-index: 10;
+        left: 112px;
+        top: 176px;
+        width: 650px;
+      }
+
+      #hook-kicker {
+        color: var(--orange);
+        font: 700 25px/1 Menlo, monospace;
+        margin-bottom: 24px;
+      }
+
+      #hook-title {
+        color: #fff1c8;
+        font-size: 174px;
+        line-height: 0.95;
+      }
+
+      #hook-line {
+        margin-top: 36px;
+        color: var(--cloud);
+        font-size: 42px;
+        font-weight: 700;
+      }
+
+      .seal {
+        position: absolute;
+        z-index: 11;
+        width: 92px;
+        height: 92px;
+        display: grid;
+        place-items: center;
+        border: 4px solid #f5c090;
+        border-radius: 50%;
+        color: #fff1c8;
+        background: rgba(174, 41, 25, 0.9);
+        font: 400 34px/1 "MaShanZheng", serif;
+        box-shadow: 0 0 36px rgba(228, 143, 79, 0.48);
+      }
+
+      #hook-seal {
+        left: 695px;
+        top: 472px;
+      }
+
+      .revival-copy {
+        position: absolute;
+        z-index: 9;
+        left: 82px;
+        bottom: 164px;
+        width: 900px;
+      }
+
+      .revival-copy h2 {
+        color: #fff2ca;
+        font-size: 104px;
+        line-height: 1;
+      }
+
+      .revival-copy p {
+        margin-top: 24px;
+        color: var(--gold);
+        font-size: 34px;
+        font-weight: 700;
+      }
+
+      #scene-login .vignette {
+        background: linear-gradient(90deg, rgba(11, 10, 13, 0.82) 0%, rgba(11, 10, 13, 0.16) 60%, rgba(11, 10, 13, 0.2) 100%);
+      }
+
+      #scene-character .revival-copy {
+        left: 1070px;
+        bottom: 138px;
+        width: 720px;
+        text-align: right;
+      }
+
+      #scene-character .vignette {
+        background: linear-gradient(90deg, rgba(11, 10, 13, 0.1) 0%, rgba(11, 10, 13, 0.16) 54%, rgba(11, 10, 13, 0.82) 100%);
+      }
+
+      #map-title {
+        right: 86px;
+        top: 88px;
+        font-size: 92px;
+      }
+
+      #combat-line {
+        left: 635px;
+        top: 64px;
+        font-size: 74px;
+        padding: 12px 24px 16px;
+        border-left: 5px solid var(--orange);
+        background: rgba(11, 10, 13, 0.84);
+      }
+
+      #combat-line span {
+        color: var(--orange);
+      }
+
+      #l1-stamp,
+      #l2-stamp {
+        position: absolute;
+        z-index: 12;
+        right: 82px;
+        top: 70px;
+      }
+
+      #combat-stamps {
+        position: absolute;
+        z-index: 12;
+        right: 80px;
+        bottom: 122px;
+        display: flex;
+        gap: 18px;
+      }
+
+      #gear-title {
+        left: 92px;
+        top: 78px;
+        font-size: 88px;
+      }
+
+      #gear-icons {
+        position: absolute;
+        z-index: 11;
+        right: 92px;
+        bottom: 126px;
+        display: flex;
+        gap: 20px;
+      }
+
+      #gear-icons img,
+      #forge-icons img {
+        width: 96px;
+        height: 96px;
+        object-fit: contain;
+        padding: 10px;
+        border: 2px solid rgba(241, 190, 130, 0.8);
+        border-radius: 4px;
+        background: rgba(59, 34, 23, 0.86);
+        box-shadow: 0 8px 26px rgba(11, 10, 13, 0.5);
+      }
+
+      #forge-title {
+        left: 100px;
+        top: 92px;
+        font-size: 98px;
+      }
+
+      #forge-icons {
+        position: absolute;
+        z-index: 11;
+        right: 112px;
+        top: 116px;
+        display: flex;
+        gap: 22px;
+      }
+
+      #coop-title {
+        left: 96px;
+        top: 82px;
+        font-size: 88px;
+      }
+
+      #coop-title span {
+        color: var(--orange);
+      }
+
+      #ai-scene-bg {
+        filter: brightness(0.34) saturate(0.82);
+      }
+
+      #ai-furnace {
+        position: absolute;
+        z-index: 4;
+        left: 84px;
+        top: 154px;
+        width: 1050px;
+        height: 690px;
+        object-fit: cover;
+        object-position: top center;
+        border: 2px solid rgba(241, 190, 130, 0.76);
+        box-shadow: 0 18px 70px rgba(0, 0, 0, 0.64);
+      }
+
+      #ai-title {
+        left: 1160px;
+        top: 154px;
+        width: 650px;
+        font-size: 96px;
+        line-height: 1.02;
+      }
+
+      #ai-title span {
+        color: var(--orange);
+      }
+
+      #ai-steps {
+        position: absolute;
+        z-index: 10;
+        left: 1170px;
+        top: 430px;
+        display: grid;
+        gap: 26px;
+      }
+
+      .ai-step {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        color: #fff2cb;
+        font-size: 36px;
+        font-weight: 700;
+      }
+
+      .ai-step b {
+        display: grid;
+        width: 48px;
+        height: 48px;
+        place-items: center;
+        border: 2px solid var(--orange);
+        border-radius: 50%;
+        color: var(--orange);
+        font: 700 24px/1 Menlo, monospace;
+      }
+
+      #chapters {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        background: var(--shell);
+      }
+
+      .chapter-art {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .chapter-art img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .chapter-art:first-child {
+        border-right: 3px solid var(--orange);
+      }
+
+      .chapter-name {
+        position: absolute;
+        left: 56px;
+        bottom: 80px;
+        z-index: 8;
+        color: #fff2cb;
+        font: 400 92px/1 "QiuHongKai", serif;
+        text-shadow: 0 6px 30px #000;
+      }
+
+      #counter-row {
+        position: absolute;
+        z-index: 12;
+        left: 240px;
+        right: 240px;
+        bottom: 72px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+      }
+
+      .counter {
+        padding: 22px 28px;
+        border-top: 3px solid var(--orange);
+        color: #fff2cb;
+        background: rgba(11, 10, 13, 0.82);
+        text-align: center;
+        font-size: 31px;
+        font-weight: 700;
+      }
+
+      .counter strong {
+        display: block;
+        color: var(--orange);
+        font: 700 53px/1 Menlo, monospace;
+        margin-bottom: 10px;
+      }
+
+      #final .vignette {
+        background:
+          linear-gradient(90deg, rgba(11, 10, 13, 0.88) 0%, rgba(11, 10, 13, 0.28) 52%, rgba(11, 10, 13, 0.54) 100%),
+          linear-gradient(0deg, rgba(11, 10, 13, 0.84) 0%, transparent 50%, rgba(11, 10, 13, 0.2) 100%);
+      }
+
+      #final-copy {
+        position: absolute;
+        z-index: 10;
+        left: 110px;
+        top: 150px;
+        width: 780px;
+      }
+
+      #final-title {
+        color: #fff2cb;
+        font-size: 176px;
+        line-height: 0.94;
+      }
+
+      #final-tagline {
+        margin-top: 30px;
+        color: var(--orange);
+        font-size: 44px;
+        font-weight: 800;
+      }
+
+      #final-links {
+        position: absolute;
+        z-index: 10;
+        left: 118px;
+        bottom: 98px;
+        display: grid;
+        gap: 13px;
+        color: #fff3d2;
+        font: 700 27px/1.25 Menlo, monospace;
+        text-shadow: 0 3px 14px #000;
+      }
+
+      #final-links span {
+        color: var(--gold);
+        font-family: "PingFang SC", sans-serif;
+        margin-right: 16px;
+      }
+
+      #final-seal {
+        left: 950px;
+        top: 430px;
+        width: 108px;
+        height: 108px;
+        font-size: 40px;
+      }
+
+      .ember {
+        position: absolute;
+        z-index: 13;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ffb05a;
+        box-shadow: 0 0 14px #ff793e;
+        opacity: 0;
+      }
+
+      #transition-flash,
+      #transition-wipe {
+        position: absolute;
+        inset: 0;
+        z-index: 90;
+        pointer-events: none;
+        opacity: 0;
+      }
+
+      #transition-flash {
+        background: #ffd9a0;
+        mix-blend-mode: screen;
+      }
+
+      #transition-wipe {
+        background: var(--red);
+        transform-origin: left center;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="60"
+      data-width="1920"
+      data-height="1080"
+    >
+      <section id="hook" class="scene">
+        <img id="hook-visual" class="visual" src="media/stills/menu-keyart.jpg" data-layout-allow-overflow />
+        <div class="vignette"></div>
+        <div class="warm-grade"></div>
+        <div id="hook-copy">
+          <div id="hook-kicker">HACKATHON BUILD / PLAYABLE NOW</div>
+          <h1 id="hook-title" class="display">再续<br />西游</h1>
+          <p id="hook-line">童年的页游，重新活过来。</p>
+        </div>
+        <div id="hook-seal" class="seal">入界</div>
+        <i class="ember" style="left: 180px; top: 900px"></i>
+        <i class="ember" style="left: 350px; top: 790px"></i>
+        <i class="ember" style="left: 570px; top: 950px"></i>
+        <i class="ember" style="left: 790px; top: 730px"></i>
+        <i class="ember" style="left: 1080px; top: 910px"></i>
+        <i class="ember" style="left: 1310px; top: 820px"></i>
+        <i class="ember" style="left: 1540px; top: 930px"></i>
+      </section>
+
+      <section id="scene-login" class="scene">
+        <img id="login-visual" class="visual" src="media/stills/login.png" />
+        <div class="vignette"></div>
+        <div class="chapter">01 / 复活</div>
+        <div class="revival-copy">
+          <h2 id="login-title" class="display">不是截图</h2>
+          <p id="login-subtitle">一个真的能登录、能存档的浏览器游戏</p>
+        </div>
+      </section>
+
+      <section id="scene-character" class="scene">
+        <img id="character-visual" class="visual" src="media/stills/character-select.png" data-layout-allow-overflow />
+        <div class="vignette"></div>
+        <div class="chapter">ROLE / 孙悟空</div>
+        <div class="revival-copy">
+          <h2 id="character-title" class="display">熟悉的人物</h2>
+          <p id="character-subtitle">从旧资源和原始逻辑里重新拼回浏览器</p>
+        </div>
+      </section>
+
+      <section id="scene-map" class="scene">
+        <div class="game-frame">
+          <video id="map-video" class="clip" src="media/gameplay/world-map.mp4" muted playsinline preload="auto" data-start="11.60" data-duration="3.77" data-media-start="0.35" data-track-index="0"></video>
+        </div>
+        <div class="chapter">WORLD / 关卡地图</div>
+        <h2 id="map-title" class="feature-title">关卡不再是回忆</h2>
+        <div class="proof-rail"><strong>旧资源</strong> × <strong>原始逻辑</strong> × <strong>现代浏览器</strong></div>
+      </section>
+
+      <section id="scene-l1" class="scene">
+        <div class="game-frame">
+          <video id="l1-video" class="clip" src="media/gameplay/nine-heavens-combat.mp4" muted playsinline preload="auto" data-start="15.37" data-duration="2.83" data-media-start="0.65" data-track-index="0"></video>
+        </div>
+        <h2 id="combat-line" class="feature-title">每一棍 <span>都有节奏</span></h2>
+        <div id="l1-stamp" class="stamp">九重天</div>
+      </section>
+
+      <section id="scene-l2" class="scene">
+        <div class="game-frame">
+          <video id="l2-video" class="clip" src="media/gameplay/tiangongdao-combat.mp4" muted playsinline preload="auto" data-start="18.20" data-duration="5.45" data-media-start="0.35" data-track-index="0"></video>
+        </div>
+        <div id="l2-stamp" class="stamp">天宫道</div>
+        <div id="combat-stamps">
+          <span id="stamp-chase" class="stamp">追击</span>
+          <span id="stamp-counter" class="stamp">反击</span>
+          <span id="stamp-damage" class="stamp">伤害</span>
+        </div>
+      </section>
+
+      <section id="scene-gear" class="scene">
+        <div class="game-frame">
+          <video id="gear-video" class="clip" src="media/gameplay/backpack-equipment.mp4" muted playsinline preload="auto" data-start="23.65" data-duration="3.20" data-media-start="0.35" data-track-index="0"></video>
+        </div>
+        <h2 id="gear-title" class="feature-title">装备，改写属性</h2>
+        <div id="gear-icons">
+          <img src="media/stills/ptdxzg.png" alt="weapon" />
+          <img src="media/stills/whg.png" alt="armor" />
+        </div>
+      </section>
+
+      <section id="scene-forge" class="scene">
+        <div class="game-frame">
+          <video id="forge-video" class="clip" src="media/gameplay/furnace.mp4" muted playsinline preload="auto" data-start="26.85" data-duration="3.72" data-media-start="0.35" data-track-index="0"></video>
+        </div>
+        <h2 id="forge-title" class="feature-title">太上老君，开炉</h2>
+        <div id="forge-icons">
+          <img id="forge-mat" src="media/stills/wptm.png" alt="material" />
+          <img id="forge-weapon" src="media/stills/ptdxzg-forge.png" alt="weapon" />
+        </div>
+        <div class="proof-rail">材料真实扣除 · 产物回到背包</div>
+      </section>
+
+      <section id="scene-coop" class="scene">
+        <div class="game-frame">
+          <video id="coop-video" class="clip" src="media/gameplay/coop-room.mp4" muted playsinline preload="auto" data-start="30.57" data-duration="6.10" data-track-index="0"></video>
+        </div>
+        <h2 id="coop-title" class="feature-title">分享链接，<span>并肩开打</span></h2>
+        <div class="proof-rail">创建房间 · 一键复制 · 点开即加入</div>
+      </section>
+
+      <section id="scene-ai" class="scene">
+        <img id="ai-scene-bg" class="visual" src="media/stills/menu-keyart-ai.jpg" />
+        <img id="ai-furnace" src="media/gameplay/frames/furnace.jpg" alt="furnace" />
+        <h2 id="ai-title" class="feature-title"><span>AI</span> 太上老君<br />理解炼制请求</h2>
+        <div id="ai-steps">
+          <div id="ai-step-1" class="ai-step"><b>01</b>理解材料与数量</div>
+          <div id="ai-step-2" class="ai-step"><b>02</b>判断配方与概率</div>
+          <div id="ai-step-3" class="ai-step"><b>03</b>返回真实炼制结果</div>
+        </div>
+      </section>
+
+      <section id="chapters" class="scene">
+        <div class="chapter-art">
+          <img id="chapter-l1" src="media/stills/loading-nine-heavens.webp" />
+          <div class="chapter-name">九重天</div>
+        </div>
+        <div class="chapter-art">
+          <img id="chapter-l2" src="media/stills/loading-heavenly-palace.webp" />
+          <div class="chapter-name">天宫道</div>
+        </div>
+        <div id="counter-row">
+          <div id="counter-1" class="counter"><strong>2</strong>原生关卡</div>
+          <div id="counter-2" class="counter"><strong>1</strong>完整成长循环</div>
+          <div id="counter-3" class="counter"><strong>LINK</strong>分享即联机</div>
+        </div>
+      </section>
+
+      <section id="final" class="scene">
+        <img id="final-visual" class="visual" src="media/stills/menu-keyart-final.jpg" data-layout-allow-overflow />
+        <div class="vignette"></div>
+        <div class="warm-grade"></div>
+        <div id="final-copy">
+          <h2 id="final-title" class="display">再续<br />西游</h2>
+          <p id="final-tagline">不是怀旧截图，是现在就能玩的西游。</p>
+        </div>
+        <div id="final-seal" class="seal">开打</div>
+        <div id="final-links">
+          <div><span>PLAY</span>https://zaixu.qmledmq.cn:8443/</div>
+          <div><span>CODE</span>github.com/Daily-AC/zmxy3-remake</div>
+        </div>
+        <i class="ember" style="left: 170px; top: 920px"></i>
+        <i class="ember" style="left: 410px; top: 830px"></i>
+        <i class="ember" style="left: 700px; top: 930px"></i>
+        <i class="ember" style="left: 970px; top: 820px"></i>
+        <i class="ember" style="left: 1260px; top: 950px"></i>
+        <i class="ember" style="left: 1570px; top: 840px"></i>
+      </section>
+
+      <div id="transition-flash"></div>
+      <div id="transition-wipe"></div>
+
+      <audio id="narration" class="clip" src="narration.wav" data-start="0" data-duration="54.590542" data-track-index="20" data-volume="1"></audio>
+      <audio id="music" class="clip" src="media/audio/bg1.mp3" data-start="0" data-duration="60" data-track-index="21" data-volume="0.14"></audio>
+      <audio id="hit-1" class="clip" src="media/audio/Role1_hit1AndHit2.mp3" data-start="16.20" data-duration="0.572" data-track-index="22" data-volume="0.38"></audio>
+      <audio id="hit-2" class="clip" src="media/audio/Role1_hit1AndHit2.mp3" data-start="19.10" data-duration="0.572" data-track-index="22" data-volume="0.36"></audio>
+      <audio id="hit-heavy" class="clip" src="media/audio/Role1_hit5.mp3" data-start="21.15" data-duration="0.78" data-track-index="22" data-volume="0.44"></audio>
+      <audio id="pickup" class="clip" src="media/audio/pickup.mp3" data-start="26.92" data-duration="0.624" data-track-index="22" data-volume="0.42"></audio>
+      <audio id="victory" class="clip" src="media/audio/Game_Victory.mp3" data-start="54.80" data-duration="2.86" data-track-index="22" data-volume="0.55"></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      const scenes = [
+        ["#hook", 0, 5.96],
+        ["#scene-login", 5.96, 2.84],
+        ["#scene-character", 8.8, 2.8],
+        ["#scene-map", 11.6, 3.77],
+        ["#scene-l1", 15.37, 2.83],
+        ["#scene-l2", 18.2, 5.45],
+        ["#scene-gear", 23.65, 3.2],
+        ["#scene-forge", 26.85, 3.72],
+        ["#scene-coop", 30.57, 6.1],
+        ["#scene-ai", 36.67, 7.83],
+        ["#chapters", 44.5, 5],
+        ["#final", 49.5, 10.5],
+      ];
+
+      scenes.forEach(([selector, start, duration], index) => {
+        tl.fromTo(
+          selector,
+          { opacity: 0 },
+          { opacity: 1, duration: index === 0 ? 0.55 : 0.28, ease: "power2.out", immediateRender: false },
+          start,
+        );
+        tl.to(selector, { opacity: 0, duration: 0.3, ease: "power2.in" }, start + duration - 0.3);
+        tl.set(selector, { opacity: 0 }, start + duration);
+      });
+
+      tl.fromTo("#hook-visual", { scale: 1.02 }, { scale: 1.09, duration: 5.96, ease: "none", immediateRender: false }, 0);
+      tl.fromTo("#hook-copy", { opacity: 0, x: -54 }, { opacity: 1, x: 0, duration: 0.85, ease: "power3.out", immediateRender: false }, 0.35);
+      tl.fromTo("#hook-seal", { opacity: 0, scale: 1.7, rotation: -16 }, { opacity: 1, scale: 1, rotation: -5, duration: 0.48, ease: "back.out(1.8)", immediateRender: false }, 1.25);
+
+      tl.fromTo("#login-visual", { scale: 1.08, x: 35 }, { scale: 1.02, x: 0, duration: 2.84, ease: "power1.out", immediateRender: false }, 5.96);
+      tl.fromTo("#login-title", { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.48, ease: "power3.out", immediateRender: false }, 6.18);
+      tl.fromTo("#login-subtitle", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.42, ease: "power2.out", immediateRender: false }, 6.52);
+
+      tl.fromTo("#character-visual", { scale: 1.03, x: -30 }, { scale: 1.09, x: 0, duration: 2.8, ease: "none", immediateRender: false }, 8.8);
+      tl.fromTo("#character-title", { opacity: 0, x: 46 }, { opacity: 1, x: 0, duration: 0.46, ease: "power3.out", immediateRender: false }, 9.0);
+      tl.fromTo("#character-subtitle", { opacity: 0, x: 32 }, { opacity: 1, x: 0, duration: 0.42, ease: "power2.out", immediateRender: false }, 9.34);
+
+      tl.fromTo("#map-title", { opacity: 0, y: -32 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", immediateRender: false }, 11.88);
+      tl.fromTo("#combat-line", { opacity: 0, y: -28 }, { opacity: 1, y: 0, duration: 0.38, ease: "power3.out", immediateRender: false }, 15.55);
+      tl.fromTo("#l1-stamp", { opacity: 0, scale: 1.45, rotation: 8 }, { opacity: 1, scale: 1, rotation: -3, duration: 0.35, ease: "back.out(1.7)", immediateRender: false }, 15.75);
+
+      tl.fromTo("#l2-stamp", { opacity: 0, scale: 1.45 }, { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(1.7)", immediateRender: false }, 18.42);
+      tl.fromTo("#stamp-chase", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.34, ease: "power3.out", immediateRender: false }, 19.0);
+      tl.fromTo("#stamp-counter", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.34, ease: "power3.out", immediateRender: false }, 19.72);
+      tl.fromTo("#stamp-damage", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.34, ease: "power3.out", immediateRender: false }, 20.44);
+
+      tl.fromTo("#gear-title", { opacity: 0, x: -36 }, { opacity: 1, x: 0, duration: 0.42, ease: "power3.out", immediateRender: false }, 23.88);
+      tl.fromTo("#gear-icons img", { opacity: 0, scale: 0.65, y: 24 }, { opacity: 1, scale: 1, y: 0, duration: 0.42, stagger: 0.16, ease: "back.out(1.8)", immediateRender: false }, 24.4);
+
+      tl.fromTo("#forge-title", { opacity: 0, x: -38 }, { opacity: 1, x: 0, duration: 0.42, ease: "power3.out", immediateRender: false }, 27.04);
+      tl.fromTo("#forge-mat", { opacity: 0, x: 130, scale: 0.7 }, { opacity: 1, x: 0, scale: 1, duration: 0.48, ease: "back.out(1.6)", immediateRender: false }, 27.35);
+      tl.fromTo("#forge-weapon", { opacity: 0, x: 130, scale: 0.7 }, { opacity: 1, x: 0, scale: 1, duration: 0.48, ease: "back.out(1.6)", immediateRender: false }, 28.2);
+
+      tl.fromTo("#coop-title", { opacity: 0, y: -34 }, { opacity: 1, y: 0, duration: 0.46, ease: "power3.out", immediateRender: false }, 30.82);
+      tl.fromTo("#ai-furnace", { opacity: 0, x: -65, scale: 0.97 }, { opacity: 1, x: 0, scale: 1, duration: 0.58, ease: "power3.out", immediateRender: false }, 36.9);
+      tl.fromTo("#ai-title", { opacity: 0, x: 48 }, { opacity: 1, x: 0, duration: 0.52, ease: "power3.out", immediateRender: false }, 37.08);
+      tl.fromTo("#ai-step-1", { opacity: 0, x: 42 }, { opacity: 1, x: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, 38.12);
+      tl.fromTo("#ai-step-2", { opacity: 0, x: 42 }, { opacity: 1, x: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, 39.45);
+      tl.fromTo("#ai-step-3", { opacity: 0, x: 42 }, { opacity: 1, x: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, 40.78);
+
+      tl.fromTo("#chapter-l1", { scale: 1.08 }, { scale: 1.02, duration: 5, ease: "none", immediateRender: false }, 44.5);
+      tl.fromTo("#chapter-l2", { scale: 1.02 }, { scale: 1.08, duration: 5, ease: "none", immediateRender: false }, 44.5);
+      tl.fromTo("#counter-1", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out", immediateRender: false }, 45.0);
+      tl.fromTo("#counter-2", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out", immediateRender: false }, 45.72);
+      tl.fromTo("#counter-3", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out", immediateRender: false }, 46.44);
+
+      tl.fromTo("#final-visual", { scale: 1.08 }, { scale: 1.02, duration: 10.5, ease: "none", immediateRender: false }, 49.5);
+      tl.fromTo("#final-copy", { opacity: 0, x: -58 }, { opacity: 1, x: 0, duration: 0.7, ease: "power3.out", immediateRender: false }, 49.86);
+      tl.fromTo("#final-seal", { opacity: 0, scale: 1.65, rotation: 18 }, { opacity: 1, scale: 1, rotation: -5, duration: 0.48, ease: "back.out(1.8)", immediateRender: false }, 50.7);
+      tl.fromTo("#final-links", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.48, ease: "power3.out", immediateRender: false }, 54.2);
+
+      const emberGroups = [
+        ["#hook .ember", 0.2, 5.4],
+        ["#final .ember", 50.0, 9.0],
+      ];
+      emberGroups.forEach(([selector, start, duration]) => {
+        tl.fromTo(
+          selector,
+          { opacity: 0, y: 80, x: 0 },
+          { opacity: 0.9, y: -180, x: 34, duration, stagger: 0.13, ease: "none", immediateRender: false },
+          start,
+        );
+        tl.to(selector, { opacity: 0, duration: 0.4, stagger: 0.05 }, start + duration - 0.45);
+      });
+
+      function flashAt(time) {
+        tl.fromTo("#transition-flash", { opacity: 0 }, { opacity: 0.82, duration: 0.1, ease: "power2.in", immediateRender: false }, time - 0.1);
+        tl.to("#transition-flash", { opacity: 0, duration: 0.18, ease: "power2.out" }, time);
+        tl.set("#transition-flash", { opacity: 0 }, time + 0.18);
+      }
+
+      function wipeAt(time) {
+        tl.set("#transition-wipe", { opacity: 1, scaleX: 0, transformOrigin: "left center" }, time - 0.2);
+        tl.to("#transition-wipe", { scaleX: 1, duration: 0.2, ease: "power3.in" }, time - 0.2);
+        tl.set("#transition-wipe", { transformOrigin: "right center" }, time);
+        tl.to("#transition-wipe", { scaleX: 0, duration: 0.22, ease: "power3.out" }, time);
+        tl.set("#transition-wipe", { opacity: 0 }, time + 0.22);
+      }
+
+      flashAt(8.8);
+      flashAt(11.6);
+      flashAt(18.2);
+      flashAt(26.85);
+      flashAt(36.67);
+      wipeAt(5.96);
+      wipeAt(15.37);
+      wipeAt(23.65);
+      wipeAt(30.57);
+      wipeAt(44.5);
+      wipeAt(49.5);
+
+      window.__timelines.main = tl;
+    </script>
+  </body>
+</html>

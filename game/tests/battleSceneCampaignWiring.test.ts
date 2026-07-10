@@ -42,7 +42,9 @@ describe('BattleScene stage-one campaign wiring', () => {
   it('queues official MonsterAppearPoint quantities and drains them under the live cap', () => {
     expect(source).toMatch(/createWaveSpawnQueue\(getActiveWaveRoster\(this\.levelState\)\)/)
     expect(source).toMatch(/const x = spec\.x \?\? /)
-    expect(source).toMatch(/this\.spawnEntity\(spec\.species, spec\.stats, x, false, spec\.y\)/)
+    expect(source).toMatch(/const horizontalGroundY = this\.level1Chain && currentSubStage\(this\.level1Chain\)\.mode === 'horizontal'/)
+    expect(source).toMatch(/\? this\.heroConfig\.jump\.groundY\s*: spec\.y/)
+    expect(source).toMatch(/this\.spawnEntity\(spec\.species, spec\.stats, x, false, horizontalGroundY\)/)
     expect(source).toMatch(/advanceWaveSpawnQueue\(/)
     expect(source).toMatch(/waveMonsterCapacity\(Boolean\(this\.coopSession\)\)/)
     expect(source).toMatch(/this\.aliveGruntCount\(\) \+ this\.pendingWaveSpawns\.length/)
