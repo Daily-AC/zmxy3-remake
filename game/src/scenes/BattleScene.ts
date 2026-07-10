@@ -976,7 +976,7 @@ export class BattleScene extends Phaser.Scene {
       })
     }
     // Backgrounds for every level (L1 bg11/12/13 + L2-L4 bgN1/N2/N3, floors).
-    for (const key of ['bg11', 'bg12', 'bg13', 'floorBg1', 'online_sl11_full', 'online_floor12', 'online_floor12_full', 'online_floor13']) {
+    for (const key of ['bg11', 'bg12', 'bg13', 'floorBg1', 'online_floor12', 'online_floor12_full', 'online_floor13']) {
       this.load.image(key, `assets/extracted/level1/${key}.png`)
     }
     // L2/L3/L4 have NO floorBgN load: floorBg2.png/floorBg3.png/floorBg4.png
