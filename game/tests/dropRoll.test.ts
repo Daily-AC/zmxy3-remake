@@ -70,6 +70,7 @@ describe('drop rolling: original BaseMonster.as:1009 single-roll fallEquip()', (
         sourceUser: '悟空',
         sourceQuality: '普 通',
         sourceSaleValue: 20,
+        sourceShowId: 1,
         sourceArray: 'normalEquipment',
         effects: [{ type: 'stat', stat: 'atk', value: 2 }],
       },

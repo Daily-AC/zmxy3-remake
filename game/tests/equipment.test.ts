@@ -9,6 +9,7 @@ import {
   slotForItem,
   equipEligibility,
   sanitizeEquipmentForHero,
+  weaponShowIdForItem,
 } from '../src/systems/equipment'
 import { createInventory, addItem, countItem } from '../src/systems/inventory'
 import { equipmentItemByFillName } from '../src/systems/furnaceRecipe'
@@ -42,6 +43,12 @@ describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
     expect(slotForItem(equipmentItemByFillName('ptdxzf')!)).toBe('armor')
     expect(slotForItem(equipmentItemByFillName('xhz')!)).toBe(null)
     expect(slotForItem({ ...staff, sourceType: 'zbfb' })).toBe(null)
+  })
+
+  it('maps Wukong weapons to the original ROLE1_EQUIP showid', () => {
+    expect(weaponShowIdForItem(equipmentItemByFillName('ptdxzg')!)).toBe(1)
+    expect(weaponShowIdForItem(equipmentItemByFillName('whg')!)).toBe(2)
+    expect(weaponShowIdForItem(equipmentItemByFillName('ptdxzf')!)).toBeNull()
   })
 
   it('rejects materials and source-less custom equipment instead of guessing weapon', () => {

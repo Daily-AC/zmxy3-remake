@@ -107,6 +107,7 @@ export interface MonsterSpawnSpec {
   stats: MonsterStats
   /** Recovered MonsterAppearPoint registration coordinate. */
   x?: number
+  y?: number
   /** Recovered per-point timing. Runtime queues each concrete spawn independently. */
   delayMs?: number
   intervalMs?: number
@@ -126,6 +127,10 @@ export interface WaveSpec {
   roster: MonsterSpawnSpec[]
   /** Recovered StopPoint x coordinate. The wave remains dormant until reached. */
   stopX?: number
+  /** Recovered StopPoint registration coordinate and source metadata. */
+  stopY?: number
+  betweenRandL?: number
+  isBoss?: boolean
 }
 
 /** Expand recovered MonsterAppearPoint quantities into concrete spawn requests. */
@@ -206,6 +211,15 @@ export interface ContinuousSpawnerHero {
 
 export type SubStageMode = 'climb' | 'horizontal'
 
+export interface FbEntranceSpec {
+  registration: { x: number; y: number }
+  collision: { x: number; y: number; width: number; height: number }
+  requiredHits: number
+  hitCooldownFrames: number
+  stayFrames: number
+  animationFrames: number
+}
+
 export interface SubStageDef {
   id: string
   name: string
@@ -223,6 +237,7 @@ export interface SubStageDef {
   fallbackWalls: Wall[]
   continuousSpawner?: ContinuousSpawnerSpec
   waveLevel?: LevelDef
+  fbEntrance?: FbEntranceSpec
 }
 
 export interface SubStageChainDef {
@@ -438,6 +453,19 @@ export function horizontalProgressMaxX(state: LevelState, levelMaxX: number): nu
   if (idx === -1) return levelMaxX
   const stopX = state.stopPoints[idx].wave.stopX
   return stopX === undefined ? levelMaxX : Math.min(levelMaxX, stopX)
+}
+
+/** Hero movement remains free inside the frozen StopPoint viewport. The
+ * original ViewControllor freezes the scene/camera at the marker, then lets
+ * BaseHero move up to the screen edge; stopX is not itself an invisible wall. */
+export function horizontalHeroMaxX(
+  state: LevelState,
+  levelMaxX: number,
+  viewportWidth: number,
+  rightInset: number,
+): number {
+  const cameraCenterMaxX = horizontalProgressMaxX(state, levelMaxX)
+  return Math.min(levelMaxX, cameraCenterMaxX + viewportWidth / 2 - rightInset)
 }
 
 export function areStopPointsCleared(state: LevelState): boolean {

@@ -11,6 +11,7 @@ interface OriginalEquipmentRecord {
   user: string
   quality: string
   saleValue: number
+  showid: number
   sourceArray?: string
   stats: {
     ehp: RawStat
@@ -154,6 +155,7 @@ function baseItemFromEquipment(source: OriginalEquipmentRecord): Item {
     sourceUser: source.user,
     sourceQuality: source.quality,
     sourceSaleValue: source.saleValue,
+    sourceShowId: source.showid,
     sourceArray: source.sourceArray,
   }
 }

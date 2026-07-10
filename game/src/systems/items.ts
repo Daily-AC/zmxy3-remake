@@ -17,6 +17,8 @@ export interface Item {
   sourceQuality?: string
   /** Original MyEquipObj.getValue()/transValue() soul sale value. */
   sourceSaleValue?: number
+  /** Original MyEquipObj.showid, used by ROLE<n>_EQUIP_<showid> appearance sheets. */
+  sourceShowId?: number
   sourceArray?: string
   effects?: Effect[]
 }

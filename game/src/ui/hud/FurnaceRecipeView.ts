@@ -10,6 +10,7 @@ import { activeArtFont } from '../../systems/artFont'
 import { getSharedSocialClient, resolveSocialServerBaseUrl } from '../../net/socialClient'
 import { stackChatLayout, clampChatScroll, maxChatScroll } from '../../systems/chatLayout'
 import { CHAT_HISTORY_LIMIT, loadChatHistory, saveChatHistory, type ChatHistoryStorage, type ChatMessage } from '../../systems/chatHistory'
+import { LAOJUN_PORTRAIT_CROP, LAOJUN_PORTRAIT_TEX, laojunHeaderLayout } from './furnaceRecipeLayout'
 
 // 2026-07-09 重做（用户："这个页面重做——把老君收到一个入口里，按需要打开；
 // 另外现在只展示悟空的装备制作"）：
@@ -55,7 +56,8 @@ const ROWS_PER_PAGE = 6
 // Chat drawer geometry (screen-space, all inside `this.container` which sits
 // at (0,0) unscaled -- local coords double as screen coords, see the
 // container construction at the bottom of the constructor).
-const CHAT_VIEWPORT: Rect = { x: 582, y: 172, w: 268, h: 242 }
+const HEADER_LAYOUT = laojunHeaderLayout()
+const CHAT_VIEWPORT: Rect = { x: 582, y: HEADER_LAYOUT.chatViewportY, w: 268, h: 214 }
 const CHAT_GAP = 10
 const NPC_INSET = 4
 const BUBBLE_MAX_FRACTION = 0.78
@@ -202,24 +204,72 @@ export class FurnaceRecipeView {
     drawerBg.lineStyle(2, GOLD, 0.9).strokeRoundedRect(560, 116, 320, 356, 10)
     drawerBg.lineStyle(1, 0x8a6a30, 0.6).strokeRoundedRect(565, 121, 310, 346, 8)
     drawerChildren.push(drawerBg)
+    const header = HEADER_LAYOUT
     drawerChildren.push(
       scene.add
-        .text(600, 136, '太上老君', {
-          fontSize: '18px',
+        .text(header.nameX, header.nameY, '太上老君', {
+          fontSize: '14px',
           fontFamily: activeArtFont().family,
           color: HUD_COLORS.textGold,
           stroke: '#2c1a0c',
           strokeThickness: 3,
-          padding: { top: 4, bottom: 4 },
+          padding: { top: 2, bottom: 2 },
         })
-        .setOrigin(0, 0.5),
+        .setOrigin(0.5, 0.5),
     )
+    const portraitFrame = scene.add.graphics()
+    portraitFrame.fillStyle(INK, 0.95).fillRoundedRect(
+      header.portraitX - header.portraitSize / 2 - 2,
+      header.portraitY - header.portraitSize / 2 - 2,
+      header.portraitSize + 4,
+      header.portraitSize + 4,
+      6,
+    )
+    portraitFrame.lineStyle(1, GOLD, 0.9).strokeRoundedRect(
+      header.portraitX - header.portraitSize / 2 - 2,
+      header.portraitY - header.portraitSize / 2 - 2,
+      header.portraitSize + 4,
+      header.portraitSize + 4,
+      6,
+    )
+    drawerChildren.push(portraitFrame)
+    if (scene.textures.exists(LAOJUN_PORTRAIT_TEX)) {
+      const texture = scene.textures.get(LAOJUN_PORTRAIT_TEX)
+      const frameName = 'laojun_head'
+      if (!texture.has(frameName)) {
+        const source = scene.textures.getFrame(LAOJUN_PORTRAIT_TEX, 0)
+        texture.add(
+          frameName,
+          source.sourceIndex,
+          source.cutX + LAOJUN_PORTRAIT_CROP.x,
+          source.cutY + LAOJUN_PORTRAIT_CROP.y,
+          LAOJUN_PORTRAIT_CROP.w,
+          LAOJUN_PORTRAIT_CROP.h,
+        )
+      }
+      drawerChildren.push(
+        scene.add
+          .image(header.portraitX, header.portraitY, LAOJUN_PORTRAIT_TEX, frameName)
+          .setDisplaySize(header.portraitSize, header.portraitSize),
+      )
+    }
     this.drawerCloseRect = centerRect(852, 136, 30, 24)
     drawerChildren.push(
       scene.add.rectangle(852, 136, 30, 24, INK, 0.9).setStrokeStyle(1, 0x8a7f66, 1),
       scene.add.text(852, 136, '×', { fontSize: '16px', color: HUD_COLORS.text }).setOrigin(0.5),
     )
-    drawerChildren.push(scene.add.rectangle(720, 292, 288, 260, INK, 0.72).setStrokeStyle(1, 0x6b5f47, 1))
+    drawerChildren.push(
+      scene.add
+        .rectangle(
+          CHAT_VIEWPORT.x + CHAT_VIEWPORT.w / 2,
+          CHAT_VIEWPORT.y + CHAT_VIEWPORT.h / 2,
+          CHAT_VIEWPORT.w + 20,
+          CHAT_VIEWPORT.h + 18,
+          INK,
+          0.72,
+        )
+        .setStrokeStyle(1, 0x6b5f47, 1),
+    )
 
     // Scrollable message log: chatContentLayer holds every message group
     // stacked oldest-top -> newest-bottom (see rebuildChat/applyChatScroll);

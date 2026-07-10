@@ -42,6 +42,7 @@ const sword: Item = {
   sourceType: 'zbwq',
   sourceUser: '悟空',
   sourceSaleValue: 160,
+  sourceShowId: 2,
   effects: [
     { type: 'stat', stat: 'atk', value: 40 },
     { type: 'onHit', effect: 'lifesteal', chance: 0.5, power: 20 },

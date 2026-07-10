@@ -10,6 +10,7 @@ const point: MonsterSpawnSpec = {
   species: 'monster8',
   stats: { hp: 80, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 2 },
   x: 347.6,
+  y: 328.85,
   delayMs: 2000,
   intervalMs: 1000,
   quantity: 4,
@@ -21,6 +22,11 @@ describe('MonsterAppearPoint runtime queue', () => {
 
     expect(advanceWaveSpawnQueue(queue, 2999, 6)).toEqual([])
     expect(advanceWaveSpawnQueue(queue, 1, 6).map((spawn) => spawn.species)).toEqual(['monster8'])
+  })
+
+  it('preserves the recovered two-dimensional scene coordinate through the queue', () => {
+    const queue = createWaveSpawnQueue([{ ...point, delayMs: 0, intervalMs: 0, quantity: 1 }])
+    expect(advanceWaveSpawnQueue(queue, 0, 1)[0]).toMatchObject({ x: 347.6, y: 328.85 })
   })
 
   it('holds due monsters while the live cap is full, then drains only available slots', () => {

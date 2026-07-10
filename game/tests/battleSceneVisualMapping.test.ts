@@ -59,6 +59,14 @@ describe('BattleScene visual fidelity helpers', () => {
     expect(heroBottom - scrollYAtGround).toBeLessThanOrEqual(viewportH - 32)
   })
 
+  it('keeps horizontal-level camera Y fixed and applies official effect pivots', async () => {
+    const source = await import('node:fs').then(({ readFileSync }) =>
+      readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8'))
+    expect(source).toMatch(/startFollow\(this\.hero, true, 0\.1, isClimb \? 0\.1 : 0\)/)
+    expect(source).toMatch(/setScroll\(this\.cameras\.main\.scrollX, 0\)/)
+    expect(source).toMatch(/setDisplayOrigin\(placement\.originX, placement\.originY\)/)
+  })
+
   it('renders item drops as larger transparent icons with rarity-colored names only', async () => {
     const mod = await import('../src/scenes/BattleScene') as unknown as {
       dropItemVisualSpec?: (rarity: number) => {

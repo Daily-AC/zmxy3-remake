@@ -1,4 +1,4 @@
-import type { VisualAttachmentSpec } from '../systems/visualAttachment'
+import { resolveVisualAttachment, type VisualAttachmentSpec } from '../systems/visualAttachment'
 
 export interface Role1EffectSpec extends VisualAttachmentSpec {
   sourceSymbol: string
@@ -27,6 +27,21 @@ export type Role1EffectAction = keyof typeof ROLE1_EFFECTS
 
 export function role1EffectForAction(action: string): Role1EffectSpec | undefined {
   return ROLE1_EFFECTS[action as Role1EffectAction]
+}
+
+export function resolveRole1EffectPlacement(
+  action: Role1EffectAction,
+  anchor: { x: number; y: number },
+  facing: -1 | 1,
+): ReturnType<typeof resolveVisualAttachment> {
+  const spec = ROLE1_EFFECTS[action]
+  return resolveVisualAttachment({
+    anchor,
+    facing,
+    offset: spec.offset,
+    pivotPx: spec.pivotPx,
+    scale: spec.scale,
+  })
 }
 
 export function role1EffectFrameKey(action: Role1EffectAction, frame: number): string {

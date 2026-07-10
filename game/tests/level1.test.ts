@@ -6,6 +6,7 @@ import {
   currentSubStage,
   expandMonsterSpawnRoster,
   horizontalProgressMaxX,
+  horizontalHeroMaxX,
   getActiveWaveRoster,
   markCurrentSubStageCleared,
   tryAdvanceSubStage,
@@ -70,6 +71,7 @@ describe('Stage 1 campaign levels recovered from AS3 stage/level coordinates', (
       y: -1872.45,
       label: '巫鹰',
     })
+    expect(sl11.door).toEqual({ x: 716.85, y: -2037.45, width: 185.8, height: 165 })
   })
 
   it('keeps 九重天, 天宫道 and 南天门 as separate levels instead of one fused chain', () => {
@@ -91,6 +93,12 @@ describe('Stage 1 campaign levels recovered from AS3 stage/level coordinates', (
       3790.2,
       4661.55,
     ])
+  })
+
+  it('locks the camera at a StopPoint while still letting Wukong reach the right screen edge', () => {
+    const state = createLevelState(LEVEL_1_SL12)
+    expect(horizontalProgressMaxX(state, LEVEL_1_SL12.arenaBounds.right)).toBe(1147.4)
+    expect(horizontalHeroMaxX(state, LEVEL_1_SL12.arenaBounds.right, 960, 40)).toBe(1587.4)
   })
 
   it('preserves all thirteen official 天宫道 MonsterAppearPoints', () => {

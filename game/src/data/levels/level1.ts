@@ -81,6 +81,7 @@ function wave(...species: string[]): WaveSpec {
 function appearPoint(
   species: string,
   x: number,
+  y: number,
   delaySeconds: number,
   intervalSeconds: number,
   quantity: number,
@@ -88,6 +89,7 @@ function appearPoint(
   return {
     ...unit(species),
     x,
+    y,
     delayMs: delaySeconds * 1000,
     intervalMs: intervalSeconds * 1000,
     quantity,
@@ -115,7 +117,12 @@ const SL11_FALLBACK_WALLS: Wall[] = [
   { type: 'through', x: 440, y: -1950, width: 320, height: 24 },
 ]
 
-const SL12_WALLS: Wall[] = [{ type: 'solid', x: -180.629, y: 501.05, width: 5199.959, height: 20 }]
+const SL12_WALLS: Wall[] = [
+  { type: 'solid', x: -180.629, y: 501.05, width: 5199.959, height: 20 },
+  { type: 'solid', x: 4859.875, y: -411, width: 115.349, height: 999.999 },
+  { type: 'solid', x: -195.997, y: -138.582, width: 23.295, height: 699.965, rotation: 90 },
+  { type: 'throughDownButUp', x: -184.66, y: -138.5, width: 5200.019, height: 20 },
+]
 const SL13_WALLS: Wall[] = [{ type: 'solid', x: -3.65, y: 501, width: 5000, height: 39.999 }]
 
 const SL12_DOOR = { x: 4520.9, y: 341.65, width: 185.8, height: 165 }
@@ -124,32 +131,47 @@ const SL13_DOOR = { x: 4059.3, y: 342.45, width: 185.8, height: 165 }
 const SL12_WAVES: WaveSpec[] = [
   {
     stopX: 1147.4,
-    roster: [appearPoint('monster8', 347.6, 2, 1, 4), appearPoint('monster8', 967.55, 2, 1, 4)],
+    stopY: 215.25,
+    betweenRandL: 1150,
+    isBoss: false,
+    roster: [appearPoint('monster8', 347.6, 328.85, 2, 1, 4), appearPoint('monster8', 967.55, 323.2, 2, 1, 4)],
   },
   {
     stopX: 1809.7,
+    stopY: 208.55,
+    betweenRandL: 1150,
+    isBoss: false,
     roster: [
-      appearPoint('monster7', 1266.7, 6, 1, 3),
-      appearPoint('monster8', 1521.4, 2, 1, 5),
-      appearPoint('monster7', 1783.5, 6, 1, 3),
+      appearPoint('monster7', 1266.7, 328.85, 6, 1, 3),
+      appearPoint('monster8', 1521.4, 396, 2, 1, 5),
+      appearPoint('monster7', 1783.5, 333, 6, 1, 3),
     ],
   },
   {
     stopX: 2813.95,
-    roster: [appearPoint('monster7', 1948.8, 2, 1, 6), appearPoint('monster7', 2661.45, 2, 1, 6)],
+    stopY: 189.35,
+    betweenRandL: 1150,
+    isBoss: false,
+    roster: [appearPoint('monster7', 1948.8, 343.2, 2, 1, 6), appearPoint('monster7', 2661.45, 343.2, 2, 1, 6)],
   },
   {
     stopX: 3790.2,
+    stopY: 258.35,
+    betweenRandL: 1150,
+    isBoss: false,
     roster: [
-      appearPoint('monster7', 2945.25, 2, 1, 3),
-      appearPoint('monster8', 2888.95, 6, 1, 3),
-      appearPoint('monster7', 3559.3, 2, 1, 4),
-      appearPoint('monster8', 3635.4, 6, 1, 3),
+      appearPoint('monster7', 2945.25, 387.2, 2, 1, 3),
+      appearPoint('monster8', 2888.95, 387.2, 6, 1, 3),
+      appearPoint('monster7', 3559.3, 388, 2, 1, 4),
+      appearPoint('monster8', 3635.4, 388, 6, 1, 3),
     ],
   },
   {
     stopX: 4661.55,
-    roster: [appearPoint('monster4', 4009.8, 2, 1, 1), appearPoint('monster2', 4606.85, 2, 1, 1)],
+    stopY: 240.7,
+    betweenRandL: 1150,
+    isBoss: true,
+    roster: [appearPoint('monster4', 4009.8, 343.2, 2, 1, 1), appearPoint('monster2', 4606.85, 351.2, 2, 1, 1)],
   },
 ]
 
@@ -190,7 +212,7 @@ export const LEVEL_1_WUYING: SubStageChainDef = {
       name: '九重天 · 爬塔',
       mode: 'climb',
       bounds: SL11_BOUNDS,
-      door: { x: 1000, y: -2110, width: 90, height: 180 },
+      door: { x: 716.85, y: -2037.45, width: 185.8, height: 165 },
       heroStart: { x: 480, y: 400 },
       background: { base: 'bg11' },
       fallbackWalls: SL11_FALLBACK_WALLS,
@@ -239,6 +261,14 @@ export const LEVEL_2_TIANGONGDAO: SubStageChainDef = {
       },
       fallbackWalls: SL12_WALLS,
       waveLevel: LEVEL_1_SL12,
+      fbEntrance: {
+        registration: { x: 1760, y: 334.65 },
+        collision: { x: 2073.55, y: 398.6, width: 49, height: 64 },
+        requiredHits: 5,
+        hitCooldownFrames: 24,
+        stayFrames: 72,
+        animationFrames: 30,
+      },
     },
   ],
 }

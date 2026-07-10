@@ -17,6 +17,7 @@ import {
 import { SCENE } from './shellShared'
 import { configureLogicalCamera } from '../systems/renderScale'
 import { BATTLE_LOADING_BACKGROUNDS } from './battleLoadingContent'
+import { roomIdFromInvite, roomShareUrl, shareRoomInvite, stripRoomInvite } from '../systems/roomInvite'
 
 // 2026-07-09 视觉重做（用户打磨反馈：素面板 → 全游戏统一的水墨×暗金基调）。
 // 逻辑/协议/验收 hook 与重做前完全一致，只换了渲染层：地图暗化作底、双线金边
@@ -115,6 +116,7 @@ export class LobbyScene extends Phaser.Scene {
   private busy = false
   private statusLine = ''
   private suppressCloseToast = false
+  private inviteJoinAttempted = false
 
   constructor() {
     super(SCENE.coopLobby)
@@ -139,6 +141,7 @@ export class LobbyScene extends Phaser.Scene {
     this.toastUi = new Toast(this)
     this.render()
     this.exposeHooks()
+    this.joinRoomInviteOnce()
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.suppressCloseToast = true
       this.connection?.dispose()
@@ -170,6 +173,7 @@ export class LobbyScene extends Phaser.Scene {
     }
     w.__shellLobbyToggleReady = () => this.toggleReady()
     w.__shellLobbyStart = () => this.startRoom()
+    w.__shellLobbyShare = () => this.shareCurrentRoom()
     w.__shellLobbyBackToMap = () => this.backToMap()
     w.__shellLobbyLogout = () => this.logout()
   }
@@ -190,7 +194,6 @@ export class LobbyScene extends Phaser.Scene {
     this.root.add(
       this.add.text(cx, 148, `当前账号 · ${user}`, { fontSize: t.fontSmall, color: t.muted }).setOrigin(0.5),
     )
-
     this.root.add(this.sectionLabel(238, 205, '关　卡'))
     this.lobbyButton(408, 205, 86, 40, 'L1', () => {
       this.selectedLevel = 'L1'
@@ -245,9 +248,12 @@ export class LobbyScene extends Phaser.Scene {
         )
         .setOrigin(0.5),
     )
+    this.lobbyButton(724, 150, 92, 32, '分　享', () => {
+      void this.shareCurrentRoom()
+    }, !!room, 'ghost')
     this.root.add(
       this.add
-        .text(cx, 178, '把房间 ID 发给队友，对方在大厅输入后加入', { fontSize: t.fontSmall, color: t.muted })
+        .text(cx, 178, '分享邀请链接，或把房间 ID 发给队友', { fontSize: t.fontSmall, color: t.muted })
         .setOrigin(0.5),
     )
 
@@ -454,6 +460,29 @@ export class LobbyScene extends Phaser.Scene {
       this.statusLine = ''
       this.render()
     }
+  }
+
+  private joinRoomInviteOnce(): void {
+    if (this.inviteJoinAttempted) return
+    const roomId = roomIdFromInvite(window.location.search)
+    if (!roomId) return
+    this.inviteJoinAttempted = true
+    window.history.replaceState(window.history.state, '', stripRoomInvite(window.location.href))
+    if (this.roomInput) this.roomInput.value = roomId
+    void this.joinTypedRoom()
+  }
+
+  private async shareCurrentRoom(): Promise<void> {
+    if (!this.room) return
+    const url = roomShareUrl(window.location.href, this.room.id)
+    const nav = window.navigator
+    const result = await shareRoomInvite(url, {
+      share: typeof nav.share === 'function' ? nav.share.bind(nav) : undefined,
+      writeText: nav.clipboard?.writeText ? nav.clipboard.writeText.bind(nav.clipboard) : undefined,
+    })
+    if (result === 'shared') this.toastUi.show('邀请已分享', LOBBY_THEME.good)
+    else if (result === 'copied') this.toastUi.show('邀请链接已复制', LOBBY_THEME.good)
+    else this.toastUi.show('无法分享，请手动发送房间 ID', LOBBY_THEME.danger)
   }
 
   private openRoomSocket(roomId: string): void {

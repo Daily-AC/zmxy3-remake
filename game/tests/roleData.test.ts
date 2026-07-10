@@ -35,8 +35,12 @@ describe('roleData action timing (动作计时器)', () => {
   it('total action duration is sum(stopCounts) * tickMs', () => {
     // hit1 stopCounts [2,2,1,1,3] = 9 ticks -> 300ms at 30fps.
     expect(Math.round(actionDurationMs(roleData.actions.hit1 as ActionSpec, TICK_MS))).toBe(300)
-    // hit5 stopCounts [2,2,1,1,5] = 11 ticks -> ~366.7ms.
-    expect(Math.round(actionDurationMs(roleData.actions.hit5 as ActionSpec, TICK_MS))).toBe(367)
+    // Official 4399 Role1: hit4/hit5 are both 16 ticks, not the shorter
+    // 再续天庭 variants previously mixed into this data file.
+    expect((roleData.actions.hit4 as ActionSpec).stopCounts).toEqual([1, 1, 1, 1, 12])
+    expect((roleData.actions.hit5 as ActionSpec).stopCounts).toEqual([2, 2, 1, 1, 10])
+    expect(Math.round(actionDurationMs(roleData.actions.hit4 as ActionSpec, TICK_MS))).toBe(533)
+    expect(Math.round(actionDurationMs(roleData.actions.hit5 as ActionSpec, TICK_MS))).toBe(533)
   })
 
   it('throws when stopCounts length disagrees with frame count', () => {

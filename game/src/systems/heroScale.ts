@@ -22,24 +22,18 @@
 // hard formula, and its "2.0875 * Hurt" figure for hit1-3 does not match a
 // direct decompile of the real client either — see below).
 //
-// This module instead recovers the formula directly from this project's own
-// vendored SWF via ffdec, the same way monsterBehaviors.ts's Monster7/
-// Monster13 were recovered:
+// This module uses the official 4399 stageInfo export as the final authority.
+// An earlier pass accidentally read the derivative 再续天庭 build, whose
+// getRealPower2() has different per-hit coefficients.
 //
 //   java -jar tools/ffdec/ffdec-cli.jar \
 //     -selectclass export.hero.Role1,base.BaseHero,base.BaseRoleProperies,base.BaseBullet,base.BaseMonster \
 //     -export script <out> \
 //     "vendor/zmxy_res/.../打开我开始玩.swf"
 //
-// `export.hero.Role1.as`'s `getRealPower2(action)` (~line 2209) is the real
-// source of truth:
-//
-//   case "hit1": case "hit2": case "hit3":
-//     power = 0.707 * roleProperies.getHurt() * critMult * gxpMult
-//   case "hit4":
-//     power = 1.183 * roleProperies.getHurt() * critMult * gxpMult
-//   case "hit5":
-//     power = 1.304 * roleProperies.getHurt() * critMult * gxpMult
+// Official `export.hero.Role1.getRealPower()` applies the same
+// `getHurt() * addPower1 * critMult` path to hit1..hit5; HeroSkillProtect's
+// baseline addPower1 is 1, so every normal hit uses 1.0 * Hurt.
 //
 // `critMult` = 2 if `Math.random() <= getCrit()/100` else 1 (skippable via
 // getRealPower2's own `canCrit` parameter). `gxpMult` = 1.5 if the hero is in
@@ -110,24 +104,24 @@ export type AttackKind = 'physics' | 'magic'
 
 /** Source: export.hero.Role1.as getRealPower2(), ~line 2223-2235. */
 export const NORMAL_ATTACK_COEFFICIENT = {
-  hit1: 0.707,
-  hit2: 0.707,
-  hit3: 0.707,
-  hit4: 1.183,
-  hit5: 1.304,
+  hit1: 1,
+  hit2: 1,
+  hit3: 1,
+  hit4: 1,
+  hit5: 1,
 } as const
 
 export type NormalAttackHit = keyof typeof NORMAL_ATTACK_COEFFICIENT
 
-/** Source: kagami's HeroNormalAttackSystem.ts ground-combo createStep() calls
- * — every Role1 hit1-5 step uses durationMs=170, cooldownMs=170 (i.e. the
- * next hit can start exactly as this one's animation ends; a full 5-hit
- * combo takes 5*170=850ms if chained without gaps). This project's own
- * heroSim.ts/combo.ts own the REAL input-driven combo timing; this constant
- * is only used for this file's own DPS/kill-time estimate, not to drive
- * actual gameplay. */
-export const NORMAL_ATTACK_HIT_DURATION_MS = 170
 export const NORMAL_ATTACK_COMBO_HITS: readonly NormalAttackHit[] = ['hit1', 'hit2', 'hit3', 'hit4', 'hit5']
+/** Official Role1.initBBDC stop-count totals at 30fps: 9/9/9/16/16 ticks. */
+export const NORMAL_ATTACK_DURATION_MS: Record<NormalAttackHit, number> = {
+  hit1: 9 * (1000 / 30),
+  hit2: 9 * (1000 / 30),
+  hit3: 9 * (1000 / 30),
+  hit4: 16 * (1000 / 30),
+  hit5: 16 * (1000 / 30),
+}
 
 export interface HurtOptions {
   /** BaseRoleProperies.as's `luckData` — an equipment/accessory stat this
@@ -244,7 +238,10 @@ export function simulateComboDps(atk: number, def: number, opts: { critChance?: 
     const rawPower = NORMAL_ATTACK_COEFFICIENT[hit] * hurt * expectedCritMult
     damagePerCombo += applyPhysicsDefense(rawPower, def)
   }
-  const comboDurationMs = NORMAL_ATTACK_HIT_DURATION_MS * NORMAL_ATTACK_COMBO_HITS.length
+  const comboDurationMs = NORMAL_ATTACK_COMBO_HITS.reduce(
+    (sum, hit) => sum + NORMAL_ATTACK_DURATION_MS[hit],
+    0,
+  )
   return { damagePerCombo, comboDurationMs, dps: damagePerCombo / (comboDurationMs / 1000) }
 }
 

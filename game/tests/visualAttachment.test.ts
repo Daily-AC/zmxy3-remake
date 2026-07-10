@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveVisualAttachment } from '../src/systems/visualAttachment'
-import { ROLE1_EFFECTS } from '../src/data/role1Effects'
+import { ROLE1_EFFECTS, resolveRole1EffectPlacement } from '../src/data/role1Effects'
 
 describe('visual attachment', () => {
   it('mirrors a hero-local AS3 offset without changing the symbol pivot', () => {
@@ -21,5 +21,15 @@ describe('visual attachment', () => {
     })
     expect(ROLE1_EFFECTS.hit1.pivotPx.x).toBeTypeOf('number')
     expect(ROLE1_EFFECTS.hit1.scale).toBe(1)
+  })
+
+  it('resolves the official hit1 registration point and pivot from the hero anchor', () => {
+    expect(resolveRole1EffectPlacement('hit1', { x: 750, y: -1872.45 }, 1)).toEqual({
+      x: 870,
+      y: -1867.45,
+      originX: 18.3,
+      originY: 11,
+      flipX: true,
+    })
   })
 })

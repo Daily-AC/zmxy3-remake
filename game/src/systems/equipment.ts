@@ -22,6 +22,7 @@ interface EquipmentCatalogMeta {
   fillName: string
   type: string
   user: string
+  showid: number
 }
 
 const equipmentCatalog = new Map(
@@ -59,6 +60,12 @@ export function slotForItem(item: Item): EquipSlot | null {
   const sourceType = catalogMetaForItem(item)?.type ?? item.sourceType
   if (!sourceType) return null
   return SUPPORTED_SLOT_BY_SOURCE_TYPE[sourceType] ?? null
+}
+
+export function weaponShowIdForItem(item: Item): number | null {
+  if (slotForItem(item) !== 'weapon') return null
+  const showId = catalogMetaForItem(item)?.showid ?? item.sourceShowId
+  return Number.isFinite(showId) ? Math.max(0, Math.floor(showId as number)) : null
 }
 
 export function equipEligibility(item: Item, heroId: HeroId): EquipEligibility {

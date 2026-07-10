@@ -34,12 +34,18 @@ describe('furnace recipe catalog', () => {
       sourceType: 'zbfj',
       sourceUser: '悟空',
       sourceSaleValue: 20,
+      sourceShowId: 1,
       effects: [
         { type: 'stat', stat: 'def', value: 2 },
         { type: 'stat', stat: 'hp', value: 20 },
         { type: 'stat', stat: 'mp', value: 12 },
       ],
     })
+  })
+
+  it('preserves the original weapon showid used by ROLE1_EQUIP_<showid>', () => {
+    expect(equipmentItemByFillName('ptdxzg')).toMatchObject({ sourceShowId: 1 })
+    expect(equipmentItemByFillName('whg')).toMatchObject({ sourceShowId: 2 })
   })
 
   it('uses the supplied rng for recovered equipment stats', () => {

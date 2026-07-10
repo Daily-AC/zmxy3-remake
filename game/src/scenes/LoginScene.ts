@@ -11,6 +11,7 @@ import { readSlot } from '../systems/saveSlots'
 import { restoreGameState } from '../systems/save'
 import { addEmbers } from '../ui/embers'
 import { configureLogicalCamera } from '../systems/renderScale'
+import { roomIdFromInvite } from '../systems/roomInvite'
 
 // 2026-07-09 用户拍板终稿 mock（login-mock-v2, 四人探头版）即素材：整张效果图
 // 铺满画布当背景，功能件（输入框/印章热区/模式切换）像素对位叠在画中对应元素
@@ -242,12 +243,13 @@ export class LoginScene extends Phaser.Scene {
   private enterGame(): void {
     const storage = shellStorage()
     const env = readSlot(storage, 0)
+    const invitedRoomId = roomIdFromInvite(window.location.search)
     if (env) {
       this.registry.set(REG.activeSlot, 0)
       this.registry.set(REG.activeSave, env.save)
       this.registry.set(REG.loadedState, restoreGameState(env.save))
       this.registry.set(REG.origin, 'continue')
-      this.scene.start(SCENE.worldMap)
+      this.scene.start(invitedRoomId ? SCENE.coopLobby : SCENE.worldMap)
       return
     }
     this.scene.start(SCENE.characterSelect, { slot: 0 })

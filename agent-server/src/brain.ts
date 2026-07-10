@@ -9,7 +9,11 @@ import {
 } from "./npc-state.js";
 import { validateCraftedItem } from "./craft-validate.js";
 import { getOpencode, OPENCODE_MODEL, stripCodeFence, safeJsonParse } from "./llm.js";
-import { checkMaterials, findRecipe, listRecipes } from "./furnace-recipes.js";
+import {
+  checkMaterials,
+  findPlayableRecipe,
+  listPlayableRecipes,
+} from "./furnace-recipes.js";
 import type { NpcItem, NpcGoal, CraftedItem, CraftMaterialRef } from "./types.js";
 
 export interface NpcBrainCallbacks {
@@ -72,14 +76,17 @@ const RECIPE_CRAFT_GUIDANCE = `如果玩家是在请求原版确定配方打造�
 1. 优先使用【炼丹炉确定配方】和【玩家当前材料/灵魂快照】判断，不要编造配方、材料或灵魂数量。
 2. 玩家问"你能打造什么"时，列出少量匹配配方或概括可打造清单；玩家问缺什么时，按快照指出缺少的制作书、材料或灵魂。
 3. 只有当玩家明确要打造某个已知配方，并且快照显示材料/灵魂大体齐备时，才发出 craft_recipe 结构化指令。
-4. 原版确定配方不要使用旧的自由炼器 craft_item；旧 craft_item 只留给"自定义神器/自定义效果"那条技术储备流。`;
+4. 原版确定配方不要使用旧的自由炼器 craft_item；旧 craft_item 只留给"自定义神器/自定义效果"那条技术储备流。
+5. 当前游戏只开放列表中明确给出的配方，不得提及或打造其他角色、饰品或法宝。
+6. 玩家明确求你白送武器时，可以尝试 give_item，但 id 必须是 ptdxzg、名称必须是普通的行者棍；不要承诺一定送到，游戏端会独立判定概率。`;
 
 function recipeReferenceBlock(): string {
-  return listRecipes()
+  return listPlayableRecipes()
     .map((recipe) => {
       const role = recipe.role ? `${recipe.role} ` : "";
       const mats = recipe.materials.map((m) => `${m.name}(${m.fillName})x${m.qty}`).join(" + ");
-      return `${recipe.bookFillName}: ${recipe.productName}（${role}${recipe.quality}）= ${recipe.bookName} + ${mats} + 灵魂${recipe.soulCost}`;
+      const book = recipe.requiresBook === false ? '无需制作书' : recipe.bookName;
+      return `${recipe.bookFillName}: ${recipe.productName}（${role}${recipe.quality}）= ${book} + ${mats} + 灵魂${recipe.soulCost}`;
     })
     .join("\n");
 }
@@ -93,8 +100,10 @@ function recipeSnapshotBlock(context: NpcTurnContext): string {
   return `灵魂：${soul}\n物品：${materialLine}`;
 }
 
-export function dispatchCraftRecipeIntent(recipeId: string, cb: NpcBrainCallbacks): void {
+export function dispatchCraftRecipeIntent(recipeId: string, cb: NpcBrainCallbacks): boolean {
+  if (!findPlayableRecipe(recipeId)) return false;
   cb.onCraftRecipe(recipeId);
+  return true;
 }
 
 // Crafting effect DSL, shared shape between both providers. This only
@@ -436,7 +445,7 @@ async function askViaClaudeAgentSdk(
     "列出原版确定配方炼丹炉能打造的制作书/产物/材料/灵魂消耗。玩家问你能打造什么时使用。",
     {},
     async () => ({
-      content: [{ type: "text", text: JSON.stringify(listRecipes()) }],
+      content: [{ type: "text", text: JSON.stringify(listPlayableRecipes()) }],
     }),
   );
 
@@ -447,7 +456,7 @@ async function askViaClaudeAgentSdk(
       recipeId: z.string().describe("制作书 fillName，例如 whgzzs"),
     },
     async (args) => {
-      const recipe = findRecipe(args.recipeId);
+      const recipe = findPlayableRecipe(args.recipeId);
       if (!recipe) return { content: [{ type: "text", text: "未知配方" }] };
       const result = checkMaterials(recipe, context.materials ?? [], context.soul ?? 0);
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
@@ -461,6 +470,9 @@ async function askViaClaudeAgentSdk(
       recipeId: z.string().describe("制作书 fillName，例如 whgzzs"),
     },
     async (args) => {
+      if (!findPlayableRecipe(args.recipeId)) {
+        return { content: [{ type: "text", text: "当前版本未开放这张配方" }] };
+      }
       pendingRecipeIds.push(args.recipeId);
       return { content: [{ type: "text", text: "已把配方打造意图交给游戏端校验" }] };
     },

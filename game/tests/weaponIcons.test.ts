@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
-import { HUD_ARMOR_ICON_IDS, HUD_ICONS, HUD_WEAPON_ICON_IDS } from '../src/ui/hud/hudTheme'
+import { createHash } from 'node:crypto'
+import {
+  HUD_ARMOR_ICON_IDS,
+  HUD_ICONS,
+  HUD_WEAPON_ICON_IDS,
+  WORLD_DROP_ICONS,
+} from '../src/ui/hud/hudTheme'
+
+const sha256 = (file: URL) => createHash('sha256').update(readFileSync(file)).digest('hex')
 
 describe('official weapon icons', () => {
   it('preloads one EIcon1 bitmap for every original weapon fillName', () => {
@@ -25,5 +33,23 @@ describe('official active armor icons', () => {
       expect(existsSync(file), id).toBe(true)
       expect(readFileSync(file).subarray(1, 4).toString('ascii'), id).toBe('PNG')
     }
+  })
+})
+
+describe('official transparent world-drop icons', () => {
+  it.each([
+    ['ptdxzg', '40743d2519359e1e1304491390109a8bf530390384ab81a0ab17757f19f54867'],
+    ['whg', 'ea258d01764f0af6965e55cc2c2239d2556a9ad7d1ec9fede8e97841dcaa9343'],
+    ['ptdxzf', '4cbe233f0edb0a23b27e13eaf923b28bb1820dd4406f43392b26e7007236d3ec'],
+    ['kys', '270ead60ec6d41069aeb4be3c40fea2ed72a5a9951d86fd018f94f790b442dfc'],
+  ])('uses the EIcon1 fall_%s bitmap rather than the opaque backpack icon', (id, expectedHash) => {
+    expect(WORLD_DROP_ICONS).toContainEqual({
+      key: `drop_icon_${id}`,
+      url: `assets/extracted/drop-icons/${id}.png`,
+    })
+    const file = new URL(`../public/assets/extracted/drop-icons/${id}.png`, import.meta.url)
+    expect(existsSync(file), id).toBe(true)
+    expect(sha256(file), id).toBe(expectedHash)
+    expect(sha256(file), id).not.toBe(sha256(new URL(`../public/assets/extracted/icons/${id}.png`, import.meta.url)))
   })
 })
