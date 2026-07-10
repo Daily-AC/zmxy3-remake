@@ -10,9 +10,7 @@ describe('BattleScene combat input wiring', () => {
     )
   })
 
-  it('clears pending attack and jump edges only after a skill cast succeeds', () => {
-    expect(source()).toMatch(
-      /if \(!result\.ok\) \{[\s\S]*?return\s+\}\s+this\.heroState\.pendingEdges\.pressAttack = false\s+this\.heroState\.pendingEdges\.pressJump = false/,
-    )
+  it('clears all hero input after a skill cast succeeds', () => {
+    expect(source()).toMatch(/clearHeroInputForLock\(this\.heroState\)/)
   })
 })

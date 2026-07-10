@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { TICK_MS } from '../src/systems/tick'
+import { currentDir } from '../src/systems/locomotion'
 import {
   HeroEdges,
   NO_EDGES,
   advanceHero,
+  clearHeroInputForLock,
   initHeroState,
   makeHeroConfig,
 } from '../src/systems/heroSim'
@@ -220,5 +222,47 @@ describe('heroSim integration (fixed-timestep 组合)', () => {
     advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg)
     expect(s.action).toBe('hit1')
     expect(s.attackId).toBe(2)
+  })
+
+  it('clears held and pending input before a shared busy lock', () => {
+    const s = initHeroState(cfg, 480)
+    advanceHero(s, edges({ pressRight: true }), TICK_MS, cfg)
+    advanceHero(s, edges({ releaseRight: true }), TICK_MS, cfg)
+    advanceHero(s, edges({ pressRight: true }), TICK_MS, cfg)
+    expect(s.move.heldRight).toBe(true)
+    expect(s.move.running).toBe(true)
+
+    advanceHero(s, edges({
+      pressLeft: true,
+      releaseLeft: true,
+      pressRight: true,
+      releaseRight: true,
+      pressJump: true,
+      pressAttack: true,
+    }), 1, cfg)
+    expect(s.pendingEdges).toEqual(edges({
+      pressLeft: true,
+      releaseLeft: true,
+      pressRight: true,
+      releaseRight: true,
+      pressJump: true,
+      pressAttack: true,
+    }))
+
+    clearHeroInputForLock(s)
+
+    expect(s.pendingEdges).toEqual(NO_EDGES)
+    expect(s.move.heldLeft).toBe(false)
+    expect(s.move.heldRight).toBe(false)
+    expect(s.move.running).toBe(false)
+    expect(currentDir(s.move)).toBe(0)
+
+    const x = s.x
+    advanceHero(s, NO_EDGES, TICK_MS, cfg)
+    expect(s.x).toBe(x)
+    expect(s.combo.stage).toBe(0)
+    expect(s.attackId).toBe(0)
+    expect(s.vertical.grounded).toBe(true)
+    expect(s.vertical.jumpCount).toBe(0)
   })
 })

@@ -8,6 +8,7 @@ import {
   HeroEdges,
   NO_EDGES,
   advanceHero,
+  clearHeroInputForLock,
   initHeroState,
   makeHeroConfig,
 } from '../systems/heroSim'
@@ -1382,8 +1383,7 @@ export class BattleScene extends Phaser.Scene {
       this.showSkillFail(result.reason)
       return
     }
-    this.heroState.pendingEdges.pressAttack = false
-    this.heroState.pendingEdges.pressJump = false
+    clearHeroInputForLock(this.heroState)
     // Hold the cast pose for the skill's action duration (shared busy-lock).
     const action = result.reentered && skillId === 'jdy' ? 'hit11_2' : SKILL_ACTION[skillId]
     this.skillAnim = { action, untilMs: this.simClockMs + Math.max(200, this.skillRuntime.cooldownMs) }

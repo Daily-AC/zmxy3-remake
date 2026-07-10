@@ -110,6 +110,13 @@ export function initHeroState(cfg: HeroConfig, x: number): HeroState {
   }
 }
 
+/** Drop queued and held controls when an external busy lock takes ownership. */
+export function clearHeroInputForLock(state: HeroState): void {
+  state.pendingEdges = noEdges()
+  releaseLeft(state.move)
+  releaseRight(state.move)
+}
+
 function selectAction(state: HeroState, attacking: boolean, comboAction: string | null): string {
   if (state.airAttack) return 'hit1'
   if (attacking && comboAction) return comboAction
