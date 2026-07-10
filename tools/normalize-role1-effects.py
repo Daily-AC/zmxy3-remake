@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
-"""Trim FFDec-exported Role1 effects while preserving SWF symbol origins."""
+"""Trim FFDec-exported Role1 effects while preserving SWF symbol origins.
+
+This is deliberately not a general FFDec bounds library. It supports exactly
+the filters present in Role1v690: Blur, Glow, and zero-delta ColorMatrix.
+Other filter types fail explicitly and must be implemented before reusing this
+walker for a different SWF source set.
+"""
 
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import importlib.util
 import json
 import math
 from pathlib import Path
+import shutil
+import tempfile
 from typing import Any
 
 from PIL import Image
@@ -72,7 +81,18 @@ PREFAB_COMPILER = load_prefab_compiler()
 
 
 def numeric_frames(directory: Path) -> list[Path]:
-    return sorted(directory.glob("*.png"), key=lambda path: int(path.stem))
+    paths = list(directory.glob("*.png"))
+    try:
+        paths.sort(key=lambda path: int(path.stem))
+    except ValueError as error:
+        raise ValueError(f"{directory}: PNG frame names must be numeric") from error
+    numbers = [int(path.stem) for path in paths]
+    expected = list(range(1, len(paths) + 1))
+    if numbers != expected:
+        raise ValueError(
+            f"{directory}: PNG frame numbering must be contiguous from 1; found {numbers}"
+        )
+    return paths
 
 
 def union_box(frames: list[Image.Image], padding: int) -> tuple[int, int, int, int]:
@@ -135,7 +155,11 @@ def truncated_xform(bounds: tuple[int, int, int, int], matrix: tuple) -> tuple[i
 
 
 class FFDecBounds:
-    """Reproduces FFDec's sprite rect and filter-padding export calculations."""
+    """Reproduce the Role1v690 subset of FFDec sprite export calculations.
+
+    Supported filters are Blur, Glow, and zero-delta ColorMatrix only. Cyclic
+    display-list edges are skipped; results touched by a cycle are not cached.
+    """
 
     def __init__(self, xml_path: Path):
         self.index = PREFAB_COMPILER.SwfIndex(str(xml_path))
@@ -177,38 +201,68 @@ class FFDecBounds:
             entry["filters"] = []
         return entry
 
-    def rect(self, character_id: int, depth: int = 0) -> tuple[int, int, int, int] | None:
+    @classmethod
+    def _accepted_display_entry(
+        cls,
+        tag: Any,
+        display: dict[int, dict[str, Any]],
+    ) -> tuple[int, dict[str, Any] | None]:
+        tag_depth = int(tag.get("depth", 0))
+        depth_exists = tag_depth in display
+        is_move = tag.get("placeFlagMove") == "true"
+        if is_move != depth_exists:
+            return tag_depth, None
+        entry = cls._updated_display_entry(tag, display.get(tag_depth))
+        display[tag_depth] = entry
+        return tag_depth, entry
+
+    def rect(self, character_id: int) -> tuple[int, int, int, int] | None:
+        result, _ = self._rect(character_id, set())
+        return result
+
+    def _rect(
+        self,
+        character_id: int,
+        active: set[int],
+    ) -> tuple[tuple[int, int, int, int] | None, bool]:
+        if character_id in active:
+            return None, False
         if character_id in self._rect_cache:
-            return self._rect_cache[character_id]
-        if depth > PREFAB_COMPILER.MAX_RECURSION_DEPTH:
-            raise ValueError(f"bounds recursion exceeded at character {character_id}")
+            return self._rect_cache[character_id], True
 
         if character_id not in self.index.sprites:
             leaf_bounds = PREFAB_COMPILER.recursive_bounds(self.index, character_id)
             result = tuple(int(value) for value in leaf_bounds) if leaf_bounds is not None else None
             self._rect_cache[character_id] = result
-            return result
+            return result, True
 
+        active.add(character_id)
         display: dict[int, dict[str, Any]] = {}
         result = None
-        for tag in self._sub_tags(self.index.sprites[character_id]):
-            if self._is_place_object(tag):
-                tag_depth = int(tag.get("depth", 0))
-                entry = self._updated_display_entry(tag, display.get(tag_depth))
-                display[tag_depth] = entry
-                child_id = entry.get("characterId")
-                if child_id is None:
-                    continue
-                child_bounds = self.rect(child_id, depth + 1)
-                if child_bounds is None:
-                    continue
-                placed_bounds = truncated_xform(child_bounds, entry["matrix"])
-                result = PREFAB_COMPILER.union(result, placed_bounds)
-            elif self._is_remove_object(tag):
-                display.pop(int(tag.get("depth", 0)), None)
+        cacheable = True
+        try:
+            for tag in self._sub_tags(self.index.sprites[character_id]):
+                if self._is_place_object(tag):
+                    _, entry = self._accepted_display_entry(tag, display)
+                    if entry is None:
+                        continue
+                    child_id = entry.get("characterId")
+                    if child_id is None:
+                        continue
+                    child_bounds, child_cacheable = self._rect(child_id, active)
+                    cacheable = cacheable and child_cacheable
+                    if child_bounds is None:
+                        continue
+                    placed_bounds = truncated_xform(child_bounds, entry["matrix"])
+                    result = PREFAB_COMPILER.union(result, placed_bounds)
+                elif self._is_remove_object(tag):
+                    display.pop(int(tag.get("depth", 0)), None)
+        finally:
+            active.remove(character_id)
 
-        self._rect_cache[character_id] = result
-        return result
+        if cacheable:
+            self._rect_cache[character_id] = result
+        return result, cacheable
 
     @staticmethod
     def _direct_filter_padding(filters: list[Any]) -> tuple[int, int]:
@@ -221,40 +275,58 @@ class FFDecBounds:
             if filter_type == "COLORMATRIXFILTER":
                 continue
             if filter_type not in {"BLURFILTER", "GLOWFILTER"}:
-                raise ValueError(f"unsupported FFDec filter type: {filter_type}")
+                raise ValueError(
+                    "Role1 normalizer supports only BLURFILTER, GLOWFILTER, and "
+                    f"zero-delta COLORMATRIXFILTER; got {filter_type}"
+                )
             delta_x += float(filter_tag.get("blurX", 0))
             delta_y += float(filter_tag.get("blurY", 0))
         return math.ceil(delta_x) * 20, math.ceil(delta_y) * 20
 
-    def filter_padding(self, character_id: int, depth: int = 0) -> tuple[int, int]:
-        if character_id in self._filter_cache:
-            return self._filter_cache[character_id]
-        if depth > PREFAB_COMPILER.MAX_RECURSION_DEPTH:
-            raise ValueError(f"filter recursion exceeded at character {character_id}")
-        if character_id not in self.index.sprites:
-            return 0, 0
+    def filter_padding(self, character_id: int) -> tuple[int, int]:
+        result, _ = self._filter_padding(character_id, set())
+        return result
 
+    def _filter_padding(
+        self,
+        character_id: int,
+        active: set[int],
+    ) -> tuple[tuple[int, int], bool]:
+        if character_id in active:
+            return (0, 0), False
+        if character_id in self._filter_cache:
+            return self._filter_cache[character_id], True
+        if character_id not in self.index.sprites:
+            return (0, 0), True
+
+        active.add(character_id)
         display: dict[int, dict[str, Any]] = {}
         maximum_x = 0
         maximum_y = 0
-        for tag in self._sub_tags(self.index.sprites[character_id]):
-            if self._is_place_object(tag):
-                tag_depth = int(tag.get("depth", 0))
-                entry = self._updated_display_entry(tag, display.get(tag_depth))
-                display[tag_depth] = entry
-                child_id = entry.get("characterId")
-                if child_id is None:
-                    continue
-                child_x, child_y = self.filter_padding(child_id, depth + 1)
-                direct_x, direct_y = self._direct_filter_padding(entry["filters"])
-                maximum_x = max(maximum_x, child_x, direct_x)
-                maximum_y = max(maximum_y, child_y, direct_y)
-            elif self._is_remove_object(tag):
-                display.pop(int(tag.get("depth", 0)), None)
+        cacheable = True
+        try:
+            for tag in self._sub_tags(self.index.sprites[character_id]):
+                if self._is_place_object(tag):
+                    _, entry = self._accepted_display_entry(tag, display)
+                    if entry is None:
+                        continue
+                    child_id = entry.get("characterId")
+                    if child_id is None:
+                        continue
+                    (child_x, child_y), child_cacheable = self._filter_padding(child_id, active)
+                    cacheable = cacheable and child_cacheable
+                    direct_x, direct_y = self._direct_filter_padding(entry["filters"])
+                    maximum_x = max(maximum_x, child_x, direct_x)
+                    maximum_y = max(maximum_y, child_y, direct_y)
+                elif self._is_remove_object(tag):
+                    display.pop(int(tag.get("depth", 0)), None)
+        finally:
+            active.remove(character_id)
 
         result = maximum_x, maximum_y
-        self._filter_cache[character_id] = result
-        return result
+        if cacheable:
+            self._filter_cache[character_id] = result
+        return result, cacheable
 
     def geometry(self, symbol: str) -> dict[str, object]:
         character_id = self.index.resolve(symbol)
@@ -283,6 +355,79 @@ def symbol_geometry(xml_path: Path, symbol: str) -> dict[str, object]:
 
 def symbol_bounds_px(xml_path: Path, symbol: str) -> dict[str, int | float]:
     return symbol_geometry(xml_path, symbol)["sourceBoundsPx"]  # type: ignore[return-value]
+
+
+def render_output(prepared: list[dict[str, Any]], output_root: Path, padding: int) -> dict[str, object]:
+    manifest: dict[str, object] = {}
+    for item in prepared:
+        action = item["action"]
+        with ExitStack() as frame_stack:
+            frames = []
+            for path in item["paths"]:
+                with Image.open(path) as frame:
+                    converted = frame.convert("RGBA")
+                frame_stack.callback(converted.close)
+                frames.append(converted)
+            size = item["sourceSize"]
+            geometry = item["geometry"]
+            box = union_box(frames, padding)
+            export_bounds_twips = geometry["exportBoundsTwips"]
+            symbol_origin = (-export_bounds_twips[0] / 20, -export_bounds_twips[1] / 20)
+            pivot_x, pivot_y = cropped_pivot(symbol_origin, box[0], box[1])
+            pivot = {"x": stable_number(pivot_x), "y": stable_number(pivot_y)}
+            action_dir = output_root / action
+            action_dir.mkdir(parents=True)
+            for index, frame in enumerate(frames, start=1):
+                with frame.crop(box) as cropped:
+                    cropped.save(action_dir / f"{index:02d}.png", optimize=True)
+
+            spec = ACTION_SPECS[action]
+            manifest[action] = {
+                "sourceSymbol": SOURCE_SYMBOLS[action],
+                "frames": len(frames),
+                "fps": spec["fps"],
+                "scale": spec["scale"],
+                "pivotPx": pivot,
+                "sourceBoundsPx": geometry["sourceBoundsPx"],
+                "exportBoundsPx": geometry["exportBoundsPx"],
+                "filterPaddingPx": geometry["filterPaddingPx"],
+                "sourceSize": list(size),
+                "cropBox": list(box),
+                "outputSize": [box[2] - box[0], box[3] - box[1]],
+                "anchor": spec["anchor"],
+                "offset": spec["offset"],
+                "followAnchor": spec["followAnchor"],
+            }
+            print(
+                f"{action}: {len(frames)} frames, {size[0]}x{size[1]} -> "
+                f"{box[2] - box[0]}x{box[3] - box[1]}, "
+                f"pivot ({pivot['x']}, {pivot['y']})"
+            )
+
+    (output_root / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def replace_output_tree(staging_root: Path, output_root: Path) -> None:
+    backup_root = None
+    if output_root.exists():
+        backup_root = Path(tempfile.mkdtemp(
+            prefix=f".{output_root.name}.backup-",
+            dir=output_root.parent,
+        ))
+        backup_root.rmdir()
+        output_root.rename(backup_root)
+    try:
+        staging_root.rename(output_root)
+    except BaseException:
+        if backup_root is not None:
+            backup_root.rename(output_root)
+        raise
+    if backup_root is not None:
+        shutil.rmtree(backup_root)
 
 
 def normalize(xml_path: Path, source_root: Path, output_root: Path, padding: int) -> dict[str, object]:
@@ -318,57 +463,17 @@ def normalize(xml_path: Path, source_root: Path, output_root: Path, padding: int
             "geometry": geometry,
         })
 
-    manifest: dict[str, object] = {}
-    output_root.mkdir(parents=True, exist_ok=True)
-    for item in prepared:
-        action = item["action"]
-        frames = []
-        for path in item["paths"]:
-            with Image.open(path) as frame:
-                frames.append(frame.convert("RGBA"))
-        size = item["sourceSize"]
-        geometry = item["geometry"]
-        box = union_box(frames, padding)
-        export_bounds_twips = geometry["exportBoundsTwips"]
-        symbol_origin = (-export_bounds_twips[0] / 20, -export_bounds_twips[1] / 20)
-        pivot_x, pivot_y = cropped_pivot(symbol_origin, box[0], box[1])
-        pivot = {"x": stable_number(pivot_x), "y": stable_number(pivot_y)}
-        action_dir = output_root / action
-        action_dir.mkdir(parents=True, exist_ok=True)
-        for old in action_dir.glob("*.png"):
-            old.unlink()
-        for index, frame in enumerate(frames, start=1):
-            with frame.crop(box) as cropped:
-                cropped.save(action_dir / f"{index:02d}.png", optimize=True)
-            frame.close()
-
-        spec = ACTION_SPECS[action]
-        manifest[action] = {
-            "sourceSymbol": SOURCE_SYMBOLS[action],
-            "frames": len(frames),
-            "fps": spec["fps"],
-            "scale": spec["scale"],
-            "pivotPx": pivot,
-            "sourceBoundsPx": geometry["sourceBoundsPx"],
-            "exportBoundsPx": geometry["exportBoundsPx"],
-            "filterPaddingPx": geometry["filterPaddingPx"],
-            "sourceSize": list(size),
-            "cropBox": list(box),
-            "outputSize": [box[2] - box[0], box[3] - box[1]],
-            "anchor": spec["anchor"],
-            "offset": spec["offset"],
-            "followAnchor": spec["followAnchor"],
-        }
-        print(
-            f"{action}: {len(frames)} frames, {size[0]}x{size[1]} -> "
-            f"{box[2] - box[0]}x{box[3] - box[1]}, "
-            f"pivot ({pivot['x']}, {pivot['y']})"
-        )
-
-    (output_root / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=True, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    output_root.parent.mkdir(parents=True, exist_ok=True)
+    staging_root = Path(tempfile.mkdtemp(
+        prefix=f".{output_root.name}.staging-",
+        dir=output_root.parent,
+    ))
+    try:
+        manifest = render_output(prepared, staging_root, padding)
+        replace_output_tree(staging_root, output_root)
+    except BaseException:
+        shutil.rmtree(staging_root, ignore_errors=True)
+        raise
     return manifest
 
 
