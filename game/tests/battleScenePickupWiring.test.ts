@@ -94,8 +94,9 @@ describe('BattleScene pickup wiring', () => {
     expect(source).toMatch(/equip\(this\.equipment, this\.inventory, item, this\.identity\.heroId\)/)
     expect(source).toMatch(/sellEquipmentItem\(this\.inventory, this\.soulPurse, item\)/)
     expect(source).toMatch(/id: 'test_chiyan',[\s\S]*sourceType: 'zbwq',[\s\S]*sourceUser: '悟空'/)
-    expect(source).toMatch(/const weaponShowId = this\.equipment\.weapon \? weaponShowIdForItem\(this\.equipment\.weapon\) : null/)
-    expect(source).toMatch(/const weaponVisible = weaponTexture !== null && this\.textures\.exists\(weaponTexture\)/)
+    expect(source).toMatch(/const weaponShowId = this\.equipment\.weapon \? weaponShowIdForItem\(this\.equipment\.weapon\) : 0/)
+    expect(source).toMatch(/const weaponTexture = `role1_equip\$\{weaponShowId \?\? 0\}`/)
+    expect(source).toMatch(/const weaponVisible = this\.textures\.exists\(weaponTexture\)/)
     expect(source).toMatch(/this\.weaponSprite\.setVisible\(weaponVisible\)/)
   })
 

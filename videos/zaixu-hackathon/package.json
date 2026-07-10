@@ -1,0 +1,16 @@
+{
+  "name": "zaixu-hackathon",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.7.49 preview",
+    "check": "npx --yes hyperframes@0.7.49 lint && npx --yes hyperframes@0.7.49 validate && npx --yes hyperframes@0.7.49 inspect",
+    "capture:gameplay": "cd record && node capture-final.mjs",
+    "capture:coop": "cd record && node capture-coop.mjs",
+    "render": "npx --yes hyperframes@0.7.49 render",
+    "publish": "npx --yes hyperframes@0.7.49 publish"
+  },
+  "devDependencies": {
+    "playwright": "^1.55.0"
+  }
+}
