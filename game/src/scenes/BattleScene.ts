@@ -413,6 +413,10 @@ const LEVEL1_CLIMB_GROUND_STRIP_PX = 32
 // 平台梁/地面梁/掉落物的"可视地面"统一下沉这个量，脚底贴梁顶（2026-07-10
 // 用户三提"空间位置"的最终修正）。
 const STAND_SINK = 84
+const SL11_SCENE_ART_TEX = 'online_sl11_full'
+const SL11_SCENE_ART_SCALE = 2371 / 1269
+const SL11_SCENE_ART_X = 622.699 - 443 * SL11_SCENE_ART_SCALE
+const SL11_SCENE_ART_Y = -1872.45 + STAND_SINK - 271 * SL11_SCENE_ART_SCALE
 
 interface VisualContentBounds {
   top: number
@@ -475,6 +479,20 @@ export function monsterBaselineCorrectionY(species: string): number {
 
 export function climbBackgroundVisibility(hasPillarTexture: boolean): { pillar: boolean; fallback: boolean } {
   return { pillar: hasPillarTexture, fallback: !hasPillarTexture }
+}
+
+export function climbSceneArtPlacement(): { x: number; y: number; scale: number } {
+  return { x: SL11_SCENE_ART_X, y: SL11_SCENE_ART_Y, scale: SL11_SCENE_ART_SCALE }
+}
+
+export function transferDoorVisualCenter(
+  door: { x: number; y: number; width: number; height: number },
+  climb: boolean,
+): { x: number; y: number } {
+  return {
+    x: door.x + door.width / 2,
+    y: door.y + door.height / 2 + (climb ? STAND_SINK : 0),
+  }
 }
 
 export function pillarTileFrame(sourceHeight: number): { x: number; y: number; width: number; height: number } {
@@ -810,6 +828,7 @@ export class BattleScene extends Phaser.Scene {
   // 玩家看到的是"踩空气"——2026-07-09 用户打磨反馈后补上正式可视层。
   private climbClouds: Phaser.GameObjects.GameObject[] = []
   private pillarBg?: Phaser.GameObjects.TileSprite
+  private climbSceneArt?: Phaser.GameObjects.Image
   private drops: DropEntity[] = []
   private dropSprites = new Map<DropEntity, Phaser.GameObjects.Container>()
   private lastBagFullToastAtMs = -Infinity
@@ -957,7 +976,7 @@ export class BattleScene extends Phaser.Scene {
       })
     }
     // Backgrounds for every level (L1 bg11/12/13 + L2-L4 bgN1/N2/N3, floors).
-    for (const key of ['bg11', 'bg12', 'bg13', 'floorBg1', 'online_floor12', 'online_floor12_full', 'online_floor13']) {
+    for (const key of ['bg11', 'bg12', 'bg13', 'floorBg1', 'online_sl11_full', 'online_floor12', 'online_floor12_full', 'online_floor13']) {
       this.load.image(key, `assets/extracted/level1/${key}.png`)
     }
     // L2/L3/L4 have NO floorBgN load: floorBg2.png/floorBg3.png/floorBg4.png
@@ -1510,6 +1529,7 @@ export class BattleScene extends Phaser.Scene {
     this.bg12Layer = undefined
     this.bg13Layer = undefined
     this.pillarBg = undefined
+    this.climbSceneArt = undefined
     this.climbClouds = []
     this.debugTexts = []
     this.drops = []
@@ -1842,6 +1862,7 @@ export class BattleScene extends Phaser.Scene {
     this.level1Spawner = undefined
     this.levelState = createLevelState(def)
     this.pillarBg?.setVisible(false)
+    this.climbSceneArt?.setVisible(false)
     this.bgBase?.setVisible(true)
     this.rebuildClimbClouds(false)
     this.swapBackground(this.campaignIndex)
@@ -1918,8 +1939,23 @@ export class BattleScene extends Phaser.Scene {
         this.bgBase?.setTexture(stage.background.base, '__BASE').setScale(1).setPosition(bgPlacement.x, bgPlacement.y)
         this.bgBase?.setScrollFactor(bgPlacement.scrollFactorX, bgPlacement.scrollFactorY)
       }
+      if (this.textures.exists(SL11_SCENE_ART_TEX)) {
+        const placement = climbSceneArtPlacement()
+        if (!this.climbSceneArt) {
+          this.climbSceneArt = this.add
+            .image(placement.x, placement.y, SL11_SCENE_ART_TEX)
+            .setOrigin(0, 0)
+            .setDepth(3)
+        }
+        this.climbSceneArt
+          .setPosition(placement.x, placement.y)
+          .setScale(placement.scale)
+          .setScrollFactor(1, 1)
+          .setVisible(true)
+      }
     } else {
       this.pillarBg?.setVisible(false)
+      this.climbSceneArt?.setVisible(false)
       this.bgBase?.setVisible(true)
       this.bgBase
         ?.setTexture(stage.background.base, '__BASE')
@@ -1955,6 +1991,7 @@ export class BattleScene extends Phaser.Scene {
     for (const o of this.climbClouds) o.destroy()
     this.climbClouds = []
     if (!active || !this.textures.exists('cloud_puff1')) return
+    if (this.climbSceneArt?.visible) return
     // 平台可视化 = 在碰撞矩形内部平铺贴图（用户 23:2x 拍板的做法，云朵方案
     // 全废）：贴图为生图的雕花玉石横梁 platform_beam（原版参照见 preload 注释），
     // tileSprite 左上角对齐 wall.x/wall.y，宽度=碰撞宽度，站立线=梁顶轨。
@@ -2063,6 +2100,7 @@ export class BattleScene extends Phaser.Scene {
    * narrowed corridor or the tall camera bounds. */
   private resetClimbState(): void {
     this.climbActive = false
+    this.climbSceneArt?.setVisible(false)
     this.currentWalls = []
     this.heroConfig.jump.platformResolver = undefined
     this.heroConfig.resolveHorizontal = undefined
@@ -2257,8 +2295,8 @@ export class BattleScene extends Phaser.Scene {
 
   private showPortal(): void {
     const door = this.activeDoor()
-    const cx = door.x + door.width / 2
-    const cy = door.y + door.height / 2
+    const climb = Boolean(this.level1Chain && currentSubStage(this.level1Chain).mode === 'climb')
+    const { x: cx, y: cy } = transferDoorVisualCenter(door, climb)
     if (!this.portal) {
       // l1-truth pen: real AS3 TransferWind swirl (10-frame loop) replaces
       // the old rectangle+star placeholder -- see registerTransferWind()'s
@@ -2284,7 +2322,7 @@ export class BattleScene extends Phaser.Scene {
           strokeThickness: 5,
         })
         .setOrigin(0.5)
-      this.portal = this.add.container(cx, cy, [swirl, arrow, label]).setDepth(7)
+      this.portal = this.add.container(cx, cy, [swirl, arrow, label]).setDepth(9.5)
       this.tweens.add({ targets: arrow, y: -122, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
     }
     this.portal.setPosition(cx, cy).setVisible(true)
