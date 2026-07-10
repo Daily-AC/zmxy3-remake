@@ -16,6 +16,7 @@ import json
 import math
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 from typing import Any
 
@@ -427,7 +428,14 @@ def replace_output_tree(staging_root: Path, output_root: Path) -> None:
             backup_root.rename(output_root)
         raise
     if backup_root is not None:
-        shutil.rmtree(backup_root)
+        try:
+            shutil.rmtree(backup_root)
+        except OSError as error:
+            print(
+                f"warning: output committed at {output_root}; "
+                f"could not remove backup {backup_root}: {error}",
+                file=sys.stderr,
+            )
 
 
 def normalize(xml_path: Path, source_root: Path, output_root: Path, padding: int) -> dict[str, object]:

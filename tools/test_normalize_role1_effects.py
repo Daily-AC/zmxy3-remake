@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from contextlib import redirect_stderr
 import importlib.util
+import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -377,6 +380,57 @@ class NormalizeRole1EffectsTest(unittest.TestCase):
                 {path.name for path in root.iterdir()},
                 {"source", "output", "fixture.xml"},
             )
+
+    def test_backup_cleanup_failure_is_nonfatal_after_commit(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source_root = root / "source"
+            output_root = root / "output"
+            for source_directory in normalizer.SOURCES.values():
+                directory = source_root / source_directory
+                directory.mkdir(parents=True)
+                Image.new("RGBA", (100, 50), (255, 255, 255, 255)).save(directory / "1.png")
+            xml_path = root / "fixture.xml"
+            xml_path.write_text(
+                synthetic_xml(list(normalizer.SOURCE_SYMBOLS.values())),
+                encoding="utf-8",
+            )
+            output_root.mkdir()
+            (output_root / "sentinel.txt").write_text("old output", encoding="utf-8")
+            old_output = tree_snapshot(output_root)
+            real_rmtree = normalizer.shutil.rmtree
+
+            def fail_backup_cleanup(path, *args, **kwargs):
+                if Path(path).name.startswith(".output.backup-"):
+                    raise OSError("injected backup cleanup failure")
+                return real_rmtree(path, *args, **kwargs)
+
+            stderr = io.StringIO()
+            with patch.object(normalizer.shutil, "rmtree", side_effect=fail_backup_cleanup):
+                with redirect_stderr(stderr):
+                    try:
+                        manifest = normalizer.normalize(xml_path, source_root, output_root, padding=0)
+                    except OSError as error:
+                        self.fail(f"post-commit cleanup escaped normalize: {error}")
+
+            backups = list(root.glob(".output.backup-*"))
+            self.assertEqual(len(manifest), 14)
+            self.assertNotIn("sentinel.txt", tree_snapshot(output_root))
+            self.assertEqual(
+                json.loads((output_root / "manifest.json").read_text(encoding="utf-8")),
+                manifest,
+            )
+            self.assertEqual(
+                {path.name for path in output_root.iterdir() if path.is_dir()},
+                set(normalizer.SOURCES),
+            )
+            for action in normalizer.SOURCES:
+                self.assertEqual((output_root / action / "01.png").read_bytes()[1:4], b"PNG")
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(tree_snapshot(backups[0]), old_output)
+            self.assertFalse(list(root.glob(".output.staging-*")))
+            self.assertIn(str(backups[0]), stderr.getvalue())
+            self.assertIn("injected backup cleanup failure", stderr.getvalue())
 
 
 if __name__ == "__main__":
