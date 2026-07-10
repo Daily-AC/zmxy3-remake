@@ -185,9 +185,11 @@ import {
   interpolatePosition,
   type CoopInboundMessage,
   type CoopSyncState,
+  type HeroHitPayload,
   type HitIntentPayload,
   type MonsterStateSnapshot,
 } from '../systems/coopSync'
+import { resolveCoopHeroHitDamage, selectRemoteHeroHitTargets } from '../systems/coopHeroDamage'
 import { DialogueBox } from '../ui/DialogueBox'
 import {
   HUD_TEXTURES,
@@ -831,6 +833,8 @@ export class BattleScene extends Phaser.Scene {
   private coopSentHitIntents = new Set<string>()
   private coopRemoteAttackIds = new Map<string, number>()
   private coopRemoteAttackIdSeq = 300000
+  private coopReceivedHeroHitIds = new Set<string>()
+  private coopReceivedHeroAttackIdSeq = 600000
   private coopBossDefeatedSent = false
   private remoteHeroes = new Map<string, RemoteHeroPuppet>()
   private playtimeSec = 0
@@ -2519,6 +2523,7 @@ export class BattleScene extends Phaser.Scene {
     this.coopConnection = null
     this.coopChannel = null
     this.coopSyncState = null
+    this.coopReceivedHeroHitIds.clear()
     for (const puppet of this.remoteHeroes.values()) {
       puppet.sprite.destroy()
       puppet.plate.destroy(true)
@@ -2534,6 +2539,7 @@ export class BattleScene extends Phaser.Scene {
     if (message.type === 'event' && message.name === 'hit_intent') this.applyRemoteHitIntent(message.payload)
     for (const effect of result.effects) {
       if (effect.type === 'level_event_received' && effect.kind === 'boss_defeated') this.mirrorBossDefeated()
+      else if (effect.type === 'hero_hit_received') this.applyRemoteHeroHit(effect.hit)
     }
   }
 
@@ -3208,13 +3214,14 @@ export class BattleScene extends Phaser.Scene {
    * as a normal hit, just with this move's own power/kind instead of the
    * entity's hit1 attackPower/attackKind. */
   private resolveEnemySkillHit(e: MonsterEntity, spawn: SpawnedHitbox): void {
-    if (isHeroDead(this.identity)) return
     const spec = monsterAttackSpecFor(e.species, spawn.actionName)
     const hitbox = spec
       ? resolveAttackSpec(spec, this.monsterVisualCenter(e), e.state.facing).hitbox
       : spawnedHitboxToRect(spawn)
-    if (!overlaps(hitbox, this.currentHeroHurtbox())) return
-    this.monsterHitsHero(e, spawn.damage, spawn.attackKind)
+    if (!isHeroDead(this.identity) && overlaps(hitbox, this.currentHeroHurtbox())) {
+      this.monsterHitsHero(e, spawn.damage, spawn.attackKind)
+    }
+    this.sendRemoteHeroHits(e, hitbox, spawn.damage, spawn.attackKind)
   }
 
   private currentHeroHurtbox(): Rect {
@@ -3229,6 +3236,74 @@ export class BattleScene extends Phaser.Scene {
     if (!spec) return
     const resolved = resolveAttackSpec(spec, this.monsterVisualCenter(e), e.state.facing)
     if (overlaps(resolved.hitbox, this.currentHeroHurtbox())) this.monsterHitsHero(e)
+    this.sendRemoteHeroHits(e, resolved.hitbox, e.attackPower, e.attackKind)
+  }
+
+  private sendRemoteHeroHits(
+    e: MonsterEntity,
+    hitbox: Rect,
+    power: number,
+    attackKind: AttackKind,
+  ): void {
+    if (!this.coopSession?.isHost || !this.coopSyncState || !this.coopChannel) return
+    const monsterCenter = this.monsterVisualCenter(e)
+    const targets = selectRemoteHeroHitTargets(
+      hitbox,
+      monsterCenter.x,
+      Object.values(this.coopSyncState.heroes).map((view) => view.snapshot),
+      this.coopSession.myUserId,
+      {
+        offset: roleData.offset,
+        scale: HERO_SCALE,
+        hurtboxWidth: HERO_HURTBOX_W,
+        hurtboxHeight: HERO_HURTBOX_H,
+      },
+    )
+    const sourceMonsterId = this.coopMonsterId(e)
+    for (const target of targets) {
+      const attackId = `${sourceMonsterId}:${++e.attackId}`
+      this.coopChannel.sendHeroHit({
+        targetUserId: target.targetUserId,
+        sourceMonsterId,
+        attackId,
+        power,
+        attackKind,
+        knockbackX: target.knockbackX,
+      })
+    }
+  }
+
+  private applyRemoteHeroHit(payload: HeroHitPayload): void {
+    if (!this.coopSession) return
+    if (this.coopSession.isHost) return
+    if (payload.targetUserId !== this.coopSession.myUserId) return
+    if (this.coopReceivedHeroHitIds.has(payload.attackId)) return
+    this.coopReceivedHeroHitIds.add(payload.attackId)
+
+    const mitigated = resolveCoopHeroHitDamage(
+      payload,
+      heroTotalDef(this.identity, this.equipment),
+      heroMagicDef(this.identity),
+    )
+    const hit: HeroHit = {
+      sourceId: payload.sourceMonsterId,
+      attackId: ++this.coopReceivedHeroAttackIdSeq,
+      damage: mitigated,
+      knockbackX: payload.knockbackX,
+    }
+    const events = damageHero(this.identity, hit, this.simClockMs)
+    for (const event of events) {
+      if (event.type === 'hurt') {
+        this.floatText(this.heroVisualCenter().x, this.heroVisibleTopY() - 12, `${mitigated}`, 'hurt')
+        this.hero.setTint(0xff9a9a)
+        this.time.delayedCall(120, () => {
+          if (!isHeroDead(this.identity)) this.hero.clearTint()
+        })
+      } else if (event.type === 'death') {
+        this.floatText(this.heroVisualCenter().x, this.heroVisibleTopY() - 12, `${mitigated}`, 'hurt')
+        this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
+      }
+    }
   }
 
   private reapMonsters(): void {

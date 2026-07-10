@@ -40,4 +40,23 @@ describe('BattleScene coop integration wiring', () => {
     expect(battle).toMatch(/this\.coopChannel\.send\(encodeLevelEvent\(\{ kind: 'boss_defeated' \}\)\)/)
     expect(battle).toMatch(/private mirrorBossDefeated\(\): void/)
   })
+
+  it('lets the host hit remote hero snapshots with melee and skill hitboxes', () => {
+    const battle = source()
+
+    expect(battle).toMatch(/private sendRemoteHeroHits\(/)
+    expect(battle).toMatch(/selectRemoteHeroHitTargets\(/)
+    expect(battle).toMatch(/private resolveMonsterAttackFrame\([\s\S]*this\.sendRemoteHeroHits\(/)
+    expect(battle).toMatch(/private resolveEnemySkillHit\([\s\S]*this\.sendRemoteHeroHits\(/)
+  })
+
+  it('applies received host hero hits only on peers with payload deduplication', () => {
+    const battle = source()
+
+    expect(battle).toMatch(/effect\.type === 'hero_hit_received'[\s\S]*this\.applyRemoteHeroHit\(effect\.hit\)/)
+    expect(battle).toMatch(/private coopReceivedHeroHitIds = new Set<string>\(\)/)
+    expect(battle).toMatch(/if \(this\.coopSession\.isHost\) return/)
+    expect(battle).toMatch(/resolveCoopHeroHitDamage\(/)
+    expect(battle).toMatch(/damageHero\(this\.identity, hit, this\.simClockMs\)/)
+  })
 })
