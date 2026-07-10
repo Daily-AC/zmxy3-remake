@@ -904,7 +904,7 @@ export class BattleScene extends Phaser.Scene {
       })
     }
     // Backgrounds for every level (L1 bg11/12/13 + L2-L4 bgN1/N2/N3, floors).
-    for (const key of ['bg11', 'bg12', 'bg13', 'floorBg1', 'online_floor12', 'online_floor13']) {
+    for (const key of ['bg11', 'bg12', 'bg13', 'floorBg1', 'online_floor12', 'online_floor12_full', 'online_floor13']) {
       this.load.image(key, `assets/extracted/level1/${key}.png`)
     }
     // L2/L3/L4 have NO floorBgN load: floorBg2.png/floorBg3.png/floorBg4.png
@@ -1828,7 +1828,11 @@ export class BattleScene extends Phaser.Scene {
     this.bg12Layer?.setScale(1).setPosition(0, 0).setScrollFactor(1, 0)
     this.bg13Layer?.setScale(1).setPosition(0, 0).setScrollFactor(1, 0)
     if (stage.background.floor && this.floorImg && this.textures.exists(stage.background.floor)) {
-      this.floorImg.setVisible(true).setTexture(stage.background.floor).setPosition(0, GROUND_Y - 5).setScale(1)
+      this.floorImg
+        .setVisible(true)
+        .setTexture(stage.background.floor)
+        .setPosition(stage.background.floorX ?? 0, GROUND_Y - 5)
+        .setScale(1)
     } else {
       this.floorImg?.setVisible(false)
     }

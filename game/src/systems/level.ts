@@ -217,6 +217,7 @@ export interface SubStageDef {
     base: string
     foreground?: string
     floor?: string
+    floorX?: number
     scrollFactorX?: number
   }
   fallbackWalls: Wall[]

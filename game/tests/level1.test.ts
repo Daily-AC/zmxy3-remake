@@ -135,7 +135,8 @@ describe('Stage 1 campaign levels recovered from AS3 stage/level coordinates', (
     expect(sl12.background).toEqual({
       base: 'floorBg1',
       foreground: 'bg12',
-      floor: 'online_floor12',
+      floor: 'online_floor12_full',
+      floorX: -200,
       scrollFactorX: 0.112,
     })
     expect(sl12.fallbackWalls[0]).toMatchObject({ x: -180.629, y: 501.05, width: 5199.959, height: 20 })
