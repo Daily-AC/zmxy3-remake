@@ -32,9 +32,27 @@ function effect(action: string, forward: number, y: number): VisualAttachmentSpe
 }
 
 /**
- * L1 attack registration points and frame timings recovered from the monster
- * classes. Effect pivots remain zero until normalized assets supply source
- * bounds in Task 6; offsets are already authoritative AS3 coordinates.
+ * L1 attack timing and attachment data with adapted AABB collision geometry.
+ *
+ * Source boundaries:
+ * - Monster2/4/5 hit1 fractions and old reach values come from their AS3
+ *   animation triggers/spawn offsets. Their boxes preserve that reach as a
+ *   front-facing `forward=reach/2,width=reach` fallback with the project's
+ *   standard 150px height; those boxes are not recovered effect geometry.
+ * - Monster3 effect offsets are AS3. Its 120x90 and 140x100 boxes are the
+ *   existing monsterBehaviors/kagami placeholders and remain TODO-verify.
+ *   hit2's 30/31 fraction follows the existing overlay's one-tick-early spawn
+ *   convention rather than claiming the source effect fires before its last
+ *   AS3 tick.
+ * - Monster7's effect offset is AS3. Its 160x150 box is adapted from the Task4
+ *   crossing acceptance case and the monster's 150px sheet cell.
+ * - Monster8 effect offsets are AS3. Its 150x150 boxes use the sheet cell as
+ *   adapted geometry; they are not recovered SpecialEffectBullet bounds.
+ * - Monster30's origin offset and hit1 timing are AS3. Its zero-area box is a
+ *   non-colliding sentinel because Monster30Bullet1 owns collision in flight.
+ *
+ * Effect pivots remain zero until normalized assets supply source bounds in
+ * Task 6.
  */
 export const MONSTER_ATTACKS = {
   monster2: {
@@ -53,7 +71,7 @@ export const MONSTER_ATTACKS = {
     },
     hit2: {
       action: 'hit2',
-      hitFrameFraction: 1,
+      hitFrameFraction: 30 / 31,
       hitbox: { forward: 155, y: -30, width: 140, height: 100 },
       effect: effect('Monster3Bullet2', 155, -30),
     },
