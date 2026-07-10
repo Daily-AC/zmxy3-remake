@@ -4,6 +4,7 @@ import {
   createLevelState,
   createSubStageChainState,
   currentSubStage,
+  expandMonsterSpawnRoster,
   getActiveWaveRoster,
   markCurrentSubStageCleared,
   tryAdvanceSubStage,
@@ -11,7 +12,14 @@ import {
 } from '../src/systems/level'
 import { advanceMonster, initMonster, type MonsterConfig } from '../src/systems/monsterSim'
 import { TICK_MS } from '../src/systems/tick'
-import { LEVEL_1_SL12, LEVEL_1_SL13, LEVEL_1_WUYING, LEVEL1_MONSTER_STATS } from '../src/data/levels/level1'
+import {
+  LEVEL_1_SL12,
+  LEVEL_1_SL13,
+  LEVEL_1_WUYING,
+  LEVEL_2_TIANGONGDAO,
+  LEVEL_3_NANTIANMEN,
+  LEVEL1_MONSTER_STATS,
+} from '../src/data/levels/level1'
 
 function clearAllWaves(def: typeof LEVEL_1_SL12) {
   const state = createLevelState(def)
@@ -40,7 +48,7 @@ function cfgFor(stats: MonsterConfig['stats'], rng: () => number): MonsterConfig
   }
 }
 
-describe('Level 1 九重天 — AS3 three-substage structure', () => {
+describe('Stage 1 campaign levels recovered from AS3 stage/level coordinates', () => {
   it('models sl11 as the vertical climb with StageListener11 swarm and height-triggered 巫鹰', () => {
     const sl11 = LEVEL_1_WUYING.subStages[0]
 
@@ -63,26 +71,74 @@ describe('Level 1 九重天 — AS3 three-substage structure', () => {
     })
   })
 
-  it('models sl12 and sl13 as horizontal combat substages backed by existing WaveSpec stop-point runtime', () => {
-    expect(LEVEL_1_WUYING.subStages.map((s) => s.id)).toEqual(['sl11', 'sl12', 'sl13'])
-    expect(LEVEL_1_WUYING.subStages[1].waveLevel).toBe(LEVEL_1_SL12)
-    expect(LEVEL_1_WUYING.subStages[2].waveLevel).toBe(LEVEL_1_SL13)
+  it('keeps 九重天, 天宫道 and 南天门 as separate levels instead of one fused chain', () => {
+    expect(LEVEL_1_WUYING.subStages.map((s) => s.id)).toEqual(['sl11'])
+    expect(LEVEL_2_TIANGONGDAO.subStages.map((s) => s.id)).toEqual(['sl12'])
+    expect(LEVEL_3_NANTIANMEN.subStages.map((s) => s.id)).toEqual(['sl13'])
+    expect(LEVEL_2_TIANGONGDAO.subStages[0].waveLevel).toBe(LEVEL_1_SL12)
+    expect(LEVEL_3_NANTIANMEN.subStages[0].waveLevel).toBe(LEVEL_1_SL13)
 
     expect(areStopPointsCleared(clearAllWaves(LEVEL_1_SL12))).toBe(true)
     expect(areStopPointsCleared(clearAllWaves(LEVEL_1_SL13))).toBe(true)
   })
 
-  it('substage chain advances by transferDoor from sl11 to sl12 to sl13', () => {
-    const chain = createSubStageChainState(LEVEL_1_WUYING)
+  it('preserves all five official 天宫道 StopPoints in traversal order', () => {
+    expect(LEVEL_1_SL12.stopPoints.map((point) => point.stopX)).toEqual([
+      1181.95,
+      1844.25,
+      2848.5,
+      3824.75,
+      4696.1,
+    ])
+  })
 
-    expect(currentSubStage(chain).id).toBe('sl11')
-    markCurrentSubStageCleared(chain)
-    expect(tryAdvanceSubStage(chain, 1010, -2050, true)).toBe(true)
-    expect(currentSubStage(chain).id).toBe('sl12')
+  it('preserves all thirteen official 天宫道 MonsterAppearPoints', () => {
+    const points = LEVEL_1_SL12.stopPoints.flatMap((point) => point.roster)
+    expect(points).toHaveLength(13)
+    expect(points.map(({ species, x, delayMs, intervalMs, quantity }) => ({ species, x, delayMs, intervalMs, quantity }))).toEqual([
+      { species: 'monster8', x: 372.1, delayMs: 2000, intervalMs: 1000, quantity: 4 },
+      { species: 'monster8', x: 992.05, delayMs: 2000, intervalMs: 1000, quantity: 4 },
+      { species: 'monster7', x: 1291.2, delayMs: 6000, intervalMs: 1000, quantity: 3 },
+      { species: 'monster8', x: 1545.9, delayMs: 2000, intervalMs: 1000, quantity: 5 },
+      { species: 'monster7', x: 1808, delayMs: 6000, intervalMs: 1000, quantity: 3 },
+      { species: 'monster7', x: 1973.3, delayMs: 2000, intervalMs: 1000, quantity: 6 },
+      { species: 'monster7', x: 2685.95, delayMs: 2000, intervalMs: 1000, quantity: 6 },
+      { species: 'monster7', x: 2969.75, delayMs: 2000, intervalMs: 1000, quantity: 3 },
+      { species: 'monster8', x: 2913.45, delayMs: 6000, intervalMs: 1000, quantity: 3 },
+      { species: 'monster7', x: 3583.8, delayMs: 2000, intervalMs: 1000, quantity: 4 },
+      { species: 'monster8', x: 3659.9, delayMs: 6000, intervalMs: 1000, quantity: 3 },
+      { species: 'monster4', x: 4034.3, delayMs: 2000, intervalMs: 1000, quantity: 1 },
+      { species: 'monster2', x: 4631.35, delayMs: 2000, intervalMs: 1000, quantity: 1 },
+    ])
+    const expanded = expandMonsterSpawnRoster(points)
+    expect(expanded).toHaveLength(46)
+    expect(expanded.slice(0, 4).map(({ x, delayMs }) => ({ x, delayMs }))).toEqual([
+      { x: 372.1, delayMs: 2000 },
+      { x: 372.1, delayMs: 3000 },
+      { x: 372.1, delayMs: 4000 },
+      { x: 372.1, delayMs: 5000 },
+    ])
+  })
 
-    markCurrentSubStageCleared(chain)
-    expect(tryAdvanceSubStage(chain, 4710, 400, true)).toBe(true)
-    expect(currentSubStage(chain).id).toBe('sl13')
+  it('gates each 天宫道 wave until its official StopPoint is reached', () => {
+    const state = createLevelState(LEVEL_1_SL12)
+    expect(updateLevelSpawn(state, 0, 1, 1181.94)).toBe(false)
+    expect(updateLevelSpawn(state, 0, 1, 1181.95)).toBe(true)
+    expect(getActiveWaveRoster(state).map((point) => point.x)).toEqual([372.1, 992.05])
+  })
+
+  it('uses the mined sl12 bounds, transfer door and official extracted image layers', () => {
+    const sl12 = LEVEL_2_TIANGONGDAO.subStages[0]
+    expect(sl12.name).toBe('天宫道')
+    expect(sl12.bounds).toEqual({ left: -195.997, right: 5019.33, top: -138.582, bottom: 540 })
+    expect(sl12.door).toEqual({ x: 4520.9, y: 341.65, width: 185.8, height: 165 })
+    expect(sl12.background).toEqual({
+      base: 'floorBg1',
+      foreground: 'bg12',
+      floor: 'online_floor12',
+      scrollFactorX: 0.112,
+    })
+    expect(sl12.fallbackWalls[0]).toMatchObject({ x: -180.629, y: 501.05, width: 5199.959, height: 20 })
   })
 
   it('uses REAL recovered magnitudes — Monster30 is the 1-hp swarm imp, not the placeholder 150', () => {
@@ -120,12 +176,11 @@ describe('Level 1 九重天 — AS3 three-substage structure', () => {
     expect(events.some((e) => e.type === 'attack-start')).toBe(true)
   })
 
-  it('tier separation: mini-bosses live in sl12/sl13 waves, 巫鹰 only in sl11 height trigger', () => {
+  it('tier separation: 天宫道双将 and 南天门巨灵神 stay outside 九重天', () => {
     const sl12Waves = LEVEL_1_SL12.stopPoints.map((sp) => sp.roster.map((r) => r.species))
     const sl13Waves = LEVEL_1_SL13.stopPoints.map((sp) => sp.roster.map((r) => r.species))
 
-    expect(sl12Waves).toContainEqual(['monster4'])
-    expect(sl12Waves).toContainEqual(['monster2'])
+    expect(sl12Waves.at(-1)).toEqual(['monster4', 'monster2'])
     expect(sl13Waves).toContainEqual(['monster5'])
     expect([...sl12Waves.flat(), ...sl13Waves.flat()]).not.toContain('monster3')
     expect(LEVEL_1_WUYING.subStages[0].continuousSpawner!.heightTrigger!.boss.species).toBe('monster3')

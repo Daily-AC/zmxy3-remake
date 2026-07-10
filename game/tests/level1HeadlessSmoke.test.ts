@@ -16,7 +16,7 @@ import {
   updateContinuousSpawner,
   updateLevelSpawn,
 } from '../src/systems/level'
-import { LEVEL_1_WUYING, LEVEL1_MONSTER_STATS } from '../src/data/levels/level1'
+import { LEVEL_1_WUYING, LEVEL_2_TIANGONGDAO, LEVEL1_MONSTER_STATS } from '../src/data/levels/level1'
 
 function monsterCfg(species: string): MonsterConfig {
   return {
@@ -33,7 +33,7 @@ function monsterCfg(species: string): MonsterConfig {
   }
 }
 
-function clearWaveState(level = createLevelState(currentSubStage(createSubStageChainState(LEVEL_1_WUYING)).waveLevel!)) {
+function clearWaveState(level = createLevelState(currentSubStage(createSubStageChainState(LEVEL_2_TIANGONGDAO)).waveLevel!)) {
   for (let guard = 0; guard < 100 && !areStopPointsCleared(level); guard++) {
     if (updateLevelSpawn(level, 0)) {
       const roster = getActiveWaveRoster(level)
@@ -45,7 +45,7 @@ function clearWaveState(level = createLevelState(currentSubStage(createSubStageC
 }
 
 describe('Level 1 headless smoke (systems only)', () => {
-  it('enter L1 -> climb platforms -> height boss -> door -> sl12 -> sl13 -> isLevelCleared', () => {
+  it('clears 九重天 independently, then clears 天宫道 independently', () => {
     const chain = createSubStageChainState(LEVEL_1_WUYING)
     const sl11 = currentSubStage(chain)
     expect(sl11.id).toBe('sl11')
@@ -93,19 +93,14 @@ describe('Level 1 headless smoke (systems only)', () => {
     expect(boss.mode).toBe('dead')
     markCurrentSubStageCleared(chain)
     expect(tryAdvanceSubStage(chain, sl11.door.x + 1, sl11.door.y + 1, true)).toBe(true)
+    expect(isSubStageChainCleared(chain)).toBe(true)
 
-    const sl12 = currentSubStage(chain)
+    const tiangongdao = createSubStageChainState(LEVEL_2_TIANGONGDAO)
+    const sl12 = currentSubStage(tiangongdao)
     expect(sl12.id).toBe('sl12')
     expect(areStopPointsCleared(clearWaveState(createLevelState(sl12.waveLevel!)))).toBe(true)
-    markCurrentSubStageCleared(chain)
-    expect(tryAdvanceSubStage(chain, sl12.door.x + 1, sl12.door.y + 1, true)).toBe(true)
-
-    const sl13 = currentSubStage(chain)
-    expect(sl13.id).toBe('sl13')
-    expect(areStopPointsCleared(clearWaveState(createLevelState(sl13.waveLevel!)))).toBe(true)
-    markCurrentSubStageCleared(chain)
-    expect(tryAdvanceSubStage(chain, sl13.door.x + 1, sl13.door.y + 1, true)).toBe(true)
-
-    expect(isSubStageChainCleared(chain)).toBe(true)
+    markCurrentSubStageCleared(tiangongdao)
+    expect(tryAdvanceSubStage(tiangongdao, sl12.door.x + 1, sl12.door.y + 1, true)).toBe(true)
+    expect(isSubStageChainCleared(tiangongdao)).toBe(true)
   })
 })

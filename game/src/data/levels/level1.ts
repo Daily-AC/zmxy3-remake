@@ -1,26 +1,20 @@
-// Level 1 — 巫鹰关 (the climb to the demon bird), ported from 1.swf.
+// Stage 1 levels recovered from 1.swf/stageInfo.
 //
-// This REPLACES the project's original hand-made level 1: the placeholder
-// LEVEL_1 in systems/level.ts uses monster30/2/4/7/8 with INVENTED small stats
-// (that port's own tuning, e.g. monster30 hp 150) because it predates the
-// asset-pipeline. This pack carries the REAL recovered numbers and now models
-// L1 as the original sl11 -> sl12 -> sl13 substage chain instead of one flat
-// arena. sl12/sl13 still reuse level.ts's existing WaveSpec runtime internally;
-// sl11 uses the new continuous-spawner mode.
+// The AS3 digits are stage + level coordinates: sl11 is 九重天, sl12 is
+// 天宫道 and sl13 is 南天门. They are separate world-map levels, not one chain.
+// Each stays represented as a one-substage chain so the recovered climb/wall/
+// transfer-door runtime can be shared without flattening its geometry.
 //
-// Provenance: 1.swf's three sub-stages (StageListener11/12/13 in 打开我开始玩.swf):
+// Provenance: 1.swf's three stage-one levels (StageListener11/12/13):
 //   - Stage 11 is a vertical climb: a swarm of Monster30 (真·hp 1, speed 8 —
 //     the fast/fragile flying imps) spawns in waves while the hero ascends;
 //     reaching the summit fires StageListener11.callBoss() -> createMonster(3)
 //     = 巫鹰 (Monster3), the level's arena boss (the only monster gated
 //     `isBoss=true` on `gc.curStage==1 && gc.curLevel==1`).
-//   - Stage 12 roster: grunts Monster8/7 + mini-bosses 千里眼(M4)/顺风耳(M2).
+//   - Stage 12: 5 StopPoints and 13 MonsterAppearPoints recovered from the
+//     official stageInfo scene. The final stop contains 千里眼(M4)+顺风耳(M2).
 //   - Stage 13 roster: grunts Monster8/7, Monster30 swarm + 巨灵神(M5).
-// sl12/sl13 combat placement is approximated as stop-point waves because the
-// AS3 StageListener12 gate logic has no createMonster calls and StageListener13
-// only preloads assets; static timeline placement is still pending geometry/
-// scene mining. Boss-grade monsters stay separated from grunt rosters where
-// the original data makes that clear.
+// sl13 remains available as deferred 南天门 data; it is not fused into L1/L2.
 //
 // STATS ARE REAL, recovered verbatim from each export.monster.MonsterN
 // constructor, branch-selected for the level-1 context (`gc.curStage==1 &&
@@ -83,8 +77,25 @@ function wave(...species: string[]): WaveSpec {
   return { roster: species.map(unit) }
 }
 
+function appearPoint(
+  species: string,
+  x: number,
+  delaySeconds: number,
+  intervalSeconds: number,
+  quantity: number,
+): MonsterSpawnSpec {
+  return {
+    ...unit(species),
+    x,
+    delayMs: delaySeconds * 1000,
+    intervalMs: intervalSeconds * 1000,
+    quantity,
+  }
+}
+
 const SL11_BOUNDS = { left: 0, right: 1132, top: -2150, bottom: 430 }
-const SL_HORIZONTAL_BOUNDS = { left: 0, right: 4890, top: 0, bottom: 540 }
+const SL12_BOUNDS = { left: -195.997, right: 5019.33, top: -138.582, bottom: 540 }
+const SL13_BOUNDS = { left: -24.997, right: 4996.35, top: -150.582, bottom: 540 }
 
 // Adapted fallback geometry used only when game/src/data/levels/level1-geometry.json
 // has not landed from the parallel mining task yet. Coordinates stay in the
@@ -103,21 +114,42 @@ const SL11_FALLBACK_WALLS: Wall[] = [
   { type: 'through', x: 440, y: -1950, width: 320, height: 24 },
 ]
 
-const SL12_WALLS: Wall[] = [{ type: 'solid', x: 0, y: 400, width: 4890, height: 60 }]
-const SL13_WALLS: Wall[] = [{ type: 'solid', x: 0, y: 400, width: 4890, height: 60 }]
+const SL12_WALLS: Wall[] = [{ type: 'solid', x: -180.629, y: 501.05, width: 5199.959, height: 20 }]
+const SL13_WALLS: Wall[] = [{ type: 'solid', x: -3.65, y: 501, width: 5000, height: 39.999 }]
 
-const SL_DOOR = { x: 4700, y: 300, width: 120, height: 160 }
-const HORIZONTAL_ARENA_BOUNDS = {
-  left: SL_HORIZONTAL_BOUNDS.left,
-  right: SL_HORIZONTAL_BOUNDS.right,
-  top: SL_HORIZONTAL_BOUNDS.top,
-  bottom: SL_HORIZONTAL_BOUNDS.bottom,
-}
+const SL12_DOOR = { x: 4520.9, y: 341.65, width: 185.8, height: 165 }
+const SL13_DOOR = { x: 4059.3, y: 342.45, width: 185.8, height: 165 }
 
 const SL12_WAVES: WaveSpec[] = [
-  wave('monster8', 'monster7', 'monster8'),
-  wave('monster4'), // 千里眼
-  wave('monster2'), // 顺风耳
+  {
+    stopX: 1181.95,
+    roster: [appearPoint('monster8', 372.1, 2, 1, 4), appearPoint('monster8', 992.05, 2, 1, 4)],
+  },
+  {
+    stopX: 1844.25,
+    roster: [
+      appearPoint('monster7', 1291.2, 6, 1, 3),
+      appearPoint('monster8', 1545.9, 2, 1, 5),
+      appearPoint('monster7', 1808, 6, 1, 3),
+    ],
+  },
+  {
+    stopX: 2848.5,
+    roster: [appearPoint('monster7', 1973.3, 2, 1, 6), appearPoint('monster7', 2685.95, 2, 1, 6)],
+  },
+  {
+    stopX: 3824.75,
+    roster: [
+      appearPoint('monster7', 2969.75, 2, 1, 3),
+      appearPoint('monster8', 2913.45, 6, 1, 3),
+      appearPoint('monster7', 3583.8, 2, 1, 4),
+      appearPoint('monster8', 3659.9, 6, 1, 3),
+    ],
+  },
+  {
+    stopX: 4696.1,
+    roster: [appearPoint('monster4', 4034.3, 2, 1, 1), appearPoint('monster2', 4631.35, 2, 1, 1)],
+  },
 ]
 
 const SL13_WAVES: WaveSpec[] = [
@@ -127,25 +159,25 @@ const SL13_WAVES: WaveSpec[] = [
 
 export const LEVEL_1_SL12: LevelDef = {
   id: 'level-1-sl12',
-  name: '九重天 · 天门前庭',
+  name: '天宫道',
   spawnIntervalMs: 6000,
   stopPoints: SL12_WAVES,
   // Not used as an arena boss in the L1 substage flow; kept to reuse LevelDef's
   // existing stop-point runtime without mutating that contract.
   boss: { species: 'monster4', stats: LEVEL1_MONSTER_STATS.monster4, label: LEVEL1_MONSTER_NAMES.monster4 },
-  door: SL_DOOR,
-  arenaBounds: HORIZONTAL_ARENA_BOUNDS,
+  door: SL12_DOOR,
+  arenaBounds: SL12_BOUNDS,
 }
 
 export const LEVEL_1_SL13: LevelDef = {
   id: 'level-1-sl13',
-  name: '九重天 · 南天门',
+  name: '南天门',
   spawnIntervalMs: 6000,
   stopPoints: SL13_WAVES,
   // Not used as an arena boss in the L1 substage flow; see LEVEL_1_SL12.
   boss: { species: 'monster5', stats: LEVEL1_MONSTER_STATS.monster5, label: LEVEL1_MONSTER_NAMES.monster5 },
-  door: SL_DOOR,
-  arenaBounds: HORIZONTAL_ARENA_BOUNDS,
+  door: SL13_DOOR,
+  arenaBounds: SL13_BOUNDS,
 }
 
 export const LEVEL_1_WUYING: SubStageChainDef = {
@@ -183,25 +215,40 @@ export const LEVEL_1_WUYING: SubStageChainDef = {
         },
       },
     },
+  ],
+}
+
+export const LEVEL_2_TIANGONGDAO: SubStageChainDef = {
+  id: 'level-2',
+  name: '天宫道',
+  subStages: [
     {
       id: 'sl12',
-      name: '九重天 · 天门前庭',
+      name: '天宫道',
       mode: 'horizontal',
-      bounds: SL_HORIZONTAL_BOUNDS,
-      door: SL_DOOR,
+      bounds: SL12_BOUNDS,
+      door: SL12_DOOR,
       heroStart: { x: 180, y: 400 },
-      background: { base: 'bg12', floor: 'online_floor12' },
+      background: { base: 'floorBg1', foreground: 'bg12', floor: 'online_floor12', scrollFactorX: 0.112 },
       fallbackWalls: SL12_WALLS,
       waveLevel: LEVEL_1_SL12,
     },
+  ],
+}
+
+/** Deferred stage-one level 3 data; kept out of the active two-level campaign. */
+export const LEVEL_3_NANTIANMEN: SubStageChainDef = {
+  id: 'level-3-nantianmen',
+  name: '南天门',
+  subStages: [
     {
       id: 'sl13',
-      name: '九重天 · 南天门',
+      name: '南天门',
       mode: 'horizontal',
-      bounds: SL_HORIZONTAL_BOUNDS,
-      door: SL_DOOR,
+      bounds: SL13_BOUNDS,
+      door: SL13_DOOR,
       heroStart: { x: 180, y: 400 },
-      background: { base: 'bg13', floor: 'online_floor13' },
+      background: { base: 'floorBg1', foreground: 'bg13', floor: 'online_floor13', scrollFactorX: 0.112 },
       fallbackWalls: SL13_WALLS,
       waveLevel: LEVEL_1_SL13,
     },

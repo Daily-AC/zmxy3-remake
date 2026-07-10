@@ -105,6 +105,12 @@ export function scaleMonsterStats(base: MonsterStats, hpMultiplier: number, defB
 export interface MonsterSpawnSpec {
   species: MonsterSpeciesId
   stats: MonsterStats
+  /** Recovered MonsterAppearPoint registration coordinate. */
+  x?: number
+  /** Recovered per-point timing. The current renderer expands the complete point immediately. */
+  delayMs?: number
+  intervalMs?: number
+  quantity?: number
 }
 
 function spawn(species: BuiltinSpeciesId): MonsterSpawnSpec {
@@ -116,8 +122,21 @@ function spawnScaled(species: BuiltinSpeciesId, hpMultiplier: number, defBonus: 
 }
 
 export interface WaveSpec {
-  /** One entry per monster to spawn for this wave; array length = wave size. */
+  /** One entry per monster or recovered MonsterAppearPoint. */
   roster: MonsterSpawnSpec[]
+  /** Recovered StopPoint x coordinate. The wave remains dormant until reached. */
+  stopX?: number
+}
+
+/** Expand recovered MonsterAppearPoint quantities into concrete spawn requests. */
+export function expandMonsterSpawnRoster(roster: MonsterSpawnSpec[]): MonsterSpawnSpec[] {
+  return roster.flatMap((point) =>
+    Array.from({ length: Math.max(1, Math.floor(point.quantity ?? 1)) }, (_, index) => ({
+      ...point,
+      delayMs: (point.delayMs ?? 0) + index * (point.intervalMs ?? 0),
+      quantity: 1,
+    })),
+  )
 }
 
 export interface BossSpec {
@@ -196,7 +215,9 @@ export interface SubStageDef {
   heroStart: { x: number; y: number }
   background: {
     base: string
+    foreground?: string
     floor?: string
+    scrollFactorX?: number
   }
   fallbackWalls: Wall[]
   continuousSpawner?: ContinuousSpawnerSpec
@@ -374,6 +395,7 @@ export function updateLevelSpawn(
   state: LevelState,
   activeMonsterCount: number,
   alivePlayerCount: number = 1,
+  playerX: number = Number.POSITIVE_INFINITY,
 ): boolean {
   if (state.bossTriggered || alivePlayerCount === 0) return false
 
@@ -386,6 +408,7 @@ export function updateLevelSpawn(
   const stopPoint = state.stopPoints[idx]
 
   if (!stopPoint.waveSpawned) {
+    if (stopPoint.wave.stopX !== undefined && playerX < stopPoint.wave.stopX) return false
     stopPoint.waveSpawned = true
     return true
   }
