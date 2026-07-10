@@ -34,6 +34,8 @@ export interface HeroStateSnapshot {
 
 export interface MonsterStateSnapshot {
   monsterId: string
+  species: string
+  isBoss: boolean
   x: number
   y: number
   facing: Facing
@@ -51,6 +53,7 @@ export interface HeroStatePayload {
 export interface MonsterStatePayload {
   coopType: 'monster_state'
   monsters: MonsterStateSnapshot[]
+  progressMaxX?: number
 }
 
 export type CoopStatePayload = HeroStatePayload | MonsterStatePayload
@@ -125,6 +128,7 @@ export interface CoopSyncState {
   lastStateSeqBySender: Record<string, number>
   heroes: Record<string, RemoteHeroView>
   monsters: Record<string, RemoteMonsterView>
+  hostProgressMaxX?: number
 }
 
 export type CoopSyncEffect =
@@ -189,12 +193,17 @@ export function encodeMonsterState(
   monsters: MonsterStateSnapshot[],
   seq: number,
   sentAt: number,
+  progressMaxX?: number,
 ): CoopStateMessage {
   return {
     type: 'state',
     seq,
     sentAt,
-    payload: { coopType: 'monster_state', monsters: monsters.map((monster) => ({ ...monster })) },
+    payload: {
+      coopType: 'monster_state',
+      monsters: monsters.map((monster) => ({ ...monster })),
+      ...(progressMaxX !== undefined ? { progressMaxX } : {}),
+    },
   }
 }
 
@@ -419,6 +428,7 @@ function applyStateMessage(state: CoopSyncState, message: CoopStateMessage): Coo
       ...state,
       lastStateSeqBySender: { ...state.lastStateSeqBySender, [fromUserId]: message.seq },
       monsters,
+      hostProgressMaxX: message.payload.progressMaxX ?? state.hostProgressMaxX,
     },
     effects,
     outgoing: [],
@@ -523,6 +533,8 @@ function applyHitSettlement(state: CoopSyncState, message: Extract<CoopEventMess
   const snapshot: MonsterStateSnapshot = {
     ...(existing?.snapshot ?? {
       monsterId: settlement.targetMonsterId,
+      species: 'monster30',
+      isBoss: false,
       x: 0,
       y: 0,
       facing: 1 as Facing,
@@ -622,7 +634,12 @@ function decodeStatePayload(value: unknown): CoopStatePayload | null {
   }
   if (value.coopType === 'monster_state') {
     if (!Array.isArray(value.monsters) || !value.monsters.every(isMonsterStateSnapshot)) return null
-    return { coopType: 'monster_state', monsters: value.monsters }
+    if (value.progressMaxX !== undefined && !isFiniteNumber(value.progressMaxX)) return null
+    return {
+      coopType: 'monster_state',
+      monsters: value.monsters,
+      ...(isFiniteNumber(value.progressMaxX) ? { progressMaxX: value.progressMaxX } : {}),
+    }
   }
   return null
 }
@@ -722,6 +739,8 @@ function isMonsterStateSnapshot(value: unknown): value is MonsterStateSnapshot {
   if (!isRecord(value)) return false
   return (
     typeof value.monsterId === 'string' &&
+    typeof value.species === 'string' &&
+    typeof value.isBoss === 'boolean' &&
     isFiniteNumber(value.x) &&
     isFiniteNumber(value.y) &&
     isFacing(value.facing) &&

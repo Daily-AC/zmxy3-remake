@@ -5,6 +5,7 @@ import {
   createSubStageChainState,
   currentSubStage,
   expandMonsterSpawnRoster,
+  horizontalProgressMaxX,
   getActiveWaveRoster,
   markCurrentSubStageCleared,
   tryAdvanceSubStage,
@@ -113,11 +114,23 @@ describe('Stage 1 campaign levels recovered from AS3 stage/level coordinates', (
     const expanded = expandMonsterSpawnRoster(points)
     expect(expanded).toHaveLength(46)
     expect(expanded.slice(0, 4).map(({ x, delayMs }) => ({ x, delayMs }))).toEqual([
-      { x: 347.6, delayMs: 2000 },
       { x: 347.6, delayMs: 3000 },
       { x: 347.6, delayMs: 4000 },
       { x: 347.6, delayMs: 5000 },
+      { x: 347.6, delayMs: 6000 },
     ])
+  })
+
+  it('limits horizontal movement to the current StopPoint until its wave clears', () => {
+    const state = createLevelState(LEVEL_1_SL12)
+    expect(horizontalProgressMaxX(state, LEVEL_1_SL12.arenaBounds.right)).toBe(1147.4)
+
+    expect(updateLevelSpawn(state, 0, 1, 1147.4)).toBe(true)
+    expect(horizontalProgressMaxX(state, LEVEL_1_SL12.arenaBounds.right)).toBe(1147.4)
+    expect(updateLevelSpawn(state, 2, 1, 1147.4)).toBe(false)
+    expect(updateLevelSpawn(state, 0, 1, 1147.4)).toBe(false)
+
+    expect(horizontalProgressMaxX(state, LEVEL_1_SL12.arenaBounds.right)).toBe(1809.7)
   })
 
   it('gates each 天宫道 wave until its official StopPoint is reached', () => {

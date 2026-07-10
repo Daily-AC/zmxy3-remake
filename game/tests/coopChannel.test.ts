@@ -56,6 +56,8 @@ const hero: HeroStateSnapshot = {
 
 const monster: MonsterStateSnapshot = {
   monsterId: 'm-1',
+  species: 'monster8',
+  isBoss: false,
   x: 500,
   y: 360,
   facing: -1,

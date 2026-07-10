@@ -25,24 +25,28 @@ describe('BattleScene stage-one campaign wiring', () => {
     expect(source).toMatch(/if \(this\.campaignIndex === 1\) return \{ stage: 1, level: 2 \}/)
   })
 
-  it('renders horizontal stage image layers as opaque far base, official foreground and official floor', () => {
+  it('renders horizontal stage image layers as opaque far base, official foreground and world-locked floor', () => {
     expect(source).toMatch(/setTexture\(stage\.background\.base, '__BASE'\)/)
     expect(source).toMatch(/setScrollFactor\(stage\.background\.scrollFactorX \?\? 0, 0\)/)
     expect(source).toMatch(/stage\.background\.foreground === 'bg12'/)
     expect(source).toMatch(/setTexture\(stage\.background\.floor\)/)
+    expect(source).toMatch(/setScrollFactor\(1, 1\)/)
   })
 
-  it('spawns official MonsterAppearPoint quantities at their recovered x coordinates', () => {
-    expect(source).toMatch(/expandMonsterSpawnRoster\(getActiveWaveRoster\(this\.levelState\)\)/)
+  it('queues official MonsterAppearPoint quantities and drains them under the live cap', () => {
+    expect(source).toMatch(/createWaveSpawnQueue\(getActiveWaveRoster\(this\.levelState\)\)/)
     expect(source).toMatch(/const x = spec\.x \?\? /)
-    expect(source).toMatch(/this\.pendingWaveSpawns \+= roster\.length/)
-    expect(source).toMatch(/this\.time\.delayedCall\(spec\.delayMs \?\? 0, spawn\)/)
-    expect(source).toMatch(/this\.aliveGruntCount\(\) \+ this\.pendingWaveSpawns/)
+    expect(source).toMatch(/advanceWaveSpawnQueue\(/)
+    expect(source).toMatch(/waveMonsterCapacity\(Boolean\(this\.coopSession\)\)/)
+    expect(source).toMatch(/this\.aliveGruntCount\(\) \+ this\.pendingWaveSpawns\.length/)
   })
 
-  it('invalidates pending wave callbacks when level objects reset', () => {
-    expect(source).toMatch(/this\.waveSpawnGeneration \+= 1/)
-    expect(source).toMatch(/if \(generation !== this\.waveSpawnGeneration\) return/)
-    expect(source).toMatch(/this\.pendingWaveSpawns = 0/)
+  it('drops pending queue state synchronously when level objects reset', () => {
+    expect(source).toMatch(/this\.pendingWaveSpawns = \[\]/)
+  })
+
+  it('applies the current StopPoint as the horizontal hero boundary', () => {
+    expect(source).toMatch(/horizontalProgressMaxX\(this\.levelState, stage\.bounds\.right\)/)
+    expect(source).toMatch(/this\.heroConfig\.maxX = this\.currentHeroBounds\(\)\.maxX/)
   })
 })

@@ -103,7 +103,7 @@ import {
   createSubStageChainState,
   currentSubStage,
   currentSubStageDoor,
-  expandMonsterSpawnRoster,
+  horizontalProgressMaxX,
   updateLevelSpawn,
   updateContinuousSpawner,
   getActiveWaveRoster,
@@ -124,7 +124,7 @@ import {
 } from '../data/levels/level1'
 import { resolveHorizontalMotion, resolveVerticalMotion, type Wall } from '../systems/platformSim'
 import { wallsForLevel1SubStage } from '../systems/level1Geometry'
-import { LEVEL2_MONSTER_NAMES } from '../data/levels/level2'
+import { LEVEL2_MONSTER_NAMES, LEVEL2_MONSTER_STATS } from '../data/levels/level2'
 import { LEVEL_3_ERLANGSHEN, LEVEL3_MONSTER_NAMES } from '../data/levels/level3'
 import { LEVEL_4_XIENIAN, LEVEL4_MONSTER_NAMES } from '../data/levels/level4'
 import { monsterExp } from '../data/monsterExp'
@@ -190,6 +190,14 @@ import {
   type MonsterStateSnapshot,
 } from '../systems/coopSync'
 import { resolveCoopHeroHitDamage, selectRemoteHeroHitTargets } from '../systems/coopHeroDamage'
+import { missingHostMonsterSnapshots } from '../systems/coopMonsterRuntime'
+import {
+  advanceWaveSpawnQueue,
+  createWaveSpawnQueue,
+  waveMonsterCapacity,
+  type PendingWaveSpawn,
+} from '../systems/waveSpawnQueue'
+import { selectBossHudMonster, type BossHudMonster } from '../systems/bossHud'
 import { DialogueBox } from '../ui/DialogueBox'
 import {
   HUD_TEXTURES,
@@ -257,6 +265,10 @@ const MONSTER_NAMES: Record<string, string> = {
   ...LEVEL2_MONSTER_NAMES,
   ...LEVEL3_MONSTER_NAMES,
   ...LEVEL4_MONSTER_NAMES,
+}
+const ACTIVE_MONSTER_STATS: Record<string, MonsterStats> = {
+  ...LEVEL1_MONSTER_STATS,
+  ...LEVEL2_MONSTER_STATS,
 }
 const MONSTER30_BULLET = {
   kind: 'Monster30Bullet1',
@@ -732,8 +744,7 @@ export class BattleScene extends Phaser.Scene {
   private campaignIndex = 0
   private levelState!: LevelState
   private monsters: MonsterEntity[] = []
-  private pendingWaveSpawns = 0
-  private waveSpawnGeneration = 0
+  private pendingWaveSpawns: PendingWaveSpawn[] = []
   private level1Chain?: SubStageChainState
   private level1Spawner?: ContinuousSpawnerState
   private currentWalls: Wall[] = []
@@ -1687,15 +1698,28 @@ export class BattleScene extends Phaser.Scene {
 
   private currentHeroBounds(): { minX: number; maxX: number } {
     if (this.level1Chain) {
-      const bounds = currentSubStage(this.level1Chain).bounds
-      return { minX: bounds.left, maxX: bounds.right }
+      const stage = currentSubStage(this.level1Chain)
+      const authorityMaxX = stage.mode === 'horizontal'
+        ? horizontalProgressMaxX(this.levelState, stage.bounds.right)
+        : stage.bounds.right
+      const maxX = stage.mode === 'horizontal' && this.coopSession && !this.coopSession.isHost
+        ? Math.min(stage.bounds.right, this.coopSyncState?.hostProgressMaxX ?? stage.heroStart.x)
+        : authorityMaxX
+      return { minX: stage.bounds.left, maxX }
     }
     return { minX: MIN_X, maxX: MAX_X }
   }
 
   private resetLiveLevelObjects(): void {
-    this.waveSpawnGeneration += 1
-    this.pendingWaveSpawns = 0
+    this.pendingWaveSpawns = []
+    this.coopMonsterIds = new WeakMap<MonsterEntity, string>()
+    this.coopMonsterById.clear()
+    this.coopNextMonsterId = 1
+    this.coopSentHitIntents.clear()
+    this.coopRemoteAttackIds.clear()
+    if (this.coopSyncState) {
+      this.coopSyncState = { ...this.coopSyncState, monsters: {}, hostProgressMaxX: undefined }
+    }
     for (const e of this.monsters) {
       e.hpBar?.destroy()
       e.sprite.destroy()
@@ -1837,6 +1861,7 @@ export class BattleScene extends Phaser.Scene {
         .setTexture(stage.background.floor)
         .setPosition(stage.background.floorX ?? 0, GROUND_Y - 5)
         .setScale(1)
+        .setScrollFactor(1, 1)
     } else {
       this.floorImg?.setVisible(false)
     }
@@ -1914,8 +1939,9 @@ export class BattleScene extends Phaser.Scene {
     if (!this.level1Chain) return
     const stage = currentSubStage(this.level1Chain)
     const heroAlive = !isHeroDead(this.identity)
+    const runsAuthority = !this.coopSession || this.coopSession.isHost
 
-    if (stage.mode === 'climb' && this.level1Spawner) {
+    if (runsAuthority && stage.mode === 'climb' && this.level1Spawner) {
       const update = updateContinuousSpawner(
         this.level1Spawner,
         { x: this.heroState.x, y: this.heroState.vertical.y, alive: heroAlive },
@@ -1930,11 +1956,12 @@ export class BattleScene extends Phaser.Scene {
         this.levelState.arena.boss = boss.state
         this.showToast(`BOSS · ${update.bossSpawn.label}`, '#ff9a5a')
       }
-    } else if (stage.waveLevel) {
-      if (updateLevelSpawn(this.levelState, this.aliveGruntCount() + this.pendingWaveSpawns, 1, this.heroState.x)) {
+    } else if (runsAuthority && stage.waveLevel) {
+      if (updateLevelSpawn(this.levelState, this.aliveGruntCount() + this.pendingWaveSpawns.length, 1, this.heroState.x)) {
         this.spawnActiveWave()
       }
     }
+    if (runsAuthority) this.drainPendingWaveSpawns(delta)
 
     if (!this.coopSession) for (const e of this.monsters) this.advanceEntity(e, delta, heroAlive)
     else this.updateCoopMonsters(delta, heroAlive)
@@ -1945,8 +1972,8 @@ export class BattleScene extends Phaser.Scene {
     const wavesCleared =
       stage.mode === 'horizontal' &&
       areStopPointsCleared(this.levelState) &&
-      this.aliveGruntCount() + this.pendingWaveSpawns === 0
-    if ((climbBossDead || wavesCleared) && !door.visible) {
+      this.aliveGruntCount() + this.pendingWaveSpawns.length === 0
+    if (runsAuthority && (climbBossDead || wavesCleared) && !door.visible) {
       markCurrentSubStageCleared(this.level1Chain)
       const isFinalSubStage = this.level1Chain.currentIndex === this.level1Chain.def.subStages.length - 1
       if (isFinalSubStage) this.showResultBanner()
@@ -2033,7 +2060,14 @@ export class BattleScene extends Phaser.Scene {
   /** `y` defaults to GROUND_Y for existing ground callers; sl11's continuous
    * spawner passes raw AS3 scene y values so Monster30 and 巫鹰 live at climb
    * altitude instead of on the flat arena line. */
-  private spawnEntity(species: string, stats: MonsterStats, x: number, isBoss: boolean, y: number = GROUND_Y): MonsterEntity {
+  private spawnEntity(
+    species: string,
+    stats: MonsterStats,
+    x: number,
+    isBoss: boolean,
+    y: number = GROUND_Y,
+    coopMonsterId?: string,
+  ): MonsterEntity {
     const data = MONSTER_DATA[species] ?? MONSTER_DATA.monster30
     const config = this.monsterConfigFor(species, stats, isBoss)
     const state = initMonster(config, x, y)
@@ -2073,30 +2107,27 @@ export class BattleScene extends Phaser.Scene {
       skillOverlay: skillGate ? createSkillOverlayState(skillGate) : undefined,
     }
     this.monsters.push(entity)
-    if (this.coopSession) this.coopMonsterId(entity)
+    if (coopMonsterId) this.bindCoopMonsterId(entity, coopMonsterId)
+    else if (this.coopSession) this.coopMonsterId(entity)
     return entity
   }
 
   private spawnActiveWave(): void {
-    const roster = expandMonsterSpawnRoster(getActiveWaveRoster(this.levelState))
+    this.pendingWaveSpawns.push(...createWaveSpawnQueue(getActiveWaveRoster(this.levelState)))
+  }
+
+  private drainPendingWaveSpawns(delta: number): void {
     const bounds = this.level1Chain ? currentSubStage(this.level1Chain).bounds : { left: MIN_X, right: MAX_X }
-    const generation = this.waveSpawnGeneration
-    this.pendingWaveSpawns += roster.length
-    roster.forEach((spec: MonsterSpawnSpec, i) => {
-      const spawn = (): void => {
-        if (generation !== this.waveSpawnGeneration) return
-        this.pendingWaveSpawns = Math.max(0, this.pendingWaveSpawns - 1)
-        const x = spec.x ?? Math.min(bounds.right - 120, Math.max(bounds.left + 120, 720 + i * 190))
-        const entity = this.spawnEntity(spec.species, spec.stats, x, false)
-        // Feature recovered miniboss appear points on the shared top bar. The
-        // official 天宫道 finale contains 千里眼 and 顺风耳 at the same StopPoint;
-        // the latest spawned one owns the bar while both remain live entities.
-        if (MINIBOSS_SPECIES.has(spec.species)) {
-          this.activeMiniBoss = entity
-          this.showToast(`BOSS · ${MONSTER_NAMES[spec.species] ?? spec.species}`, '#ff9a5a')
-        }
+    const capacity = waveMonsterCapacity(Boolean(this.coopSession))
+    const availableSlots = capacity - this.aliveGruntCount()
+    const ready = advanceWaveSpawnQueue(this.pendingWaveSpawns, delta, availableSlots)
+    ready.forEach((spec: MonsterSpawnSpec, index) => {
+      const x = spec.x ?? Math.min(bounds.right - 120, Math.max(bounds.left + 120, 720 + index * 190))
+      const entity = this.spawnEntity(spec.species, spec.stats, x, false)
+      if (MINIBOSS_SPECIES.has(spec.species)) {
+        this.activeMiniBoss = entity
+        this.showToast(`BOSS · ${MONSTER_NAMES[spec.species] ?? spec.species}`, '#ff9a5a')
       }
-      this.time.delayedCall(spec.delayMs ?? 0, spawn)
     })
   }
 
@@ -2109,29 +2140,32 @@ export class BattleScene extends Phaser.Scene {
   // ---------- boss HP bar ----------
 
   private updateBossHud(): void {
-    const b = this.bossEntity
-    if (b && b.state.mode !== 'gone') {
+    type Candidate = BossHudMonster & { entity: MonsterEntity }
+    const candidates: Candidate[] = this.monsters.map((entity, index) => ({
+      id: `${entity.species}:${index}`,
+      mode: entity.state.mode,
+      hp: entity.state.hp,
+      arenaBoss: entity === this.bossEntity,
+      miniBoss: MINIBOSS_SPECIES.has(entity.species),
+      entity,
+    }))
+    const selected = selectBossHudMonster(
+      candidates.find((candidate) => candidate.entity === this.bossEntity) ?? null,
+      candidates.find((candidate) => candidate.entity === this.activeMiniBoss) ?? null,
+      candidates,
+    )
+    if (selected) {
+      if (selected.miniBoss) this.activeMiniBoss = selected.entity
+      const e = selected.entity
       this.bossBar.setVisible(true)
       this.bossBar.update({
-        name: MONSTER_NAMES[b.species] ?? b.species,
-        hp: b.state.hp,
-        maxHp: b.config.stats.hp,
+        name: MONSTER_NAMES[e.species] ?? e.species,
+        hp: e.state.hp,
+        maxHp: e.config.stats.hp,
       })
       return
     }
-    // l1-truth pen: the arena boss hasn't spawned yet (or this level has
-    // none currently active) -- feature the active miniboss instead, if any.
-    const mb = this.activeMiniBoss
-    if (mb && mb.state.mode !== 'gone') {
-      this.bossBar.setVisible(true)
-      this.bossBar.update({
-        name: MONSTER_NAMES[mb.species] ?? mb.species,
-        hp: mb.state.hp,
-        maxHp: mb.config.stats.hp,
-      })
-      return
-    }
-    if (mb) this.activeMiniBoss = null // died/reaped -- stop tracking it
+    this.activeMiniBoss = null
     this.bossBar.setVisible(false)
   }
 
@@ -2652,6 +2686,7 @@ export class BattleScene extends Phaser.Scene {
     this.syncMpMax()
     const edges = this.collectEdges()
     const jumped = edges.pressJump && this.heroState.vertical.grounded
+    this.heroConfig.maxX = this.currentHeroBounds().maxX
     advanceHero(this.heroState, edges, delta, this.heroConfig)
     if (jumped) this.playSfx('heroJump', 0.4)
     this.spawnHeroSwingEffect()
@@ -2711,11 +2746,37 @@ export class BattleScene extends Phaser.Scene {
     if (!this.coopSession || !this.coopSession.isHost || !this.coopChannel) return
     const candidates = this.monsters.filter((e) => e.state.mode !== 'gone' && (includeRecentlyDead || e.state.mode !== 'dead'))
     const snapshots = candidates.map((e) => this.monsterSnapshot(e))
-    this.coopChannel.sendMonsterState(snapshots, ++this.coopSeq, Date.now())
+    this.coopChannel.sendMonsterState(
+      snapshots,
+      ++this.coopSeq,
+      Date.now(),
+      this.currentHeroBounds().maxX,
+    )
   }
 
   private applyRemoteMonsterSnapshots(delta: number): void {
     if (!this.coopSession || !this.coopSyncState) return
+    const hostSnapshots = Object.values(this.coopSyncState.monsters).map((view) => view.snapshot)
+    const missing = missingHostMonsterSnapshots(new Set(this.coopMonsterById.keys()), hostSnapshots)
+    for (const snapshot of missing) {
+      const recovered = ACTIVE_MONSTER_STATS[snapshot.species] ?? LEVEL1_MONSTER_STATS.monster30
+      const stats = { ...recovered, hp: snapshot.maxHp }
+      const entity = this.spawnEntity(
+        snapshot.species,
+        stats,
+        snapshot.x,
+        snapshot.isBoss,
+        snapshot.y,
+        snapshot.monsterId,
+      )
+      if (snapshot.isBoss) {
+        this.bossEntity = entity
+        this.levelState.arena.state = 'active'
+        this.levelState.arena.boss = entity.state
+      } else if (MINIBOSS_SPECIES.has(snapshot.species)) {
+        this.activeMiniBoss = entity
+      }
+    }
     for (const e of this.monsters) {
       const view = this.coopSyncState.monsters[this.coopMonsterId(e)]
       if (!view) continue
@@ -2748,6 +2809,8 @@ export class BattleScene extends Phaser.Scene {
   private monsterSnapshot(e: MonsterEntity): MonsterStateSnapshot {
     return {
       monsterId: this.coopMonsterId(e),
+      species: e.species,
+      isBoss: e.isBoss,
       x: e.state.x,
       y: e.state.y,
       facing: e.state.facing,
@@ -2766,6 +2829,11 @@ export class BattleScene extends Phaser.Scene {
     }
     this.coopMonsterById.set(id, e)
     return id
+  }
+
+  private bindCoopMonsterId(e: MonsterEntity, id: string): void {
+    this.coopMonsterIds.set(e, id)
+    this.coopMonsterById.set(id, e)
   }
 
   // hitstun-triad pen: shared coordinate helpers so every hit-test box is
@@ -3064,10 +3132,14 @@ export class BattleScene extends Phaser.Scene {
 
   private updateLevel(delta: number): void {
     const heroAlive = !isHeroDead(this.identity)
+    const runsAuthority = !this.coopSession || this.coopSession.isHost
     // Spawn the next wave when the machine says so.
-    if (updateLevelSpawn(this.levelState, this.aliveGruntCount() + this.pendingWaveSpawns)) this.spawnActiveWave()
+    if (runsAuthority && updateLevelSpawn(this.levelState, this.aliveGruntCount() + this.pendingWaveSpawns.length)) {
+      this.spawnActiveWave()
+    }
+    if (runsAuthority) this.drainPendingWaveSpawns(delta)
     // All stops cleared -> spawn the arena boss (once).
-    if (isBossZoneTriggered(this.levelState)) {
+    if (runsAuthority && isBossZoneTriggered(this.levelState)) {
       markBossTriggered(this.levelState)
       this.spawnBoss()
     }
@@ -3078,7 +3150,7 @@ export class BattleScene extends Phaser.Scene {
     // door is revealed now (so the portal is reachable the moment the banner is
     // dismissed and __usePortal keeps working), but its glow only shows on
     // dismiss.
-    if (this.bossEntity && isBossDead(this.bossEntity.state) && !this.levelState.arena.door.visible) {
+    if (runsAuthority && this.bossEntity && isBossDead(this.bossEntity.state) && !this.levelState.arena.door.visible) {
       revealTransferDoor(this.levelState)
       this.showResultBanner()
     }

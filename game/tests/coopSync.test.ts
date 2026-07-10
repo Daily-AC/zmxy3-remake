@@ -32,6 +32,8 @@ const hero: HeroStateSnapshot = {
 
 const monster: MonsterStateSnapshot = {
   monsterId: 'm-1',
+  species: 'monster8',
+  isBoss: false,
   x: 500,
   y: 360,
   facing: -1,
@@ -78,6 +80,16 @@ describe('coopSync wire codec', () => {
     for (const message of messages) {
       expect(decodeCoopMessage(encodeCoopMessage(message))).toEqual(message)
     }
+  })
+
+  it('rejects host monster snapshots that cannot identify the entity a peer must create', () => {
+    const unidentified = { ...monster } as Record<string, unknown>
+    delete unidentified.species
+    expect(decodeCoopMessage(encodeCoopMessage(encodeMonsterState([unidentified as MonsterStateSnapshot], 1, 1_000)))).toBeNull()
+
+    const missingBossFlag = { ...monster } as Record<string, unknown>
+    delete missingBossFlag.isBoss
+    expect(decodeCoopMessage(encodeCoopMessage(encodeMonsterState([missingBossFlag as MonsterStateSnapshot], 1, 1_000)))).toBeNull()
   })
 
   it('rejects malformed coop frames without throwing', () => {
@@ -206,6 +218,16 @@ describe('coopSync state machine', () => {
       fromUserId: 'u-other-peer',
       reason: 'non_host_sender',
     })
+  })
+
+  it('carries the host StopPoint boundary even when no monster is currently alive', () => {
+    const peerState = createCoopSyncState({ localUserId: 'u-peer', hostUserId: 'u-host' })
+    const accepted = applyCoopMessage(peerState, {
+      ...encodeMonsterState([], 1, 1_000, 1809.7),
+      fromUserId: 'u-host',
+    })
+
+    expect(accepted.state.hostProgressMaxX).toBe(1809.7)
   })
 
   it('lets the host resolve hit intents into settlement events', () => {

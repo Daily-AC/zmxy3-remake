@@ -69,8 +69,8 @@ export class CoopChannel {
     return this.send(encodeHeroState(hero, seq, sentAt))
   }
 
-  sendMonsterState(monsters: MonsterStateSnapshot[], seq: number, sentAt: number): boolean {
-    return this.send(encodeMonsterState(monsters, seq, sentAt))
+  sendMonsterState(monsters: MonsterStateSnapshot[], seq: number, sentAt: number, progressMaxX?: number): boolean {
+    return this.send(encodeMonsterState(monsters, seq, sentAt, progressMaxX))
   }
 
   sendHitIntent(intent: HitIntentPayload): boolean {
