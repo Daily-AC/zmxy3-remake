@@ -46,6 +46,7 @@ import {
 } from '../systems/pickup'
 import { createInventory, addItem, listStacks, Inventory } from '../systems/inventory'
 import { monsterSoulDropAmount, rollDrops, type DropRollContext } from '../systems/dropRoll'
+import { l1StarterRewards } from '../systems/starterRewards'
 import type { Item } from '../systems/items'
 import { collectWorldPickup, rollMedicineDrop, type ConsumableId } from '../systems/consumables'
 import {
@@ -3404,22 +3405,28 @@ export class BattleScene extends Phaser.Scene {
   // species' own configured table in drops.json (e.g. monster5's 玄铁碎片/
   // 踏云靴) could never drop. Now takes the real killer's species.
   private spawnDrops(x: number, y: number, species: string): void {
+    const context = this.dropRollContext()
     const medicineDrop = rollMedicineDrop(Math.random)
     if (medicineDrop) {
       const drop = spawnConsumableDrop(medicineDrop, x, y)
       this.drops.push(drop)
       this.dropSprites.set(drop, this.makeDropSprite(drop))
     }
-    const soulDrop = spawnSoulDrop(monsterSoulDropAmount(species, this.dropRollContext()), x, y)
+    const soulDrop = spawnSoulDrop(monsterSoulDropAmount(species, context), x, y)
     if (soulDrop.amount > 0) {
       this.drops.push(soulDrop)
       this.dropSprites.set(soulDrop, this.makeDropSprite(soulDrop))
     }
-    for (const { item, qty } of rollDrops(species, Math.random, this.dropRollContext())) {
+    for (const { item, qty } of rollDrops(species, Math.random, context)) {
       const drop = spawnDrop(item, qty, x, y)
       this.drops.push(drop)
       this.dropSprites.set(drop, this.makeDropSprite(drop))
     }
+    l1StarterRewards(species, context).forEach(({ item, qty }, index) => {
+      const drop = spawnDrop(item, qty, x + (index - 1) * 34, y)
+      this.drops.push(drop)
+      this.dropSprites.set(drop, this.makeDropSprite(drop))
+    })
   }
 
   private dropRollContext(): DropRollContext {
