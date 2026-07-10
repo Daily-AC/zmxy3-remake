@@ -14,6 +14,30 @@ export interface RemoteHeroHitTarget {
   knockbackX: -1 | 1
 }
 
+export interface AliveHeroTarget {
+  userId: string
+  x: number
+  y: number
+  alive: boolean
+}
+
+export function selectNearestAliveHeroTarget<T extends AliveHeroTarget>(
+  monster: { x: number; y: number },
+  local: T,
+  remotes: T[],
+): T | null {
+  let nearest: T | null = null
+  let nearestDistance = Number.POSITIVE_INFINITY
+  for (const candidate of [local, ...remotes]) {
+    if (!candidate.alive) continue
+    const distance = Math.hypot(candidate.x - monster.x, candidate.y - monster.y)
+    if (distance >= nearestDistance) continue
+    nearest = candidate
+    nearestDistance = distance
+  }
+  return nearest
+}
+
 export function remoteHeroHurtbox(snapshot: HeroStateSnapshot, visual: RemoteHeroVisualConfig): Rect | null {
   if (!snapshot.alive) return null
   const centerX = snapshot.x + visual.offset.x * visual.scale

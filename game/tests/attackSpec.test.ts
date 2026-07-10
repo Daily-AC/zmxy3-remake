@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { MONSTER_ATTACKS, monsterAttackSpecFor, resolveAttackSpec } from '../src/systems/attackSpec'
+import {
+  MONSTER_ATTACKS,
+  horizontalAttackReach,
+  monsterAttackSpecFor,
+  resolveAttackSpec,
+} from '../src/systems/attackSpec'
 import { centeredBox, overlaps } from '../src/systems/hitbox'
 
 describe('AttackSpec world resolution', () => {
@@ -58,5 +63,21 @@ describe('AttackSpec world resolution', () => {
 
   it('matches Monster3 hit2 timing to the overlay spawn at 30 of 31 ticks', () => {
     expect(MONSTER_ATTACKS.monster3.hit2.hitFrameFraction).toBe(30 / 31)
+  })
+
+  it.each([
+    ['monster2', 120],
+    ['monster3', 210],
+    ['monster4', 200],
+    ['monster7', 205],
+    ['monster8', 217],
+  ])('derives %s engagement reach from its real hit1 box instead of attackRange=250', (species, reach) => {
+    const spec = monsterAttackSpecFor(species, 'hit1')
+    expect(spec).toBeDefined()
+    expect(horizontalAttackReach(spec!, 90)).toBe(reach)
+  })
+
+  it('keeps both official Monster2 hit1 animation trigger points', () => {
+    expect(MONSTER_ATTACKS.monster2.hit1.hitFrameFractions).toEqual([19 / 35, 1])
   })
 })

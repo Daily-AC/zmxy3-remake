@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { spawnEnemyProjectile, stepEnemyProjectiles } from '../src/systems/enemyProjectiles'
+import {
+  spawnEnemyProjectile,
+  stepEnemyProjectiles,
+  stepEnemyProjectilesAgainstTargets,
+} from '../src/systems/enemyProjectiles'
 
 describe('enemyProjectiles: Monster30Bullet1-style enemy projectile hitbox', () => {
   it('flies toward the target and emits one real hero hit when its segment reaches the hero', () => {
@@ -59,5 +63,36 @@ describe('enemyProjectiles: Monster30Bullet1-style enemy projectile hitbox', () 
 
     expect(state.hits).toEqual([])
     expect(state.remaining).toEqual([])
+  })
+
+  it('reports which live local or remote hero a host-authoritative projectile hit', () => {
+    const projectile = spawnEnemyProjectile({
+      id: 2,
+      kind: 'Monster30Bullet1',
+      sourceId: 'monster30-2',
+      attackId: 9,
+      x: 0,
+      y: 0,
+      targetX: 100,
+      targetY: 0,
+      facing: 1,
+      speedPxPerSecond: 1000,
+      radius: 12,
+      ttlMs: 1000,
+      damage: 5,
+      attackKind: 'physics',
+    })
+
+    const result = stepEnemyProjectilesAgainstTargets(
+      [projectile],
+      [
+        { targetId: 'u-host', x: 999, y: 0, alive: true },
+        { targetId: 'u-peer', x: 100, y: 0, alive: true },
+      ],
+      110,
+    )
+
+    expect(result.hits).toEqual([expect.objectContaining({ targetId: 'u-peer', attackId: 9 })])
+    expect(result.remaining).toEqual([])
   })
 })

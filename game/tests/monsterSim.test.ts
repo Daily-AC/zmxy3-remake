@@ -10,7 +10,8 @@ import {
   VerticalFollowConfig,
 } from '../src/systems/monsterSim'
 import { TICK_MS } from '../src/systems/tick'
-import { MONSTER_ATTACKS } from '../src/systems/attackSpec'
+import { MONSTER_ATTACKS, horizontalAttackReach, resolveAttackSpec } from '../src/systems/attackSpec'
+import { centeredBox, overlaps } from '../src/systems/hitbox'
 
 // Advance one fixed tick at a time for `ms`, so the per-call 8-tick budget cap
 // (a spiral-of-death guard, irrelevant at real frame deltas) never truncates.
@@ -157,6 +158,73 @@ describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
       expect(events.some((e) => e.type === 'attack-frame')).toBe(false)
       events = run(m, noHit(600, true), 200, cfg)
       expect(events.some((e) => e.type === 'attack-frame')).toBe(true)
+    })
+
+    it('keeps chasing inside the legacy attackRange until the configured hitbox can reach', () => {
+      const cfg: MonsterConfig = {
+        ...meleeCfg(),
+        targetingGeometry: {
+          selfOffsetX: 0,
+          targetOffsetX: 0,
+          attackReach: 204,
+        },
+      }
+      const m = initMonster(cfg, 500, 400)
+
+      run(m, noHit(750, true), 100, cfg)
+
+      expect(m.mode).toBe('chase')
+      expect(m.action).toBe('walk')
+      expect(m.x).toBeGreaterThan(500)
+
+      const events = run(m, noHit(750, true), 2000, cfg)
+      expect(events.some((event) => event.type === 'attack-start')).toBe(true)
+    })
+
+    it('emits both Monster2 hit1 frames once with distinct frame indexes', () => {
+      const cfg: MonsterConfig = {
+        ...meleeCfg(),
+        attackDurationMs: 350,
+        attackSpec: MONSTER_ATTACKS.monster2.hit1,
+      }
+      const m = initMonster(cfg, 500, 400)
+      run(m, noHit(580, true), 1000, cfg)
+
+      const events = run(m, noHit(580, true), 400, cfg)
+
+      expect(events.filter((event) => event.type === 'attack-frame')).toEqual([
+        { type: 'attack-frame', x: 500, y: 400, attackFrameIndex: 0 },
+        { type: 'attack-frame', x: 500, y: 400, attackFrameIndex: 1 },
+      ])
+    })
+
+    it.each([
+      ['monster2', -30],
+      ['monster3', 30],
+      ['monster4', 0],
+      ['monster7', 4.5],
+      ['monster8', 21],
+    ] as const)('%s chases from attackRange=250 until hit1 overlaps the rendered hero', (species, selfOffsetX) => {
+      const attackSpec = MONSTER_ATTACKS[species].hit1
+      const cfg: MonsterConfig = {
+        ...meleeCfg(),
+        stats: { ...MONSTER30_STATS, speed: 3, attackRange: 250, normalAttackRate: 1 },
+        decisionIntervalMs: 100,
+        attackSpec,
+        targetingGeometry: {
+          selfOffsetX,
+          targetOffsetX: 7.5,
+          attackReach: horizontalAttackReach(attackSpec, 90) - 1,
+        },
+      }
+      const m = initMonster(cfg, 500, 400)
+      const heroX = 750
+
+      const events = run(m, noHit(heroX, true), 4000, cfg)
+
+      expect(events.some((event) => event.type === 'attack-frame')).toBe(true)
+      const resolved = resolveAttackSpec(attackSpec, { x: m.x + selfOffsetX, y: 400 }, m.facing)
+      expect(overlaps(resolved.hitbox, centeredBox(heroX + 7.5, 400, 90, 150))).toBe(true)
     })
   })
 

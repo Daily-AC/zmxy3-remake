@@ -4,6 +4,8 @@ import { resolveVisualAttachment, type VisualAttachmentSpec } from './visualAtta
 export interface AttackSpec {
   action: string
   hitFrameFraction: number
+  /** Optional multi-hit trigger points within one animation. */
+  hitFrameFractions?: readonly number[]
   hitbox: { forward: number; y: number; width: number; height: number }
   effect?: VisualAttachmentSpec & { action: string }
 }
@@ -59,6 +61,7 @@ export const MONSTER_ATTACKS = {
     hit1: {
       action: 'hit1',
       hitFrameFraction: 19 / 35,
+      hitFrameFractions: [19 / 35, 1],
       hitbox: { forward: 75 / 2, y: 0, width: 75, height: 150 },
     },
   },
@@ -125,6 +128,14 @@ export const MONSTER_ATTACKS = {
 export function monsterAttackSpecFor(species: string, action: string): AttackSpec | undefined {
   const attacks = MONSTER_ATTACKS as Record<string, Record<string, AttackSpec>>
   return attacks[species]?.[action]
+}
+
+/** Maximum horizontal visual-center distance at which this box can overlap a
+ * centered target hurtbox. Monster AI uses this instead of the broad AS3
+ * target-registration range, so it walks close enough for the rendered hit to
+ * connect. */
+export function horizontalAttackReach(spec: AttackSpec, targetHurtboxWidth: number): number {
+  return spec.hitbox.forward + spec.hitbox.width / 2 + Math.max(0, targetHurtboxWidth) / 2
 }
 
 /** Preserve undecompiled L2+ behavior with an explicit front-facing box. */
