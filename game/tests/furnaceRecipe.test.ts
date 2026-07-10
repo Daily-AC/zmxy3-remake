@@ -26,6 +26,29 @@ function give(inv: ReturnType<typeof createInventory>, fillName: string, qty: nu
 }
 
 describe('furnace recipe catalog', () => {
+  it('turns recovered armor stats into minimum runtime effects by default', () => {
+    expect(equipmentItemByFillName('ptdxzf')).toMatchObject({
+      id: 'ptdxzf',
+      kind: 'equip',
+      sourceType: 'zbfj',
+      effects: [
+        { type: 'stat', stat: 'def', value: 2 },
+        { type: 'stat', stat: 'hp', value: 20 },
+        { type: 'stat', stat: 'mp', value: 12 },
+      ],
+    })
+  })
+
+  it('uses the supplied rng for recovered equipment stats', () => {
+    expect(equipmentItemByFillName('ptdxzg', () => 0.999)?.effects).toEqual([
+      { type: 'stat', stat: 'atk', value: 5 },
+    ])
+  })
+
+  it('does not attach meaningless runtime effects to materials', () => {
+    expect(equipmentItemByFillName('wptm')).not.toHaveProperty('effects')
+  })
+
   it('lists all 39 制作书 recipes and keeps the material table in sync with equipment.json', () => {
     const recipes = listRecipes()
     const bookFillNames = (originalEquipment as { items: { fillName: string; ename: string }[] }).items

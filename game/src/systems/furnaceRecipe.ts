@@ -160,14 +160,19 @@ function equipmentEffects(source: OriginalEquipmentRecord, rng: () => number): E
   return effects
 }
 
+function runtimeItemFromEquipment(source: OriginalEquipmentRecord, rng: () => number): Item {
+  const item = baseItemFromEquipment(source)
+  if (item.kind !== 'equip') return item
+  const effects = equipmentEffects(source, rng)
+  return effects.length > 0 ? { ...item, effects } : item
+}
+
 function craftedItemFromRecipe(recipe: FurnaceRecipe, rng: () => number): Item {
   const source = equipmentByFillName(recipe.productFillName)
   if (!source) {
     return { id: recipe.productFillName, name: recipe.productName, kind: 'equip', rarity: 1, effects: [] }
   }
-  const item = baseItemFromEquipment(source)
-  const effects = equipmentEffects(source, rng)
-  return effects.length > 0 ? { ...item, effects } : item
+  return runtimeItemFromEquipment(source, rng)
 }
 
 function buildRecipe(book: OriginalEquipmentRecord): FurnaceRecipe | undefined {
@@ -246,7 +251,7 @@ export function craft(
 }
 
 /** Resolve any equipment.json fillName to a runtime Item for debug/test bootstrapping. */
-export function equipmentItemByFillName(fillName: string): Item | undefined {
+export function equipmentItemByFillName(fillName: string, rng: () => number = () => 0): Item | undefined {
   const source = equipmentByFillName(fillName)
-  return source ? baseItemFromEquipment(source) : undefined
+  return source ? runtimeItemFromEquipment(source, rng) : undefined
 }

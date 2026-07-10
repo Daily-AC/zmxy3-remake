@@ -31,6 +31,10 @@ describe('drop rolling: original BaseMonster.as:1009 single-roll fallEquip()', (
         sourceType: 'zbsp',
         sourceQuality: '优 秀',
         sourceArray: 'otherEquipment',
+        effects: [
+          { type: 'stat', stat: 'atk', value: 15 },
+          { type: 'stat', stat: 'def', value: 3 },
+        ],
       },
       qty: 1,
     }])
@@ -63,6 +67,7 @@ describe('drop rolling: original BaseMonster.as:1009 single-roll fallEquip()', (
         sourceType: 'zbwq',
         sourceQuality: '普 通',
         sourceArray: 'normalEquipment',
+        effects: [{ type: 'stat', stat: 'atk', value: 2 }],
       },
       qty: 1,
     }])

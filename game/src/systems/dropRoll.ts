@@ -1,6 +1,6 @@
-import originalEquipment from '../data/original/equipment.json'
 import originalMonsterDrops from '../data/original/monster-drops.json'
 import type { Item } from './items'
+import { equipmentItemByFillName } from './furnaceRecipe'
 
 export interface DropRollContext {
   stage?: number
@@ -36,15 +36,6 @@ interface OriginalMonsterDropRecord {
 }
 
 const originalMonsterTable = (originalMonsterDrops as { monsters: OriginalMonsterDropRecord[] }).monsters
-const originalEquipmentItems = (originalEquipment as {
-  items: {
-    fillName: string
-    ename: string
-    type: string
-    quality: string
-    sourceArray?: string
-  }[]
-}).items
 
 function toClassName(monsterId: string): string {
   const normalized = monsterId.trim()
@@ -87,27 +78,13 @@ function resolveIsBoss(monster: OriginalMonsterDropRecord, context: DropRollCont
   return resolveConditional(monster.isBoss, context, false, false)
 }
 
-function qualityToRarity(quality: string): Item['rarity'] {
-  if (quality === '粗 糙' || quality === '普 通') return 1
-  if (quality === '优 秀' || quality === '精 良') return 2
-  return 3
-}
-
 function fallListItemToItem(entry: OriginalFallListItem): Item {
-  const source = originalEquipmentItems.find((item) => item.fillName === entry.name)
-  if (!source) {
-    return { id: entry.name, name: entry.name, kind: entry.bigtype === 'zb' ? 'equip' : 'material', rarity: 1 }
-  }
-  const kind: Item['kind'] = entry.bigtype === 'zb' ? 'equip' : source.type === 'zbwp' || source.type === 'wpqhs' ? 'material' : 'equip'
-  return {
-    id: source.fillName,
-    name: source.ename,
-    kind,
-    rarity: qualityToRarity(source.quality),
-    sourceFillName: source.fillName,
-    sourceType: source.type,
-    sourceQuality: source.quality,
-    sourceArray: source.sourceArray,
+  const recovered = equipmentItemByFillName(entry.name)
+  return recovered ?? {
+    id: entry.name,
+    name: entry.name,
+    kind: entry.bigtype === 'zb' ? 'equip' : 'material',
+    rarity: 1,
   }
 }
 

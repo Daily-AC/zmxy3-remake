@@ -9,6 +9,7 @@ import {
   slotForItem,
 } from '../src/systems/equipment'
 import { createInventory, addItem, countItem } from '../src/systems/inventory'
+import { equipmentItemByFillName } from '../src/systems/furnaceRecipe'
 import type { Item } from '../src/systems/items'
 
 const staff: Item = {
@@ -25,9 +26,17 @@ const plainStaff: Item = { id: 'stick', name: '木棍', kind: 'equip', rarity: 1
 const herb: Item = { id: 'herb', name: '妖草', kind: 'material', rarity: 1 }
 
 describe('equipment slots + equip/unequip (装备栏穿脱)', () => {
-  it('only equip-kind items map to a slot', () => {
-    expect(slotForItem(staff)).toBe('weapon')
+  it('maps recovered source types to their original equipment slots', () => {
+    expect(slotForItem(equipmentItemByFillName('ptdxzg')!)).toBe('weapon')
+    expect(slotForItem(equipmentItemByFillName('ptdxzf')!)).toBe('armor')
+    expect(slotForItem(equipmentItemByFillName('xhz')!)).toBe('accessory')
+    expect(slotForItem({ ...staff, sourceType: 'zbfb' })).toBe('talisman')
+  })
+
+  it('rejects materials and keeps source-less custom equipment in the weapon slot', () => {
     expect(slotForItem(herb)).toBe(null)
+    expect(slotForItem(equipmentItemByFillName('wptm')!)).toBe(null)
+    expect(slotForItem(staff)).toBe('weapon')
   })
 
   it('equips an item out of the bag into the weapon slot', () => {
@@ -119,5 +128,15 @@ describe('equipment combat numbers (装备接入伤害)', () => {
     equip(eq, inv, staff)
     expect(comboHitDamage(30, eq)).toBe(70) // +40 atk from the staff
     expect(heroAtk(0, eq)).toBe(40)
+  })
+
+  it('applies recovered equipment effects after the original item is equipped', () => {
+    const eq = createEquipment()
+    const inv = createInventory(8)
+    const recoveredStaff = equipmentItemByFillName('ptdxzg')!
+
+    addItem(inv, recoveredStaff, 1)
+    expect(equip(eq, inv, recoveredStaff)).toBe(true)
+    expect(heroAtk(10, eq)).toBe(12)
   })
 })
