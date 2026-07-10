@@ -84,11 +84,11 @@ describe('Stage 1 campaign levels recovered from AS3 stage/level coordinates', (
 
   it('preserves all five official 天宫道 StopPoints in traversal order', () => {
     expect(LEVEL_1_SL12.stopPoints.map((point) => point.stopX)).toEqual([
-      1181.95,
-      1844.25,
-      2848.5,
-      3824.75,
-      4696.1,
+      1147.4,
+      1809.7,
+      2813.95,
+      3790.2,
+      4661.55,
     ])
   })
 
@@ -96,35 +96,35 @@ describe('Stage 1 campaign levels recovered from AS3 stage/level coordinates', (
     const points = LEVEL_1_SL12.stopPoints.flatMap((point) => point.roster)
     expect(points).toHaveLength(13)
     expect(points.map(({ species, x, delayMs, intervalMs, quantity }) => ({ species, x, delayMs, intervalMs, quantity }))).toEqual([
-      { species: 'monster8', x: 372.1, delayMs: 2000, intervalMs: 1000, quantity: 4 },
-      { species: 'monster8', x: 992.05, delayMs: 2000, intervalMs: 1000, quantity: 4 },
-      { species: 'monster7', x: 1291.2, delayMs: 6000, intervalMs: 1000, quantity: 3 },
-      { species: 'monster8', x: 1545.9, delayMs: 2000, intervalMs: 1000, quantity: 5 },
-      { species: 'monster7', x: 1808, delayMs: 6000, intervalMs: 1000, quantity: 3 },
-      { species: 'monster7', x: 1973.3, delayMs: 2000, intervalMs: 1000, quantity: 6 },
-      { species: 'monster7', x: 2685.95, delayMs: 2000, intervalMs: 1000, quantity: 6 },
-      { species: 'monster7', x: 2969.75, delayMs: 2000, intervalMs: 1000, quantity: 3 },
-      { species: 'monster8', x: 2913.45, delayMs: 6000, intervalMs: 1000, quantity: 3 },
-      { species: 'monster7', x: 3583.8, delayMs: 2000, intervalMs: 1000, quantity: 4 },
-      { species: 'monster8', x: 3659.9, delayMs: 6000, intervalMs: 1000, quantity: 3 },
-      { species: 'monster4', x: 4034.3, delayMs: 2000, intervalMs: 1000, quantity: 1 },
-      { species: 'monster2', x: 4631.35, delayMs: 2000, intervalMs: 1000, quantity: 1 },
+      { species: 'monster8', x: 347.6, delayMs: 2000, intervalMs: 1000, quantity: 4 },
+      { species: 'monster8', x: 967.55, delayMs: 2000, intervalMs: 1000, quantity: 4 },
+      { species: 'monster7', x: 1266.7, delayMs: 6000, intervalMs: 1000, quantity: 3 },
+      { species: 'monster8', x: 1521.4, delayMs: 2000, intervalMs: 1000, quantity: 5 },
+      { species: 'monster7', x: 1783.5, delayMs: 6000, intervalMs: 1000, quantity: 3 },
+      { species: 'monster7', x: 1948.8, delayMs: 2000, intervalMs: 1000, quantity: 6 },
+      { species: 'monster7', x: 2661.45, delayMs: 2000, intervalMs: 1000, quantity: 6 },
+      { species: 'monster7', x: 2945.25, delayMs: 2000, intervalMs: 1000, quantity: 3 },
+      { species: 'monster8', x: 2888.95, delayMs: 6000, intervalMs: 1000, quantity: 3 },
+      { species: 'monster7', x: 3559.3, delayMs: 2000, intervalMs: 1000, quantity: 4 },
+      { species: 'monster8', x: 3635.4, delayMs: 6000, intervalMs: 1000, quantity: 3 },
+      { species: 'monster4', x: 4009.8, delayMs: 2000, intervalMs: 1000, quantity: 1 },
+      { species: 'monster2', x: 4606.85, delayMs: 2000, intervalMs: 1000, quantity: 1 },
     ])
     const expanded = expandMonsterSpawnRoster(points)
     expect(expanded).toHaveLength(46)
     expect(expanded.slice(0, 4).map(({ x, delayMs }) => ({ x, delayMs }))).toEqual([
-      { x: 372.1, delayMs: 2000 },
-      { x: 372.1, delayMs: 3000 },
-      { x: 372.1, delayMs: 4000 },
-      { x: 372.1, delayMs: 5000 },
+      { x: 347.6, delayMs: 2000 },
+      { x: 347.6, delayMs: 3000 },
+      { x: 347.6, delayMs: 4000 },
+      { x: 347.6, delayMs: 5000 },
     ])
   })
 
   it('gates each 天宫道 wave until its official StopPoint is reached', () => {
     const state = createLevelState(LEVEL_1_SL12)
-    expect(updateLevelSpawn(state, 0, 1, 1181.94)).toBe(false)
-    expect(updateLevelSpawn(state, 0, 1, 1181.95)).toBe(true)
-    expect(getActiveWaveRoster(state).map((point) => point.x)).toEqual([372.1, 992.05])
+    expect(updateLevelSpawn(state, 0, 1, 1147.39)).toBe(false)
+    expect(updateLevelSpawn(state, 0, 1, 1147.4)).toBe(true)
+    expect(getActiveWaveRoster(state).map((point) => point.x)).toEqual([347.6, 967.55])
   })
 
   it('uses the mined sl12 bounds, transfer door and official extracted image layers', () => {

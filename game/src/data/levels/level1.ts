@@ -122,33 +122,33 @@ const SL13_DOOR = { x: 4059.3, y: 342.45, width: 185.8, height: 165 }
 
 const SL12_WAVES: WaveSpec[] = [
   {
-    stopX: 1181.95,
-    roster: [appearPoint('monster8', 372.1, 2, 1, 4), appearPoint('monster8', 992.05, 2, 1, 4)],
+    stopX: 1147.4,
+    roster: [appearPoint('monster8', 347.6, 2, 1, 4), appearPoint('monster8', 967.55, 2, 1, 4)],
   },
   {
-    stopX: 1844.25,
+    stopX: 1809.7,
     roster: [
-      appearPoint('monster7', 1291.2, 6, 1, 3),
-      appearPoint('monster8', 1545.9, 2, 1, 5),
-      appearPoint('monster7', 1808, 6, 1, 3),
+      appearPoint('monster7', 1266.7, 6, 1, 3),
+      appearPoint('monster8', 1521.4, 2, 1, 5),
+      appearPoint('monster7', 1783.5, 6, 1, 3),
     ],
   },
   {
-    stopX: 2848.5,
-    roster: [appearPoint('monster7', 1973.3, 2, 1, 6), appearPoint('monster7', 2685.95, 2, 1, 6)],
+    stopX: 2813.95,
+    roster: [appearPoint('monster7', 1948.8, 2, 1, 6), appearPoint('monster7', 2661.45, 2, 1, 6)],
   },
   {
-    stopX: 3824.75,
+    stopX: 3790.2,
     roster: [
-      appearPoint('monster7', 2969.75, 2, 1, 3),
-      appearPoint('monster8', 2913.45, 6, 1, 3),
-      appearPoint('monster7', 3583.8, 2, 1, 4),
-      appearPoint('monster8', 3659.9, 6, 1, 3),
+      appearPoint('monster7', 2945.25, 2, 1, 3),
+      appearPoint('monster8', 2888.95, 6, 1, 3),
+      appearPoint('monster7', 3559.3, 2, 1, 4),
+      appearPoint('monster8', 3635.4, 6, 1, 3),
     ],
   },
   {
-    stopX: 4696.1,
-    roster: [appearPoint('monster4', 4034.3, 2, 1, 1), appearPoint('monster2', 4631.35, 2, 1, 1)],
+    stopX: 4661.55,
+    roster: [appearPoint('monster4', 4009.8, 2, 1, 1), appearPoint('monster2', 4606.85, 2, 1, 1)],
   },
 ]
 
