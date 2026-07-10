@@ -3,6 +3,11 @@ import type { CoopSession } from '../net/socialClient'
 import { activeArtFont } from '../systems/artFont'
 import { drawInkBackdrop } from '../ui/menu/inkBackdrop'
 import { BATTLE_READY_EVENT } from './BattleScene'
+import {
+  battleLoadingContext,
+  battleLoadingStatusFrames,
+  type BattleLoadingContext,
+} from './battleLoadingContent'
 import { SCENE } from './shellShared'
 
 export interface BattleData {
@@ -21,14 +26,13 @@ interface BattleLoadingState {
   readonly status: string
 }
 
-const CAMPAIGN_NAMES = ['九重天', '天宫道', '二郎神关', '邪念之境'] as const
-const STATUS_FRAMES = ['正在调兵', '正在调兵.', '正在调兵..', '正在调兵...'] as const
-
 export class BattleLoadingScene extends Phaser.Scene {
   private battleData: BattleData = { campaignIndex: 0 }
+  private loadingContext: BattleLoadingContext = battleLoadingContext(0)
   private levelLabel = ''
   private progress = 0
-  private status: string = STATUS_FRAMES[0]
+  private statusFrames: readonly string[] = battleLoadingStatusFrames(false)
+  private status = this.statusFrames[0]
   private statusIndex = 0
   private statusText?: Phaser.GameObjects.Text
   private progressText?: Phaser.GameObjects.Text
@@ -41,10 +45,11 @@ export class BattleLoadingScene extends Phaser.Scene {
 
   init(data?: BattleLoadingData): void {
     this.battleData = data?.battleData ?? { campaignIndex: 0 }
-    const campaignIndex = Phaser.Math.Clamp(Math.floor(this.battleData.campaignIndex), 0, CAMPAIGN_NAMES.length - 1)
-    this.levelLabel = `第 ${campaignIndex + 1} 关 · ${CAMPAIGN_NAMES[campaignIndex]}`
+    this.loadingContext = battleLoadingContext(this.battleData.campaignIndex)
+    this.levelLabel = this.loadingContext.label
     this.progress = 0
-    this.status = STATUS_FRAMES[0]
+    this.statusFrames = battleLoadingStatusFrames(Boolean(this.battleData.coopSession))
+    this.status = this.statusFrames[0]
     this.statusIndex = 0
   }
 
@@ -62,11 +67,18 @@ export class BattleLoadingScene extends Phaser.Scene {
         strokeThickness: 5,
       })
       .setOrigin(0.5)
+    this.add
+      .text(480, 286, this.loadingContext.context, {
+        fontFamily,
+        fontSize: '20px',
+        color: '#e3cf9a',
+      })
+      .setOrigin(0.5)
     this.statusText = this.add
-      .text(480, 302, this.status, { fontFamily, fontSize: '18px', color: '#c8b88f' })
+      .text(480, 326, this.status, { fontFamily, fontSize: '18px', color: '#c8b88f' })
       .setOrigin(0.5)
     this.progressText = this.add
-      .text(480, 378, '0%', { fontFamily, fontSize: '16px', color: '#f2eddf' })
+      .text(480, 402, '0%', { fontFamily, fontSize: '16px', color: '#f2eddf' })
       .setOrigin(0.5)
     this.progressBar = this.add.graphics()
     this.drawProgress()
@@ -75,8 +87,8 @@ export class BattleLoadingScene extends Phaser.Scene {
       delay: 320,
       loop: true,
       callback: () => {
-        this.statusIndex = (this.statusIndex + 1) % STATUS_FRAMES.length
-        this.status = STATUS_FRAMES[this.statusIndex]
+        this.statusIndex = (this.statusIndex + 1) % this.statusFrames.length
+        this.status = this.statusFrames[this.statusIndex]
         this.statusText?.setText(this.status)
       },
     })
@@ -114,8 +126,8 @@ export class BattleLoadingScene extends Phaser.Scene {
 
   private drawProgress(): void {
     this.progressBar?.clear()
-    this.progressBar?.fillStyle(0x3a2814, 0.9).fillRoundedRect(250, 342, 460, 12, 6)
-    this.progressBar?.fillStyle(0xd9b45a, 1).fillRoundedRect(250, 342, 460 * this.progress, 12, 6)
+    this.progressBar?.fillStyle(0x3a2814, 0.9).fillRoundedRect(250, 366, 460, 12, 6)
+    this.progressBar?.fillStyle(0xd9b45a, 1).fillRoundedRect(250, 366, 460 * this.progress, 12, 6)
     this.progressText?.setText(`${Math.round(this.progress * 100)}%`)
   }
 
