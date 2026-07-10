@@ -30,6 +30,8 @@ export interface MonsterStats {
   alertRange: number
   normalAttackRate: number
   def: number
+  /** Original fractional magic-damage reduction. Omitted when the species has none. */
+  mDef?: number
 }
 
 // From monsters-index.md §Monster30 基础数值 (normal difficulty, no scaling).

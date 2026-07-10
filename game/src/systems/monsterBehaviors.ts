@@ -25,11 +25,13 @@
 //     -export script <out> \
 //     "vendor/zmxy_res/造梦西游魔改版/造梦西游3再续天庭最终版/造梦西游3再续天庭0.72(最终版本)/打开我开始玩.swf"
 //
-// Two corrections to kagami's own approximations, confirmed by reading
-// `BaseMonster.as` directly (line numbers below refer to that decompile,
-// full citations in tasks/monster-behavior-report.md):
-//   - default `normalAttackRate` is exactly `0.3` (not kagami's "约0.366";
-//     BaseMonster.as:28) unless a monster overrides it in its own constructor.
+// Corrections to kagami's own approximations were confirmed by reading the
+// applicable `BaseMonster.as` directly. Active L1/L2 uses the official
+// stageInfo export, where default `normalAttackRate` is exactly `0.5` unless
+// a monster overrides it in its own constructor. The deferred Monster13 spec
+// retains the `0.3` default from the separate vendored build it was mined from.
+//
+// The shared shell still follows these mechanics from the vendored build:
 //   - `alertRange` is checked with full 2D distance
 //     (`AUtils.GetDisBetweenTwoObj`, BaseMonster.as:465); the *acquired*
 //     `attackRange` check is x-distance only (`Math.abs(x - target.x)`,
@@ -475,19 +477,13 @@ export function advanceMonsterBehavior(
 // CORRECTED (behavior-wiring pen, tasks/audit-numbers-report.md §6): this spec
 // started as a straight port of kagami's
 // vendor/kagami-phaser/src/systems/Monster3System.ts (Monster3Tuning), but an
-// independent audit found kagami's tuning constants are NOT the real AS3
-// values for this project's own vendored SWF (hp 926 vs real 300, and several
-// other fields below also diverged once checked). Re-decompiled directly from
-// `export.monster.Monster3` in 打开我开始玩.swf (this port's own ffdec
-// decompile, the same file Monster7/Monster13 below already cite), reading
-// the `gc.curStage==1 && gc.curLevel==1` boss branch (Monster3 is also a much
-// weaker non-boss grunt on other stages — not modeled here, this spec is
-// L1-boss-only):
-//   hp = 5*60 = 300, def = 6, horizenSpeed = 3 (px/frame), attackRange = 250,
-//   alertRange = 1000 (this one already matched kagami), boss-branch
-//   probability = 1 (-> normalAttackRate; matches data/levels/level1.ts's own
-//   monster3 MonsterStats, which already carried the correct AS3 numbers —
-//   only this file's independent copy was stale).
+// independent audit found kagami's tuning constants are NOT the official AS3
+// values (hp 926 vs official 160, with other fields also diverging). Stats
+// below come from the official stageInfo export's `export.monster.Monster3`;
+// this spec is L1-boss-only:
+//   hp = 160, def = 6, horizenSpeed = 3 (px/frame), attackRange = 250,
+//   alertRange = 1000, normalAttackRate = the BaseMonster default 0.5.
+//   `_anti.probability = 1` is special-skill tuning, not the hit1 roll.
 //   hit1: attackBackInfoDict = {power:14, attackKind:"physics",
 //   attackBackSpeed:[6,-5], attackInterval:999, hitMaxCount:99}. Animation
 //   bank4 (hit1, setFrameStopCount row index 4, confirmed against this
@@ -519,9 +515,9 @@ export function advanceMonsterBehavior(
 export const Monster3Spec: MonsterBehaviorSpec = {
   id: 'monster3',
   source:
-    "export.monster.Monster3 (gc.curStage==1&&curLevel==1 boss branch), 打开我开始玩.swf (this port's own ffdec decompile) " +
-    '-- corrects kagami Monster3Tuning per tasks/audit-numbers-report.md §6, see file header',
-  hp: 300, // was 926 (kagami) -- AS3 setHp(5*60)
+    'export.monster.Monster3, official stageInfo export ' +
+    '-- corrects kagami Monster3Tuning; see file header',
+  hp: 160, // was 926 (kagami) -- official AS3 setHp(160)
   def: 6, // was 0 (kagami) -- AS3 protectedParamsObject.def
   speed: 3 * (1000 / TICK_MS), // was 240 (kagami) -- AS3 horizenSpeed=3 px/frame -> px/s
   attackRange: 250, // was 150 (kagami) -- AS3 attackRange
@@ -529,7 +525,7 @@ export const Monster3Spec: MonsterBehaviorSpec = {
   hurtDurationMs: 15 * TICK_MS, // was 250ms (kagami) -- AS3 hurt bank [15]
   deadDurationMs: 15 * TICK_MS, // was 1000ms (kagami) -- AS3 dead bank [2,2,2,2,2,5] (15 ticks)
   decisionIntervalMs: 1000,
-  normalAttackRate: 1, // was 0.42 (kagami) -- AS3 boss-branch probability=1 (matches level1.ts's monster3 stats)
+  normalAttackRate: 0.5, // official BaseMonster default; Monster3 does not override it
   waitRateWhenNoTarget: 0.137, // BaseMonster.as:32 default; Monster3 does not override it.
   normalMove: {
     actionName: 'hit1',
@@ -614,7 +610,7 @@ export const Monster7Spec: MonsterBehaviorSpec = {
   hurtDurationMs: 15 * TICK_MS, // hurt row: 1 cell, stopCount 15
   deadDurationMs: (2 + 2 + 2 + 2 + 7) * TICK_MS, // dead row: stopCounts [2,2,2,2,7]
   decisionIntervalMs: 1000,
-  normalAttackRate: 0.3, // BaseMonster.as:28 default; Monster7 does not override it.
+  normalAttackRate: 0.5, // official BaseMonster default; Monster7 does not override it.
   waitRateWhenNoTarget: 0.137,
   normalMove: {
     actionName: 'hit1',

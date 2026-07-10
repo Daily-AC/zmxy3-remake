@@ -16,31 +16,24 @@
 //   - Stage 13 roster: grunts Monster8/7, Monster30 swarm + 巨灵神(M5).
 // sl13 remains available as deferred 南天门 data; it is not fused into L1/L2.
 //
-// STATS ARE REAL, recovered verbatim from each export.monster.MonsterN
-// constructor, branch-selected for the level-1 context (`gc.curStage==1 &&
-// gc.curLevel==1`; grunts/mini-bosses take the `else` branch of their
-// `curStage==3&&curLevel==3 || curStage==8` guard, i.e. their level-1 form):
+// Active L1/L2 stats are recovered verbatim from the official stageInfo
+// export.monster.MonsterN constructors:
 //   grunts:  Monster8 hp80/def2, Monster7 hp150/def4 (hit2 is the known
 //            out-of-bounds-row original bug — see monster7.json), Monster30
-//            hp1/def0/speed8 (a one-shot swarm imp).
-//   minibs:  千里眼 M4 hp1500/def8, 顺风耳 M2 hp2000/def10, 巨灵神 M5 hp4000/def12.
-//   boss:    巫鹰 M3 hp300/def6 (5*60), attacks hit1 phys 14 / hit2 magic 7,
-//            probability 1 in the boss branch.
-//
-// NOTE (original quirk, kept faithful): the named finale boss 巫鹰 (300 hp) is
-// far squishier than the mini-bosses that precede it (巨灵神 4000 hp). In the
-// original it's a gimmick bird chased to the climb summit, not a tank. The
-// wave escalation (千里眼 1500 < 顺风耳 2000 < 巨灵神 4000) is monotonic; the
-// arena boss is deliberately not the hp peak.
+//            hp1/def0/mDef0.5/speed8 (a one-shot swarm imp).
+//   minibs:  千里眼 M4 hp1000/def8, 顺风耳 M2 hp1800/def10.
+//   boss:    巫鹰 M3 hp160/def6, attacks hit1 phys 14 / hit2 magic 7.
+// Monster5 belongs only to the deferred sl13 data and keeps its separately
+// recovered tuning; it is not part of the active two-level campaign.
 //
 // BALANCE CAVEAT: same as level2/3/4 — these are original magnitudes; the hero
 // damage/skill formulas are being switched to the original coord in parallel,
 // which is exactly what this pack is aligning level 1 to.
 //
-// normalAttackRate mapping: BaseMonster.as:28 defaults to 0.3. A species uses
+// normalAttackRate mapping: official BaseMonster defaults to 0.5. A species uses
 // a different value only when its own constructor assigns a literal
 // `this.normalAttackRate = X`: Monster5.as:14 -> 0.8, Monster30.as:17 -> 0.25.
-// Monster2/3/4/7/8 do not override it; their `protectedParamsObject.probability`
+// Monster2/3/4/7/8 do not override it; their `_anti.probability`
 // is a separate special-skill chance, not the base hit1 roll.
 
 import type { MonsterStats } from '../../systems/monsterSim'
@@ -50,15 +43,23 @@ import type { Wall } from '../../systems/platformSim'
 /** Real recovered per-species stats for level 1 (see file header). */
 export const LEVEL1_MONSTER_STATS: Record<string, MonsterStats> = {
   // grunts / swarm (level-1 form)
-  monster8: { hp: 80, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 2 },
-  monster7: { hp: 150, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 4 },
-  monster30: { hp: 1, speed: 8, attackRange: 250, alertRange: 1000, normalAttackRate: 0.25, def: 0 },
-  // mini-bosses (else-branch, isBoss=true in level 1)
-  monster4: { hp: 1500, speed: 5, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 8 }, // 千里眼
-  monster2: { hp: 2000, speed: 5, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 10 }, // 顺风耳
+  monster8: { hp: 80, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.5, def: 2 },
+  monster7: { hp: 150, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.5, def: 4 },
+  monster30: {
+    hp: 1,
+    speed: 8,
+    attackRange: 250,
+    alertRange: 1000,
+    normalAttackRate: 0.25,
+    def: 0,
+    mDef: 0.5,
+  },
+  // 天宫道双将
+  monster4: { hp: 1000, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.5, def: 8 }, // 千里眼
+  monster2: { hp: 1800, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.5, def: 10 }, // 顺风耳
   monster5: { hp: 4000, speed: 5, attackRange: 250, alertRange: 1000, normalAttackRate: 0.8, def: 12 }, // 巨灵神
   // arena boss
-  monster3: { hp: 300, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.3, def: 6 }, // 巫鹰
+  monster3: { hp: 160, speed: 3, attackRange: 250, alertRange: 1000, normalAttackRate: 0.5, def: 6 }, // 巫鹰
 }
 
 // Human-readable names, for HP-bar labels (recovered `monsterName`).
