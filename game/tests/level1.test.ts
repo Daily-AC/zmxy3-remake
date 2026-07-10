@@ -155,30 +155,33 @@ describe('Stage 1 campaign levels recovered from AS3 stage/level coordinates', (
     expect(sl12.fallbackWalls[0]).toMatchObject({ x: -180.629, y: 501.05, width: 5199.959, height: 20 })
   })
 
-  it('uses REAL recovered magnitudes — Monster30 is the 1-hp swarm imp, not the placeholder 150', () => {
+  it('uses the official active L1/L2 monster stats recovered from stageInfo', () => {
     const s = LEVEL1_MONSTER_STATS
-    expect(s.monster30.hp).toBe(1)
-    expect(s.monster30.speed).toBe(8)
-    expect(s.monster8.hp).toBe(80)
-    expect(s.monster7.hp).toBe(150)
-    expect(s.monster4.hp).toBeLessThan(s.monster2.hp) // 千里眼 1500 < 顺风耳 2000
-    expect(s.monster2.hp).toBeLessThan(s.monster5.hp) // 顺风耳 2000 < 巨灵神 4000
-    expect(s.monster3.hp).toBe(300) // 巫鹰 boss, verbatim
+    expect(s.monster30).toMatchObject({ hp: 1, speed: 8, def: 0, mDef: 0.5 })
+    expect(s.monster3).toMatchObject({ hp: 160, speed: 3, def: 6 })
+    expect(s.monster8).toMatchObject({ hp: 80, speed: 3, def: 2 })
+    expect(s.monster7).toMatchObject({ hp: 150, speed: 3, def: 4 })
+    expect(s.monster4).toMatchObject({ hp: 1000, speed: 3, def: 8 })
+    expect(s.monster2).toMatchObject({ hp: 1800, speed: 3, def: 10 })
+
+    for (const species of ['monster30', 'monster3', 'monster8', 'monster7', 'monster4', 'monster2']) {
+      expect(s[species]).toMatchObject({ attackRange: 250, alertRange: 1000 })
+    }
   })
 
-  it('normalAttackRate uses literal species overrides or BaseMonster.as:28 default, never protectedParamsObject.probability', () => {
+  it('uses the official BaseMonster 0.5 normal attack rate except Monster30\'s literal override', () => {
     const s = LEVEL1_MONSTER_STATS
-    expect(s.monster8.normalAttackRate).toBe(0.3)
-    expect(s.monster7.normalAttackRate).toBe(0.3)
+    expect(s.monster8.normalAttackRate).toBe(0.5)
+    expect(s.monster7.normalAttackRate).toBe(0.5)
     expect(s.monster30.normalAttackRate).toBe(0.25)
-    expect(s.monster4.normalAttackRate).toBe(0.3)
-    expect(s.monster2.normalAttackRate).toBe(0.3)
+    expect(s.monster4.normalAttackRate).toBe(0.5)
+    expect(s.monster2.normalAttackRate).toBe(0.5)
     expect(s.monster5.normalAttackRate).toBe(0.8)
-    expect(s.monster3.normalAttackRate).toBe(0.3)
+    expect(s.monster3.normalAttackRate).toBe(0.5)
   })
 
-  it('Monster7 grunt attacks within one decision cycle when rng 0.29 is under the corrected BaseMonster default 0.3', () => {
-    const cfg = cfgFor(LEVEL1_MONSTER_STATS.monster7, () => 0.29)
+  it('Monster7 attacks within one decision cycle when rng 0.49 is under the official BaseMonster default 0.5', () => {
+    const cfg = cfgFor(LEVEL1_MONSTER_STATS.monster7, () => 0.49)
     const m = initMonster(cfg, 500, 400)
     const events = []
 

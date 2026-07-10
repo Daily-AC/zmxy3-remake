@@ -200,20 +200,18 @@ describe('monsterBehaviors: Monster3 hit2 skill gate (deterministic, no roll)', 
   })
 })
 
-// behavior-wiring pen (2026-07-09): AS3 numeric regression for 巫鹰, corrected
-// off kagami's Monster3Tuning per tasks/audit-numbers-report.md §6. Source:
-// export.monster.Monster3's gc.curStage==1&&curLevel==1 boss branch, 打开我
-// 开始玩.swf (this port's own ffdec decompile) -- see Monster3Spec's header
-// comment for the full field-by-field citation.
+// Numeric regression for 巫鹰, corrected from the official stageInfo
+// export.monster.Monster3 constructor. See Monster3Spec's header for the
+// field-by-field provenance.
 describe('monsterBehaviors: Monster3 AS3 numeric regression (behavior-wiring pen)', () => {
-  it('hp is 300 (5*60), not kagami\'s 926', () => {
-    expect(Monster3Spec.hp).toBe(300)
+  it('uses the official 160 hp', () => {
+    expect(Monster3Spec.hp).toBe(160)
   })
 
-  it('def/attackRange/speed/normalAttackRate match the AS3 boss branch', () => {
+  it('def/attackRange/speed/normalAttackRate match the official constructor and BaseMonster default', () => {
     expect(Monster3Spec.def).toBe(6)
     expect(Monster3Spec.attackRange).toBe(250)
-    expect(Monster3Spec.normalAttackRate).toBe(1) // AS3 boss-branch probability
+    expect(Monster3Spec.normalAttackRate).toBe(0.5)
     expect(Monster3Spec.speed).toBeCloseTo(90, 5) // horizenSpeed=3 px/frame @ 30fps
   })
 
@@ -238,6 +236,12 @@ describe('monsterBehaviors: Monster3 AS3 numeric regression (behavior-wiring pen
       expect(attack.knockbackX).toBe(-5)
       expect(attack.knockbackY).toBe(0)
     }
+  })
+})
+
+describe('monsterBehaviors: Monster7 official BaseMonster defaults', () => {
+  it('uses the official 0.5 normal attack rate', () => {
+    expect(Monster7Spec.normalAttackRate).toBe(0.5)
   })
 })
 
