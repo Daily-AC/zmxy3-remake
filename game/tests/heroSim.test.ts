@@ -117,12 +117,75 @@ describe('heroSim integration (fixed-timestep 组合)', () => {
     expect(s.attacking).toBe(false)
   })
 
-  it('cannot start a combo while airborne', () => {
+  it('does not advance simulation time when rapid edges arrive before a fixed tick', () => {
     const s = initHeroState(cfg, 480)
+
+    for (let i = 0; i < 20; i++) advanceHero(s, edges({ pressAttack: true }), 1, cfg)
+
+    expect(s.simClockMs).toBe(0)
+    expect(s.attackId).toBe(0)
+
+    advanceHero(s, NO_EDGES, TICK_MS - 20, cfg)
+
+    expect(s.simClockMs).toBe(TICK_MS)
+    expect(s.attackId).toBe(1)
+  })
+
+  it('merges distinct edges before a fixed tick and consumes them only once', () => {
+    const s = initHeroState(cfg, 480)
+
+    advanceHero(s, edges({ pressRight: true }), 5, cfg)
+    advanceHero(s, edges({ pressJump: true }), 5, cfg)
+
+    expect(s.simClockMs).toBe(0)
+    advanceHero(s, NO_EDGES, TICK_MS - 10, cfg)
+
+    expect(s.simClockMs).toBe(TICK_MS)
+    expect(s.move.heldRight).toBe(true)
+    expect(s.vertical.jumpCount).toBe(1)
+    expect(s.x).toBeCloseTo(486, 5)
+
+    advanceHero(s, NO_EDGES, TICK_MS, cfg)
+
+    expect(s.vertical.jumpCount).toBe(1)
+    expect(s.x).toBeCloseTo(492, 5)
+  })
+
+  it('attacks while airborne without changing the jump trajectory', () => {
+    const attacked = initHeroState(cfg, 480)
+    const control = initHeroState(cfg, 480)
+
+    advanceHero(attacked, edges({ pressJump: true }), TICK_MS, cfg)
+    advanceHero(control, edges({ pressJump: true }), TICK_MS, cfg)
+    advanceHero(attacked, edges({ pressAttack: true }), TICK_MS, cfg)
+    advanceHero(control, NO_EDGES, TICK_MS, cfg)
+
+    expect(attacked.action).toBe('hit1')
+    expect(attacked.vertical.y).toBe(control.vertical.y)
+    expect(attacked.vertical.vy).toBe(control.vertical.vy)
+  })
+
+  it('discards attack presses during an active air attack', () => {
+    const s = initHeroState(cfg, 480)
+
     advanceHero(s, edges({ pressJump: true }), TICK_MS, cfg)
-    expect(s.vertical.grounded).toBe(false)
     advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg)
-    expect(s.combo.stage).toBe(0)
+    expect(s.action).toBe('hit1')
+    expect(s.attackId).toBe(1)
+
+    advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg)
+    for (let i = 0; i < 7; i++) advanceHero(s, NO_EDGES, TICK_MS, cfg)
+    expect(s.action).toBe('hit1')
+
+    advanceHero(s, NO_EDGES, TICK_MS, cfg)
+
+    expect(s.vertical.grounded).toBe(false)
     expect(s.action).not.toBe('hit1')
+    expect(s.attackId).toBe(1)
+    expect(s.combo.stage).toBe(0)
+
+    while (!s.vertical.grounded) advanceHero(s, NO_EDGES, TICK_MS, cfg)
+    expect(s.combo.stage).toBe(0)
+    expect(s.attackId).toBe(1)
   })
 })
