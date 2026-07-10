@@ -2,8 +2,8 @@
 // HeroCombatSystem.ts + CombatSystem.ts (scratchpad/zmxy-eval/kagami-phaser/src/systems/).
 //
 // Ported as-is (core state machine):
-//  - hp/maxHp, state 'ready'|'hurt'|'dead', per-hit i-frames (hurtUntilMs /
-//    invulnerableUntilMs), x-only knockback with exponential decay.
+//  - hp/maxHp, state 'ready'|'hurt'|'dead', explicit hard invulnerability,
+//    x-only knockback with exponential decay.
 //  - Hit dedup so one attack instance only ever damages a target once
 //    (kagami's CombatSystem.resolveHitOnce), inlined here in monsterSim's
 //    style (a resolved-ids array on the target) instead of a separate shared
@@ -22,8 +22,8 @@
 //    hits accumulate a meter faster than sparse ones; once the meter exceeds
 //    19 the hero gets `frameClips * 3` (30fps * 3 = 90 ticks = 3000ms)
 //    protection and the meter resets to 0. This is what stops the hero being
-//    juggled to death by fast attackers once per-hit i-frames alone aren't
-//    enough. The exact per-hit increment formula is undocumented beyond "denser
+//    juggled to death by fast attackers. The exact per-hit increment formula
+//    is undocumented beyond "denser
 //    hits add more, capped step of 3" (combat-rules-index.md:196) — the tiered
 //    thresholds in hitMeterIncrement() below are a TODO-verify approximation
 //    of that shape, not a recovered original formula.
@@ -45,7 +45,7 @@ export interface HeroCombatModel {
   state: HeroCombatState
   /** Hurt-pose end time; state reverts to 'ready' once timeMs reaches this. */
   hurtUntilMs: number
-  /** Per-hit i-frame end time (kagami's setYourFather equivalent, per-hit case). */
+  /** Explicit hard-invulnerability end time; ordinary hurt does not set it. */
   invulnerableUntilMs: number
   /** 受击条: accumulates on every landed hit, resets to 0 once it trips the meter guard. */
   hitMeter: number
@@ -91,7 +91,6 @@ export interface HeroCombatBounds {
 export const HeroCombatTuning = {
   maxHp: 120,
   hurtDurationMs: 260,
-  invulnerableDurationMs: 480,
   knockbackPixelsPerSecond: 64,
   knockbackDecayPerSecond: 6,
   hitMeterThreshold: 19,
@@ -168,11 +167,10 @@ function accumulateHitMeter(hero: HeroCombatModel, timeMs: number): void {
 
 /**
  * Resolve one incoming hit against the hero. Dedups by (sourceId, attackId)
- * first — same as kagami's CombatSystem.resolveHitOnce — so a swing that
- * arrives while the hero happens to be invulnerable is consumed and cannot
- * retroactively land once the invulnerability window passes. Returns the
- * events this call produced (empty if the hit was a dup, or blocked by
- * death/i-frames).
+ * first — same as kagami's CombatSystem.resolveHitOnce — so a swing blocked by
+ * explicit hard invulnerability is consumed and cannot retroactively land
+ * once protection passes. Returns the events this call produced (empty if the
+ * hit was a dup, or blocked by death/hard invulnerability).
  */
 export function applyHeroDamage(
   hero: HeroCombatModel,
@@ -201,7 +199,6 @@ export function applyHeroDamage(
 
   hero.state = 'hurt'
   hero.hurtUntilMs = timeMs + HeroCombatTuning.hurtDurationMs
-  hero.invulnerableUntilMs = timeMs + HeroCombatTuning.invulnerableDurationMs
   hero.knockbackVelocityX = hit.knockbackX * HeroCombatTuning.knockbackPixelsPerSecond
 
   accumulateHitMeter(hero, timeMs)

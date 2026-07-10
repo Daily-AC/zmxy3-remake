@@ -15,7 +15,7 @@ function hit(partial: Partial<HeroHit> = {}): HeroHit {
   return { sourceId: 'monster-1', attackId: 1, damage: 15, knockbackX: 1, ...partial }
 }
 
-describe('heroCombat (受伤/无敌帧/受击条/死亡/复活)', () => {
+describe('heroCombat (受伤/受击条/死亡/复活)', () => {
   it('starts at full HP and ready', () => {
     const hero = createHeroCombat()
     expect(hero.hp).toBe(HeroCombatTuning.maxHp)
@@ -23,23 +23,21 @@ describe('heroCombat (受伤/无敌帧/受击条/死亡/复活)', () => {
     expect(isHeroCombatDead(hero)).toBe(false)
   })
 
-  it('applies damage, enters hurt, and grants per-hit i-frames', () => {
+  it('applies damage and enters hurt without granting a global per-hit i-frame', () => {
     const hero = createHeroCombat()
     const events = applyHeroDamage(hero, hit({ damage: 15 }), 1000)
     expect(events).toEqual([{ type: 'hurt' }])
     expect(hero.hp).toBe(HeroCombatTuning.maxHp - 15)
     expect(hero.state).toBe('hurt')
-    expect(isHeroInvulnerable(hero, 1000)).toBe(true)
-    expect(isHeroInvulnerable(hero, 1000 + HeroCombatTuning.invulnerableDurationMs)).toBe(false)
+    expect(isHeroInvulnerable(hero, 1000)).toBe(false)
   })
 
-  it('rejects a hit landing during per-hit i-frames (no HP loss)', () => {
+  it('allows distinct attack instances to damage during the same hurt pose', () => {
     const hero = createHeroCombat()
     applyHeroDamage(hero, hit({ attackId: 1 }), 1000)
-    const hpAfterFirst = hero.hp
-    const events = applyHeroDamage(hero, hit({ attackId: 2 }), 1050) // well within 480ms i-frames
-    expect(events).toEqual([])
-    expect(hero.hp).toBe(hpAfterFirst)
+    const events = applyHeroDamage(hero, hit({ attackId: 2 }), 1000)
+    expect(events).toEqual([{ type: 'hurt' }])
+    expect(hero.hp).toBe(HeroCombatTuning.maxHp - 30)
   })
 
   it('dedups the same (sourceId, attackId) even after i-frames would have expired', () => {
@@ -51,6 +49,17 @@ describe('heroCombat (受伤/无敌帧/受击条/死亡/复活)', () => {
     const events = applyHeroDamage(hero, hit({ attackId: 7 }), 5000)
     expect(events).toEqual([])
     expect(hero.hp).toBe(hpAfterFirst)
+  })
+
+  it('preserves explicit hard invulnerability and consumes a blocked attack id', () => {
+    const hero = createHeroCombat()
+    hero.invulnerableUntilMs = 1500
+
+    expect(applyHeroDamage(hero, hit({ attackId: 11 }), 1200)).toEqual([])
+    expect(hero.hp).toBe(hero.maxHp)
+    expect(applyHeroDamage(hero, hit({ attackId: 11 }), 1600)).toEqual([])
+    expect(applyHeroDamage(hero, hit({ attackId: 12 }), 1600)).toEqual([{ type: 'hurt' }])
+    expect(hero.hp).toBe(hero.maxHp - 15)
   })
 
   it('hurt state times out back to ready via updateHeroCombat', () => {
@@ -97,8 +106,6 @@ describe('heroCombat (受伤/无敌帧/受击条/死亡/复活)', () => {
     const hero = createHeroCombat()
     const pos = { x: 500 }
     let t = 1000
-    // Each landed hit needs its own i-frame window to expire first, but the
-    // meter-guard invulnerability (once tripped) should then hold regardless.
     let sourceCounter = 0
     let trippedAt = -1
     for (let i = 0; i < 30 && hero.meterInvulnerableUntilMs === undefined; i++) {
@@ -112,21 +119,21 @@ describe('heroCombat (受伤/无敌帧/受击条/死亡/复活)', () => {
         // landed; meter may have tripped on this call
         if (hero.meterInvulnerableUntilMs !== undefined) trippedAt = t
       }
-      t += HeroCombatTuning.invulnerableDurationMs + 10 // step past per-hit i-frames each time
+      t += 100
     }
     expect(hero.meterInvulnerableUntilMs).toBeDefined()
     expect(hero.hitMeter).toBe(0) // reset on trip
 
-    // While meter-invulnerable, even a hit past the per-hit i-frame window is rejected.
+    // While meter-invulnerable, a new attack instance is rejected.
     const hpAtTrip = hero.hp
     const events = applyHeroDamage(
       hero,
       { sourceId: 'monster-1', attackId: sourceCounter + 1, damage: 1, knockbackX: 0 },
-      trippedAt + HeroCombatTuning.invulnerableDurationMs + 10,
+      trippedAt + 100,
     )
     expect(events).toEqual([])
     expect(hero.hp).toBe(hpAtTrip)
-    expect(isHeroInvulnerable(hero, trippedAt + HeroCombatTuning.invulnerableDurationMs + 10)).toBe(true)
+    expect(isHeroInvulnerable(hero, trippedAt + 100)).toBe(true)
 
     // Protection lifts once the ~3s window has fully elapsed.
     updateHeroCombat(hero, pos, bounds, trippedAt + HeroCombatTuning.hitMeterProtectionMs, 16)
