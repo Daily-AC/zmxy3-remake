@@ -365,6 +365,7 @@ const HERO_HURTBOX_W = 90
 const HERO_HURTBOX_H = 150
 
 const HERO_TEX = 'role1_0'
+export const BATTLE_READY_EVENT = 'battle-ready'
 const COMBO_BANNER_TEX = 'combo_banner_generated'
 // Weapon overlay sheet: same 200×200 grid + same action frames as role1_0, with
 // ZERO offset (art-verified: the grip lands in the fist). Only 8 weapon skins
@@ -1110,6 +1111,7 @@ export class BattleScene extends Phaser.Scene {
       this.disposeCoopSync()
       this.dialogue?.close()
     })
+    this.events.emit(BATTLE_READY_EVENT)
   }
 
   // ---------- save-slot wiring ----------

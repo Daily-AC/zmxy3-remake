@@ -6,6 +6,7 @@ import { WorldMapScene } from './scenes/WorldMapScene'
 import { SkillTreeScene } from './scenes/SkillTreeScene'
 import { LoginScene } from './scenes/LoginScene'
 import { LobbyScene } from './scenes/LobbyScene'
+import { BattleLoadingScene } from './scenes/BattleLoadingScene'
 import { BattleScene } from './scenes/BattleScene'
 import { ensureArtFontsLoaded } from './systems/artFont'
 import { RENDER_METRICS, installHiDpiTextFactory } from './systems/renderScale'
@@ -40,6 +41,6 @@ ensureArtFontsLoaded().finally(() => {
     // Enables `scene.add.dom(...)` so the dialogue input can live inside the
     // canvas (kept aligned to game coords by Phaser across scaling/letterboxing).
     dom: { createContainer: true },
-    scene: [MainMenuScene, LoginScene, LobbyScene, SlotSelectScene, CharacterSelectScene, WorldMapScene, SkillTreeScene, BattleScene],
+    scene: [MainMenuScene, LoginScene, LobbyScene, SlotSelectScene, CharacterSelectScene, WorldMapScene, SkillTreeScene, BattleLoadingScene, BattleScene],
   })
 })

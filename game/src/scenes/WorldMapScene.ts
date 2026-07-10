@@ -258,7 +258,7 @@ export class WorldMapScene extends Phaser.Scene {
   private tryEnterLevel(campaignIndex: number): boolean {
     if (!isCampaignLevelUnlocked(campaignIndex, this.currentIndex)) return false
     this.npcClient?.dispose()
-    this.scene.start(SCENE.battle, { campaignIndex })
+    this.scene.start(SCENE.battleLoading, { battleData: { campaignIndex } })
     return true
   }
 
