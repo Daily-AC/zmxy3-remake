@@ -4158,6 +4158,9 @@ export class BattleScene extends Phaser.Scene {
         name: '赤炎噬血杖',
         kind: 'equip',
         rarity: 3,
+        sourceType: 'zbwq',
+        sourceUser: '悟空',
+        sourceSaleValue: 160,
         effects: [
           { type: 'stat', stat: 'atk', value: 45 },
           { type: 'onHit', effect: 'lifesteal', chance: 1, power: 25 },
