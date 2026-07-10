@@ -441,7 +441,7 @@
 
 ## 2026-07-10 session8 Codex 接手（代码真源复核 + 13~24 收口）
 
-接手基线复核：`master=65e28b2`，先重跑旧基线 `612 passed / 1 skipped` 与 `tsc --noEmit`，并读取 Claude Code `projects` 对应 session 原文与缓存图片；交接里的“已完成”均未直接采信。本场所有状态以下方代码、测试和浏览器证据为准，当前改动尚未 commit/push/deploy。
+接手基线复核：`master=65e28b2`，先重跑旧基线 `612 passed / 1 skipped` 与 `tsc --noEmit`，并读取 Claude Code `projects` 对应 session 原文与缓存图片；交接里的“已完成”均未直接采信。本场所有状态以下方代码、测试和浏览器证据为准，功能与资源改动提交为 `2cd6f0f`。
 
 **用户清单 13~24**：
 - 13：伤害/承伤/回血/升级飘字统一锚到角色与怪物的首帧 alpha 内容顶边；橙/红/紫/绿字号和描边加粗。额外实机发现同帧群怪数字完全重叠，新增 `FloatingTextLaneAllocator` 按 120ms+邻近锚点分流；八数字浏览器截图已无压字。
@@ -468,4 +468,6 @@
 - `git diff --check`：通过。
 - agent-server：18 unit 通过；deterministic forge WebSocket E2E 两条断言通过。真实 LLM mock-game 不作为本轮完成条件，且当前 5181 开发服务占用固定测试端口。
 
-**未执行**：未 commit、未 push、未部署线上、未跑 Windows Electron/home `acceptance.sh`；这些会改共享远端/发布状态，不在本轮夜间修复的默认授权内。开发服务仍为 `http://127.0.0.1:5201/`。
+**线上部署（2026-07-10）**：用户明确授权后推送 `master`，执行 `ssh home-wsl 'bash ~/deploy-zm-frontend.sh'`；服务器从 `4416f2b` 快进到 `2cd6f0f`，远端 tsc + Vite production build 通过并复制到 `/mnt/c/www/zaixu`。公网 `https://zaixu.qmledmq.cn:8443/` 返回 200，主包为 `index-DMVxN2-q.js`；无缓存 Playwright 实测登录页完整渲染，canvas 960x540、CSS 1440x810、DPR2，console/page/request failure 均为 0。新增连击横幅、三张药品图、武器图标与特效 manifest 的公网 URL 均返回 200。
+
+**未执行**：未跑 Windows Electron/home `acceptance.sh`；本轮用户只要求先部署网页。开发服务仍为 `http://127.0.0.1:5201/`。
