@@ -438,3 +438,34 @@
 - 生图素材入 game/public/assets/generated/ 并在消费处注释来源与手法；风格锚=用户给的原版截图。
 
 **在途/未销旧账**：coop 双人两 tab 终审；终包窗口（electron exe→home，tools/acceptance/，交付截止 2026-07-10 中午）；掉落物/武器图标素材线（=16）。
+
+## 2026-07-10 session8 Codex 接手（代码真源复核 + 13~24 收口）
+
+接手基线复核：`master=65e28b2`，先重跑旧基线 `612 passed / 1 skipped` 与 `tsc --noEmit`，并读取 Claude Code `projects` 对应 session 原文与缓存图片；交接里的“已完成”均未直接采信。本场所有状态以下方代码、测试和浏览器证据为准，当前改动尚未 commit/push/deploy。
+
+**用户清单 13~24**：
+- 13：伤害/承伤/回血/升级飘字统一锚到角色与怪物的首帧 alpha 内容顶边；橙/红/紫/绿字号和描边加粗。额外实机发现同帧群怪数字完全重叠，新增 `FloatingTextLaneAllocator` 按 120ms+邻近锚点分流；八数字浏览器截图已无压字。
+- 14：从本会话内置 image generation 结果取回墨金火焰横幅，绿幕去底后落 `game/public/assets/generated/combo-banner.png`；数字/「连击」/叹号仍是动态组件，保留重锤缩放、横抖、火花、上滑淡出，并叠原版 hit7 光焰。
+- 15/18/19：柱墙不重生成运行时大图，改用原图中 `y=200,h=850` 的实测连续周期作为 TileSprite frame，排除中段白轨并避免硬拼接；覆盖范围扩到关卡左右边界外。浏览器两次进入/场景 restart 后均无白线、空白带或背景消失。
+- 16：`EIcon1.swf` 解出 31/31 武器真图并按 fillName 接入背包。`Common1` 的 `SHp/BHp/SMp` 只有类逻辑、无可导出显示符号，按用户授权生成小红药/大红药/小蓝药三张透明 PNG，实机场景确认三纹理均加载。资源测试逐文件检查 PNG 存在。
+- 17：PIL 实测悟空与 13 个怪物首帧内容 bbox，地面怪按可视脚底对齐悟空；飞行巫鹰保持浮空语义；怪物 sprite、hitbox、头顶血条和飘字共用同一 visual center/top 契约。
+- 20：Boss 名牌+血条按完整总宽居中，整体下移到 `y=66`，不再用“条居中、名牌左挂”的假居中。
+- 21：技能页两张心法卡各自拥有标题/分隔线，图标、心法名、操作、等级与成本用纯布局函数排布；浏览器亲看无叠字。
+- 22：保持 Phaser 逻辑画布 960x540（避免高 DPI 画布把游戏缩到左上四分之一），全局 Text factory 以 DPR（封顶 2）生成高清文字纹理；所有场景相机与手写命中坐标统一逻辑空间。浏览器实测 canvas 960x540、CSS 1280x720、DPR2，画面铺满。
+- 23：新角色零心法、零已学技能、Y/U/I/O/L 全空；存档写 `skillTreeVersion=2`，旧版本一次性清洗演示五技能数据，之后玩家真实获得的技能不会重复迁移；技能页零灵魂显示「心法不足」。
+- 24：从官方 `Role1v690.swf` 解出 14 组、232 帧普攻/九技能特效，脚本 `tools/normalize-role1-effects.py` 统一裁边，运行时按真实动作映射播放；浏览器实测普攻 hit5、升龙斩 hit6 与技能扣蓝（50→14）。
+
+**本场额外抓到并修复**：
+- 偶发背景消失根因是 Phaser scene restart 复用 `BattleScene` 实例，但 `pillarBg/bg12Layer/bg13Layer` 等仍指向 shutdown 后已销毁对象；`buildBackground()` 现重置全部跨场景累积引用与集合，且 `pillar_wall` 缺失时明确保留 `bg11` fallback。
+- 炼丹聊天使用 Phaser 3 的 `setMask(createGeometryMask())`，Phaser 4 WebGL 实际只告警且不裁剪；改为 `filters.external.addMask()` 并在 shutdown 销毁离屏 mask shape。真实浏览器打开老君抽屉无相关 console warning。
+- Boss 出生点校准后，`level1HeadlessSmoke` 仍写死旧 `-2050`；改为从 `LEVEL_1_WUYING` 配置真源取值，避免测试与关卡数据再次分叉。
+
+**真实双人终审补齐**：本机内存 social-server + 两个隔离浏览器 context，完成注册、建 L1 房、加入、双准备、开局；两端 `remoteHeroes.size=1`，peer 看到 host 从起点移动到 `x≈768`，名字/等级圈/蓝血条截图正常。social-server 以 Node22 跑完 41 unit + e2e `SMOKE OK`。
+
+**最终验证（本场代码态）**：
+- `cd game && npm test`：66 files，633 passed，1 skipped。
+- `cd game && npm run build`：tsc + Vite production build 通过；仅既有 >500k chunk warning。
+- `git diff --check`：通过。
+- agent-server：18 unit 通过；deterministic forge WebSocket E2E 两条断言通过。真实 LLM mock-game 不作为本轮完成条件，且当前 5181 开发服务占用固定测试端口。
+
+**未执行**：未 commit、未 push、未部署线上、未跑 Windows Electron/home `acceptance.sh`；这些会改共享远端/发布状态，不在本轮夜间修复的默认授权内。开发服务仍为 `http://127.0.0.1:5201/`。

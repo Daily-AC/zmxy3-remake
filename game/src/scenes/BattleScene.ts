@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { TICK_MS } from '../systems/tick'
+import { FloatingTextLaneAllocator } from '../systems/floatingTextLayout'
 import { RoleData, ActionSpec, actionFrameTimings, actionDurationMs } from '../systems/roleData'
 import {
   HeroConfig,
@@ -40,7 +41,7 @@ import {
 import { createInventory, addItem, listStacks, Inventory } from '../systems/inventory'
 import { monsterSoulDropAmount, rollDrops, type DropRollContext } from '../systems/dropRoll'
 import type { Item } from '../systems/items'
-import { collectWorldPickup, CONSUMABLE_SPECS, rollMedicineDrop } from '../systems/consumables'
+import { collectWorldPickup, rollMedicineDrop, type ConsumableId } from '../systems/consumables'
 import {
   Equipment,
   EquipSlot,
@@ -184,10 +185,18 @@ import {
 import { RoleInfoHud } from '../ui/hud/RoleInfoHud'
 import { SkillBarHud, SkillSlotData } from '../ui/hud/SkillBarHud'
 import { activeArtFont } from '../systems/artFont'
+import {
+  ROLE1_EFFECTS,
+  role1EffectForAction,
+  role1EffectFrameKey,
+  role1EffectFrameUrl,
+  type Role1EffectAction,
+} from '../data/role1Effects'
 import { PrefabLoader, type PrefabDocument } from '../prefab/PrefabLoader'
 import bg12PrefabDoc from '../data/prefab/bg12.prefab.json'
 import bg13PrefabDoc from '../data/prefab/bg13.prefab.json'
 import { BossHpBar, MonsterHpBar } from '../ui/hud/MonsterHpBar'
+import { configureLogicalCamera, logicalPointerPosition } from '../systems/renderScale'
 import { BackpackWindow } from '../ui/hud/BackpackWindow'
 import { FurnacePanel } from '../ui/hud/FurnacePanel'
 import { ResultBanner } from '../ui/hud/ResultBanner'
@@ -342,6 +351,7 @@ const HERO_HURTBOX_W = 90
 const HERO_HURTBOX_H = 150
 
 const HERO_TEX = 'role1_0'
+const COMBO_BANNER_TEX = 'combo_banner_generated'
 // Weapon overlay sheet: same 200×200 grid + same action frames as role1_0, with
 // ZERO offset (art-verified: the grip lands in the fist). Only 8 weapon skins
 // exist (EQUIP_6/7 are absent in every pack); Stage A uses the default EQUIP_0.
@@ -380,6 +390,74 @@ const LEVEL1_CLIMB_GROUND_STRIP_PX = 32
 // 平台梁/地面梁/掉落物的"可视地面"统一下沉这个量，脚底贴梁顶（2026-07-10
 // 用户三提"空间位置"的最终修正）。
 const STAND_SINK = 84
+
+interface VisualContentBounds {
+  top: number
+  bottom: number
+}
+
+// First idle-frame visible-pixel bounds, measured from the shipped PNG alpha
+// channel with alpha >= 16. These are content bounds inside one sheet cell,
+// not whole-cell approximations; keep the renderer, hitboxes, HP bars and
+// floating numbers in the same visible coordinate space.
+const HERO_IDLE_CONTENT: VisualContentBounds = { top: 72, bottom: 172 }
+const MONSTER_IDLE_CONTENT: Record<string, VisualContentBounds> = {
+  monster2: { top: 40, bottom: 171 },
+  monster3: { top: 40, bottom: 146 },
+  monster4: { top: 39, bottom: 156 },
+  monster5: { top: 159, bottom: 298 },
+  monster6: { top: 159, bottom: 335 },
+  monster7: { top: 29, bottom: 130 },
+  monster8: { top: 29, bottom: 123 },
+  monster9: { top: 59, bottom: 170 },
+  monster10: { top: 59, bottom: 173 },
+  monster15: { top: 120, bottom: 309 },
+  monster16: { top: 29, bottom: 240 },
+  monster19: { top: 59, bottom: 181 },
+  monster30: { top: 33, bottom: 108 },
+}
+
+function visibleBottomOffset(cellH: number, offsetY: number, scale: number, contentBottom: number): number {
+  return offsetY * scale + (contentBottom - cellH / 2) * scale
+}
+
+export function computeVisibleTopY(input: {
+  stateY: number
+  offsetY: number
+  scale: number
+  cellH: number
+  contentTop: number
+  baselineCorrectionY?: number
+}): number {
+  return input.stateY +
+    input.offsetY * input.scale +
+    (input.contentTop - input.cellH / 2) * input.scale +
+    (input.baselineCorrectionY ?? 0)
+}
+
+export function monsterBaselineCorrectionY(species: string): number {
+  if (species === 'monster30') return 0
+  const bounds = MONSTER_IDLE_CONTENT[species]
+  const data = MONSTER_DATA[species]
+  if (!bounds || !data) return 0
+  const heroBottom = visibleBottomOffset(
+    roleData.sheet.cellH,
+    roleData.offset.y,
+    HERO_SCALE,
+    HERO_IDLE_CONTENT.bottom,
+  )
+  const monsterBottom = visibleBottomOffset(data.sheet.cellH, data.offset.y, HERO_SCALE, bounds.bottom)
+  return heroBottom - monsterBottom
+}
+
+export function climbBackgroundVisibility(hasPillarTexture: boolean): { pillar: boolean; fallback: boolean } {
+  return { pillar: hasPillarTexture, fallback: !hasPillarTexture }
+}
+
+export function pillarTileFrame(sourceHeight: number): { x: number; y: number; width: number; height: number } {
+  const y = sourceHeight > 1050 ? 200 : 0
+  return { x: 0, y, width: 864, height: Math.min(850, sourceHeight - y) }
+}
 
 export function computeBg11ClimbPlacement(): { x: number; y: number; scrollFactorX: number; scrollFactorY: number } {
   return {
@@ -572,6 +650,16 @@ const SKILL_ACTION: Record<Role1SkillId, string> = {
   qsez: 'hit13', zz: 'hit14', hmz: 'hit10', hyjj: 'hit12',
 }
 
+const CONSUMABLE_TEXTURES: Record<ConsumableId, { key: string; url: string }> = {
+  smallHp: { key: 'drop_cure_small_hp', url: 'assets/generated/cure-small-hp.png' },
+  bigHp: { key: 'drop_cure_big_hp', url: 'assets/generated/cure-big-hp.png' },
+  smallMp: { key: 'drop_cure_small_mp', url: 'assets/generated/cure-small-mp.png' },
+}
+
+export function consumableTextureKey(id: ConsumableId): string {
+  return CONSUMABLE_TEXTURES[id].key
+}
+
 // Item kind coming from the NPC brain -> the game's item kind vocabulary.
 function npcKindToGameKind(k: NpcItem['kind'] | 'equip'): Item['kind'] {
   if (k === 'equipment' || k === 'equip') return 'equip'
@@ -702,6 +790,7 @@ export class BattleScene extends Phaser.Scene {
   private debugVisible = false
   private hud!: Phaser.GameObjects.Text
   private playedHitIds = new Set<number>()
+  private readonly floatingTextLanes = new FloatingTextLaneAllocator()
   private bgmStarted = false
   private injected: HeroEdges = { ...NO_EDGES }
 
@@ -852,6 +941,13 @@ export class BattleScene extends Phaser.Scene {
     // L1 爬塔背景：原版是云纹雕柱塔身（用户参照图），bg11 云海图与之不符——
     // 生图柱墙（同风格锚，上下镜像拼接保证竖向无缝），爬塔段整体替换 bg11。
     this.load.image('pillar_wall', 'assets/generated/pillar_wall.jpg')
+    this.load.image(COMBO_BANNER_TEX, 'assets/generated/combo-banner.png')
+    for (const { key, url } of Object.values(CONSUMABLE_TEXTURES)) this.load.image(key, url)
+    for (const [action, spec] of Object.entries(ROLE1_EFFECTS) as [Role1EffectAction, (typeof ROLE1_EFFECTS)[Role1EffectAction]][]) {
+      for (let frame = 1; frame <= spec.frames; frame++) {
+        this.load.image(role1EffectFrameKey(action, frame), role1EffectFrameUrl(action, frame))
+      }
+    }
     for (let i = 1; i <= TRANSFERWIND_FRAME_COUNT; i++) {
       this.load.image(`transferwind_${i}`, `assets/extracted/effects/transferwind_${i}.png`)
     }
@@ -875,6 +971,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.floatingTextLanes.clear()
+    configureLogicalCamera(this)
     this.buildBackground()
     this.registerAnimations(roleData, HERO_TEX, HERO_LOOP, '')
     // Register every campaign species' animations under a per-species prefix.
@@ -886,6 +984,7 @@ export class BattleScene extends Phaser.Scene {
     }
     this.registerNpcIdle()
     this.registerTransferWind()
+    this.registerRole1Effects()
 
     this.hero = this.add.sprite(480, GROUND_Y, HERO_TEX).setScale(HERO_SCALE).setDepth(10)
     // Weapon overlay: frame-perfect mirror of the hero, shown only when armed.
@@ -1153,8 +1252,9 @@ export class BattleScene extends Phaser.Scene {
 
     const onDown = (pointer: Phaser.Input.Pointer) => {
       if (!this.paused || !this.pauseMenu?.visible) return
+      const p = logicalPointerPosition(pointer)
       for (const b of this.pauseButtons) {
-        if (Math.abs(pointer.x - b.cx) <= b.w / 2 && Math.abs(pointer.y - b.cy) <= b.h / 2) {
+        if (Math.abs(p.x - b.cx) <= b.w / 2 && Math.abs(p.y - b.cy) <= b.h / 2) {
           b.onClick()
           return
         }
@@ -1260,6 +1360,14 @@ export class BattleScene extends Phaser.Scene {
     // Hold the cast pose for the skill's action duration (shared busy-lock).
     const action = result.reentered && skillId === 'jdy' ? 'hit11_2' : SKILL_ACTION[skillId]
     this.skillAnim = { action, untilMs: this.simClockMs + Math.max(200, this.skillRuntime.cooldownMs) }
+    const heroCenter = this.heroVisualCenter()
+    const visualBox = result.hitboxes.find((box) => !box.visualOnly) ?? result.hitboxes[0]
+    this.spawnRole1Effect(
+      action,
+      heroCenter.x + this.heroState.facing * (visualBox?.offsetX ?? 40),
+      heroCenter.y + (visualBox?.offsetY ?? 0),
+      this.heroState.facing,
+    )
     this.playSfx(this.hitSfxKey(5), 0.5)
     // Skill level for the real damage formula: jdy stage-2 reuses stage-1's
     // level; others use the runtime's learned level (min 1 since it just cast).
@@ -1318,8 +1426,8 @@ export class BattleScene extends Phaser.Scene {
         if (e.state.resolvedAttackIds.includes(attackId)) continue
         if (this.queueOrSendHeroHit(e, attackId, dmg)) {
           const mcs = this.monsterVisualCenter(e)
-          this.floatText(mcs.x, mcs.y - 70, `${dmg}`, 'damage')
-          this.onLocalHitFx(mcs.x, mcs.y, facing)
+          this.floatText(mcs.x, this.monsterVisibleTopY(e) - 14, `${dmg}`, 'damage')
+          this.cameras.main.shake(55, 0.0015)
         }
       }
     }
@@ -1337,6 +1445,10 @@ export class BattleScene extends Phaser.Scene {
     // Reset accumulators that persist across a scene restart (their old game
     // objects were destroyed on shutdown; keeping stale refs crashes swapBackground).
     this.bgTiles = []
+    this.bg12Layer = undefined
+    this.bg13Layer = undefined
+    this.pillarBg = undefined
+    this.climbClouds = []
     this.debugTexts = []
     this.drops = []
     this.dropSprites.clear()
@@ -1537,6 +1649,21 @@ export class BattleScene extends Phaser.Scene {
     this.anims.create({ key: 'transferwind', frames, frameRate: 12, repeat: -1 })
   }
 
+  private registerRole1Effects(): void {
+    for (const [action, spec] of Object.entries(ROLE1_EFFECTS) as [Role1EffectAction, (typeof ROLE1_EFFECTS)[Role1EffectAction]][]) {
+      const animKey = `role1_fx_anim_${action}`
+      if (this.anims.exists(animKey)) continue
+      this.anims.create({
+        key: animKey,
+        frames: Array.from({ length: spec.frames }, (_, index) => ({
+          key: role1EffectFrameKey(action, index + 1),
+        })),
+        frameRate: spec.fps,
+        repeat: 0,
+      })
+    }
+  }
+
   private comboStageDurations(): number[] {
     const dur = (a: string): number => actionDurationMs(roleData.actions[a] as ActionSpec, TICK_MS)
     return [0, dur('hit1'), dur('hit2'), dur('hit3'), dur('hit4'), dur('hit5')]
@@ -1657,15 +1784,34 @@ export class BattleScene extends Phaser.Scene {
     // 原版此段是云纹雕柱塔身）；bg11 仍是 sl12/13 与其他关卡的 bgBase 底。
     const isClimb = stage.mode === 'climb'
     if (isClimb) {
-      if (!this.pillarBg && this.textures.exists('pillar_wall')) {
+      const background = climbBackgroundVisibility(this.textures.exists('pillar_wall'))
+      if (!this.pillarBg && background.pillar) {
+        const texture = this.textures.get('pillar_wall')
+        const source = texture.getSourceImage() as { height: number }
+        const frameName = 'pillar_wall__continuous'
+        if (!texture.has(frameName)) {
+          const frame = pillarTileFrame(source.height)
+          texture.add(frameName, 0, frame.x, frame.y, frame.width, frame.height)
+        }
         this.pillarBg = this.add
-          .tileSprite(-80, -2380, 1300, 3080, 'pillar_wall')
+          .tileSprite(
+            stage.bounds.left - 120,
+            -2380,
+            stage.bounds.right - stage.bounds.left + 240,
+            3080,
+            'pillar_wall',
+            frameName,
+          )
           .setOrigin(0, 0)
           .setDepth(-40)
         this.pillarBg.setTileScale(1300 / 864 / 1.5, 1300 / 864 / 1.5)
       }
-      this.pillarBg?.setVisible(true)
-      this.bgBase?.setVisible(false)
+      this.pillarBg?.setVisible(background.pillar)
+      this.bgBase?.setVisible(background.fallback)
+      if (background.fallback) {
+        this.bgBase?.setTexture(stage.background.base, '__BASE').setScale(1).setPosition(bgPlacement.x, bgPlacement.y)
+        this.bgBase?.setScrollFactor(bgPlacement.scrollFactorX, bgPlacement.scrollFactorY)
+      }
     } else {
       this.pillarBg?.setVisible(false)
       this.bgBase?.setVisible(true)
@@ -2050,9 +2196,9 @@ export class BattleScene extends Phaser.Scene {
     // top boss bar, bottom-left skill dock, backpack window (toggle B).
     this.roleInfoHud = new RoleInfoHud(this, 14, 12, { scale: 1.3 })
     this.roleInfoHud.container.setScrollFactor(0).setDepth(100)
-    // 2026-07-10 用户反馈：boss 名牌/血条默认居中(480)会压住左上角色属性
-    // 条——右移到 680，名牌左缘(≈397)让开 RoleInfo(≈350 宽)。
-    this.bossBar = new BossHpBar(this, 680)
+    // 名牌+血条按完整组合宽度居中；下移避开左上角色属性，而不是把整个
+    // 组件横向推偏来躲遮挡。
+    this.bossBar = new BossHpBar(this, 480, 70, { barWidth: 360 })
     this.bossBar.setVisible(false)
     // Dock chrome (无双 + cluster + 5 slots) flush to the bottom-left corner.
     // Cluster icons wired to their real handlers where the milestone has one
@@ -2613,7 +2759,32 @@ export class BattleScene extends Phaser.Scene {
 
   private monsterVisualCenter(e: MonsterEntity): { x: number; y: number } {
     const off = e.data.offset
-    return { x: e.state.x + off.x * e.scale, y: e.state.y + off.y * e.scale }
+    return {
+      x: e.state.x + off.x * e.scale,
+      y: e.state.y + off.y * e.scale + monsterBaselineCorrectionY(e.species),
+    }
+  }
+
+  private heroVisibleTopY(): number {
+    return computeVisibleTopY({
+      stateY: this.heroState.vertical.y,
+      offsetY: roleData.offset.y,
+      scale: HERO_SCALE,
+      cellH: roleData.sheet.cellH,
+      contentTop: HERO_IDLE_CONTENT.top,
+    })
+  }
+
+  private monsterVisibleTopY(e: MonsterEntity): number {
+    const content = MONSTER_IDLE_CONTENT[e.species] ?? { top: 0, bottom: e.data.sheet.cellH }
+    return computeVisibleTopY({
+      stateY: e.state.y,
+      offsetY: e.data.offset.y,
+      scale: e.scale,
+      cellH: e.data.sheet.cellH,
+      contentTop: content.top,
+      baselineCorrectionY: monsterBaselineCorrectionY(e.species),
+    })
   }
 
   /** Monster hit-test box: same aspect as the original fixed 120x140 (still a
@@ -2662,7 +2833,7 @@ export class BattleScene extends Phaser.Scene {
       if (e.hitQueue.some((h) => h.attackId === s.attackId)) continue
       if (!this.queueOrSendHeroHit(e, s.attackId, damage)) continue
       const mc = this.monsterVisualCenter(e)
-      this.floatText(mc.x, mc.y - 70, `${damage}`, 'damage')
+      this.floatText(mc.x, this.monsterVisibleTopY(e) - 14, `${damage}`, 'damage')
       if (!firstHit) firstHit = e
     }
     if (firstHit && !this.playedHitIds.has(s.attackId)) {
@@ -2670,7 +2841,7 @@ export class BattleScene extends Phaser.Scene {
       this.playSfx(this.hitSfxKey(s.combo.stage), 0.5)
       this.rollHitProcs(firstHit)
       const fc = this.monsterVisualCenter(firstHit)
-      this.onLocalHitFx(fc.x, fc.y, s.facing)
+      this.onLocalHitFx(fc.x, fc.y, s.facing, hitKey)
     }
   }
 
@@ -2683,8 +2854,8 @@ export class BattleScene extends Phaser.Scene {
   private comboFxBanner?: Phaser.GameObjects.Container
   private comboFxFadeTimer?: Phaser.Time.TimerEvent
 
-  private onLocalHitFx(x: number, y: number, facing: number): void {
-    this.spawnSlashFx(x, y, facing)
+  private onLocalHitFx(x: number, y: number, facing: number, action: string): void {
+    this.spawnRole1Effect(action === 'hit2' ? 'hit1' : action, x, y, facing)
     this.comboFxCount = this.simClockMs - this.comboFxLastMs <= 1500 ? this.comboFxCount + 1 : 1
     this.comboFxLastMs = this.simClockMs
     if (this.comboFxCount >= 2) this.showComboBanner(this.comboFxCount)
@@ -2696,13 +2867,12 @@ export class BattleScene extends Phaser.Scene {
   private showComboBanner(count: number): void {
     this.comboFxBanner?.destroy(true)
     this.comboFxFadeTimer?.remove(false)
-    const g = this.add.graphics()
-    g.fillStyle(0xff3a14, 0.85)
-    g.beginPath(); g.moveTo(-104, 26); g.lineTo(112, 26); g.lineTo(104, 32); g.lineTo(-112, 32); g.closePath(); g.fillPath()
-    g.fillStyle(0x14100b, 0.92)
-    g.beginPath(); g.moveTo(-96, -26); g.lineTo(120, -26); g.lineTo(104, 26); g.lineTo(-112, 26); g.closePath(); g.fillPath()
-    g.lineStyle(2, 0xffb43a, 0.9)
-    g.beginPath(); g.moveTo(-96, -26); g.lineTo(120, -26); g.lineTo(104, 26); g.lineTo(-112, 26); g.closePath(); g.strokePath()
+    const flare = this.add
+      .image(-72, 0, role1EffectFrameKey('hit7', 8))
+      .setScale(0.42)
+      .setAlpha(0.72)
+      .setBlendMode(Phaser.BlendModes.ADD)
+    const backing = this.add.image(0, 0, COMBO_BANNER_TEX).setDisplaySize(300, 131)
     const num = this.add
       .text(-52, -2, `${count}`, {
         fontSize: '58px',
@@ -2733,7 +2903,7 @@ export class BattleScene extends Phaser.Scene {
       })
       .setOrigin(0, 0.5)
     const banner = this.add
-      .container(724, 148, [g, num, label, bang])
+      .container(724, 148, [flare, backing, num, label, bang])
       .setScrollFactor(0)
       .setDepth(60)
       .setAngle(-6)
@@ -2775,42 +2945,19 @@ export class BattleScene extends Phaser.Scene {
     })
   }
 
-  /** 挥击刀光 v2（v1 用 additive 混合，叠在浅色柱墙上直接洗白不可见——
-   * 用户"攻击特效还没做"的真相）。正常混合：暗红外描边 + 饱和红橙主弧 +
-   * 亮芯 + 溅射线，命中同时镜头微震。 */
-  private spawnSlashFx(x: number, y: number, facing: number): void {
-    const g = this.add.graphics().setDepth(15)
-    g.setPosition(x, y)
-    const dir = facing >= 0 ? 1 : -1
-    g.lineStyle(13, 0x6a0f04, 0.9)
-    g.beginPath()
-    g.arc(0, 0, 52, -1.05, 1.05)
-    g.strokePath()
-    g.lineStyle(8, 0xff3a14, 0.95)
-    g.beginPath()
-    g.arc(0, 0, 52, -1.0, 1.0)
-    g.strokePath()
-    g.lineStyle(3.5, 0xffd9a0, 1)
-    g.beginPath()
-    g.arc(0, 0, 46, -0.85, 0.85)
-    g.strokePath()
-    g.lineStyle(3, 0xffefd0, 0.95)
-    for (const ang of [-0.55, 0.05, 0.6]) {
-      g.beginPath()
-      g.moveTo(Math.cos(ang) * 56, Math.sin(ang) * 56)
-      g.lineTo(Math.cos(ang) * 76, Math.sin(ang) * 76)
-      g.strokePath()
-    }
-    g.setScale(dir * 0.55, 0.55)
-    g.setAngle((Math.random() * 24 - 12) * dir)
-    this.tweens.add({
-      targets: g,
-      scaleX: dir * 1.3,
-      scaleY: 1.3,
-      alpha: 0,
-      duration: 190,
-      ease: 'Cubic.easeOut',
-      onComplete: () => g.destroy(),
+  private spawnRole1Effect(action: string, x: number, y: number, facing: number): void {
+    const spec = role1EffectForAction(action)
+    if (!spec) return
+    const effectAction = action as Role1EffectAction
+    const sprite = this.add
+      .sprite(x, y, role1EffectFrameKey(effectAction, 1))
+      .setDepth(15)
+      .setScale((facing >= 0 ? 1 : -1) * spec.scale, spec.scale)
+    const animKey = `role1_fx_anim_${effectAction}`
+    sprite.play(animKey)
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.destroy())
+    this.time.delayedCall(Math.ceil((spec.frames / spec.fps) * 1000) + 200, () => {
+      if (sprite.active) sprite.destroy()
     })
     this.cameras.main.shake(70, 0.0022)
   }
@@ -2856,7 +3003,7 @@ export class BattleScene extends Phaser.Scene {
     if (target.state.resolvedAttackIds.includes(attackId)) return
     if (target.hitQueue.some((hit) => hit.attackId === attackId)) return
     target.hitQueue.push({ attackId, damage: intent.damage })
-    this.floatText(target.state.x, target.state.y - 90, `${intent.damage}`, 'damage')
+    this.floatText(this.monsterVisualCenter(target).x, this.monsterVisibleTopY(target) - 14, `${intent.damage}`, 'damage')
   }
 
   private remoteAttackId(intent: HitIntentPayload): number {
@@ -2990,7 +3137,7 @@ export class BattleScene extends Phaser.Scene {
     // Burn tick -> queue as an incoming hit (monsterSim resolves it normally).
     if (e.state.mode !== 'dead' && e.burn && this.simClockMs >= e.burn.nextAtMs) {
       e.hitQueue.push({ attackId: ++this.burnAttackId, damage: e.burn.power })
-      this.floatText(e.state.x, e.state.y - 70, `${e.burn.power}`, 'burn')
+      this.floatText(this.monsterVisualCenter(e).x, this.monsterVisibleTopY(e) - 10, `${e.burn.power}`, 'burn')
       e.burn.ticksLeft -= 1
       e.burn.nextAtMs = this.simClockMs + BURN_INTERVAL_MS
       if (e.burn.ticksLeft <= 0) e.burn = null
@@ -3058,7 +3205,7 @@ export class BattleScene extends Phaser.Scene {
     const before = c.hp
     c.hp = Math.min(c.maxHp, c.hp + power)
     const healed = c.hp - before
-    this.floatText(this.heroState.x, GROUND_Y - 90, `+${healed || power}`, 'heal')
+    this.floatText(this.heroVisualCenter().x, this.heroVisibleTopY() - 10, `+${healed || power}`, 'heal')
     this.hero.setTint(0xd6ffd6)
     this.time.delayedCall(120, () => this.hero.clearTint())
   }
@@ -3076,7 +3223,7 @@ export class BattleScene extends Phaser.Scene {
     const result = gainHeroExp(this.identity, monsterExp(species, { heroLevel: this.identity.progression.level }))
     if (result.levelsGained > 0) {
       this.showToast(`升级！ Lv.${result.levelAfter}`, '#ffe066')
-      this.floatText(this.heroState.x, GROUND_Y - 110, 'LEVEL UP!', 'exp')
+      this.floatText(this.heroVisualCenter().x, this.heroVisibleTopY() - 10, 'LEVEL UP!', 'exp')
       this.hero.setTint(0xfff2a8)
       this.time.delayedCall(220, () => {
         if (!isHeroDead(this.identity)) this.hero.clearTint()
@@ -3123,13 +3270,13 @@ export class BattleScene extends Phaser.Scene {
     const events = damageHero(this.identity, hit, this.simClockMs)
     for (const e of events) {
       if (e.type === 'hurt') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `${mitigated}`, 'hurt')
+        this.floatText(this.heroVisualCenter().x, this.heroVisibleTopY() - 12, `${mitigated}`, 'hurt')
         this.hero.setTint(0xff9a9a)
         this.time.delayedCall(120, () => {
           if (!isHeroDead(this.identity)) this.hero.clearTint()
         })
       } else if (e.type === 'death') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `${mitigated}`, 'hurt')
+        this.floatText(this.heroVisualCenter().x, this.heroVisibleTopY() - 12, `${mitigated}`, 'hurt')
         this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
       }
     }
@@ -3204,13 +3351,13 @@ export class BattleScene extends Phaser.Scene {
     const events = damageHero(this.identity, heroHit, this.simClockMs)
     for (const e of events) {
       if (e.type === 'hurt') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `${mitigated}`, 'hurt')
+        this.floatText(this.heroVisualCenter().x, this.heroVisibleTopY() - 12, `${mitigated}`, 'hurt')
         this.hero.setTint(0xff9a9a)
         this.time.delayedCall(120, () => {
           if (!isHeroDead(this.identity)) this.hero.clearTint()
         })
       } else if (e.type === 'death') {
-        this.floatText(this.heroState.x, this.heroState.vertical.y - 60, `${mitigated}`, 'hurt')
+        this.floatText(this.heroVisualCenter().x, this.heroVisibleTopY() - 12, `${mitigated}`, 'hurt')
         this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
       }
     }
@@ -3221,14 +3368,16 @@ export class BattleScene extends Phaser.Scene {
     this.hero.setAlpha(1)
     this.hero.setAngle(0)
     this.showToast('复活！', '#6ef0a0')
-    this.floatText(this.heroState.x, GROUND_Y - 90, '复活', 'heal')
+    this.floatText(this.heroVisualCenter().x, this.heroVisibleTopY() - 10, '复活', 'heal')
     this.hero.setTint(0xd6ffd6)
     this.time.delayedCall(200, () => this.hero.clearTint())
   }
 
   /** Rising floating text, styled per FLOAT_STYLES (ui/hud/Toast). */
   private floatText(x: number, y: number, text: string, kind: FloatKind = 'damage'): void {
-    spawnFloatingText(this, x, y, text, kind)
+    const combatNumber = kind === 'damage' || kind === 'crit' || kind === 'burn' || kind === 'hurt'
+    const position = combatNumber ? this.floatingTextLanes.allocate(x, y, this.simClockMs) : { x, y }
+    spawnFloatingText(this, position.x, position.y, text, kind)
   }
 
   // l1-truth pen (2026-07-09): was hardcoded 'monster30' regardless of which
@@ -3274,12 +3423,10 @@ export class BattleScene extends Phaser.Scene {
     }
     // 2026-07-10 用户拍板：掉落物不加文字标签，只留物本体（药珠/图标）。
     if (drop.kind === 'consumable') {
-      const spec = CONSUMABLE_SPECS[drop.consumableId]
-      const fill = spec.resource === 'hp' ? 0xe85454 : 0x4d9dff
-      const stroke = spec.resource === 'hp' ? 0xffd0c8 : 0xc6e4ff
-      const orb = this.add.circle(0, 0, drop.consumableId === 'bigHp' ? 12 : 10, fill, 0.92).setStrokeStyle(2, stroke, 0.95)
-      const shine = this.add.circle(-3, -3, 3, 0xffffff, 0.75)
-      return this.add.container(drop.x, drop.y, [orb, shine]).setDepth(8)
+      const icon = this.add.image(0, 0, consumableTextureKey(drop.consumableId))
+      const maxSize = drop.consumableId === 'bigHp' ? 40 : 34
+      icon.setScale(Math.min(1, maxSize / Math.max(icon.width, icon.height)))
+      return this.add.container(drop.x, drop.y, [icon]).setDepth(8)
     }
     const visual = dropItemVisualSpec(drop.item.rarity)
     const iconKey = this.textures.exists('icon_' + drop.item.id) ? 'icon_' + drop.item.id : ICON_FALLBACK_KEY
@@ -3315,11 +3462,11 @@ export class BattleScene extends Phaser.Scene {
           if (result.resource === 'hp' && result.hpAfter !== undefined) {
             const delta = result.hpAfter - (result.hpBefore ?? this.identity.combat.hp)
             this.identity.combat.hp = result.hpAfter
-            if (delta > 0) this.floatText(this.heroState.x, heroCenter.y - 55, `+${Math.round(delta)}`, 'heal')
+            if (delta > 0) this.floatText(heroCenter.x, this.heroVisibleTopY() - 10, `+${Math.round(delta)}`, 'heal')
           } else if (result.resource === 'mp' && result.mpAfter !== undefined) {
             const delta = result.mpAfter - (result.mpBefore ?? this.mp.mp)
             this.mp.mp = result.mpAfter
-            if (delta > 0) this.floatText(this.heroState.x, heroCenter.y - 55, `+${Math.round(delta)} MP`, 'heal')
+            if (delta > 0) this.floatText(heroCenter.x, this.heroVisibleTopY() - 10, `+${Math.round(delta)} MP`, 'heal')
           }
           this.npcClient.worldEvent('consumable_obtained', {
             id: pickedDrop.consumableId,
@@ -3420,17 +3567,16 @@ export class BattleScene extends Phaser.Scene {
     if (frozen) e.sprite.setTint(0x8fc7ff)
     else if (e.burn) e.sprite.setTint(0xff8a5a)
     else e.sprite.clearTint()
-    const off = e.data.offset
-    e.sprite.setPosition(e.state.x + off.x * e.scale, e.state.y + off.y * e.scale)
+    const center = this.monsterVisualCenter(e)
+    e.sprite.setPosition(center.x, center.y)
     // Grunt head HP bar (hidden at full / on death); boss uses the top bar.
     // hitstun-triad pen: a fixed "-110" read fine for hero-ish-sized grunts
     // but sat inside/below a big boss's own head (cellH up to 350) and well
     // above a small imp's -- anchor off the species' own real visual top edge
     // instead (center - half its own scaled cell height - a small gap).
-    const headroom = (e.data.sheet.cellH / 2) * e.scale + 10
     // 2026-07-10 用户反馈"血条不在怪正上方"：x 此前用逻辑坐标 e.state.x，
     // 而精灵渲染在 visualCenter（含 species offset）——横向就offset出去了。
-    e.hpBar?.update(e.state.hp, e.config.stats.hp, this.monsterVisualCenter(e).x, this.monsterVisualCenter(e).y - headroom)
+    e.hpBar?.update(e.state.hp, e.config.stats.hp, center.x, this.monsterVisibleTopY(e) - 10)
   }
 
   private updateParallax(): void {
@@ -3659,7 +3805,7 @@ export class BattleScene extends Phaser.Scene {
     // 验收专用：刀光/连击横幅是 ~200ms 瞬时效果，盲截图逮不住帧——暴露演示钩子。
     w.__fxDemo = (n: number) => {
       const c = this.heroVisualCenter()
-      this.spawnSlashFx(c.x + 60, c.y, this.heroState.facing)
+      this.spawnRole1Effect('hit5', c.x + 60, c.y, this.heroState.facing)
       this.showComboBanner(n)
     }
     w.__heroState = () => ({

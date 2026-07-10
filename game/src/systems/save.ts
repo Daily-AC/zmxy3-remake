@@ -50,6 +50,7 @@ import { BIND_KEYS, ROLE1_SCHOOLS, MAX_SCHOOL_LEVEL, MAX_SKILL_LEVEL, createDefa
 
 export const GameSaveVersion = 1 as const
 export const GameSaveStorageKey = 'zmxy3-remake.save.v1'
+const SkillTreeSaveVersion = 2 as const
 
 export type SaveStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
@@ -76,6 +77,8 @@ export type GameSaveV1 = {
   /** S5: SkillTreeState (systems/skillTree.ts). A pre-S5 save has this as
    * `null`; decodeSkillTree treats that as a legacy five-skill migration. */
   skills: SkillTreeState | null
+  /** Missing/1 identifies the pre-zero-skill demo data that must be cleaned once. */
+  skillTreeVersion?: number
   /** S5: soulPurse.ts's wallet. See save.ts header re: newly-persisted. */
   soul: number
 }
@@ -118,6 +121,7 @@ export function createGameSave(input: CreateGameSaveInput): GameSave {
     },
     pets: [],
     skills: input.skillTree ?? createDefaultSkillTreeState(),
+    skillTreeVersion: SkillTreeSaveVersion,
     soul: Math.max(0, Math.floor(input.soul ?? 0)),
   }
 }
@@ -168,7 +172,7 @@ export function restoreGameState(save: GameSave): LoadedGameState {
     progression: decodeProgression(save.progression),
     equipment: decodeEquipment(save.equipment),
     inventory: decodeInventory(save.inventory),
-    skillTree: decodeSkillTree(save.skills),
+    skillTree: decodeSkillTree(save.skills, save.skillTreeVersion),
     soul: nonNegativeNumber((save as unknown as Record<string, unknown>).soul),
   }
 }
@@ -227,7 +231,14 @@ function decodeInventory(saved: unknown): Inventory {
  * the honest behavior. A validly-shaped but genuinely empty state decodes as
  * empty, not defaulted -- only unreadable data gets the fallback.
  */
-function decodeSkillTree(saved: unknown): SkillTreeState {
+function decodeSkillTree(saved: unknown, savedVersion: unknown): SkillTreeState {
+  // Before this marker existed every slot was seeded from the five-skill or
+  // one-skill demo bootstrap. Clear that data once; new saves write version 2,
+  // so a player can later earn the same skill combination without it being
+  // mistaken for legacy data on every load.
+  if (clampInteger(savedVersion, 0, SkillTreeSaveVersion) < SkillTreeSaveVersion) {
+    return createDefaultSkillTreeState()
+  }
   if (!isRecord(saved) || !Array.isArray(saved.schools) || saved.schools.length !== 2) {
     return createDefaultSkillTreeState()
   }

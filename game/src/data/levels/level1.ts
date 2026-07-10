@@ -175,7 +175,10 @@ export const LEVEL_1_WUYING: SubStageChainDef = {
             stats: LEVEL1_MONSTER_STATS.monster3,
             label: LEVEL1_MONSTER_NAMES.monster3,
             x: 750,
-            y: -2050,
+            // Align the boss registration point with the top platform. The
+            // old -2050 marker left its visible feet far above WuKong and the
+            // carved beam, so jumping through it revealed no physical body.
+            y: -1872.45,
           },
         },
       },

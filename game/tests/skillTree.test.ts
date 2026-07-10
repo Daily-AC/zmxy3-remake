@@ -52,24 +52,24 @@ describe('skillTree config (Config.as:263 allSklName[0..1], roleid 1)', () => {
 })
 
 describe('createDefaultSkillTreeState (fresh-character bootstrap)', () => {
-  it('has only the first skill slz learned at level 1 and bound to Y', () => {
+  it('starts with zero learned skills and no bindings', () => {
     const state = createDefaultSkillTreeState()
-    expect(getBindings(state)).toEqual({ Y: 'slz', U: null, I: null, O: null, L: null })
-    expect(getLearnedLevel(state, 'slz')).toBe(1)
+    expect(getBindings(state)).toEqual({ Y: null, U: null, I: null, O: null, L: null })
+    expect(getLearnedLevel(state, 'slz')).toBe(0)
     expect(getLearnedLevel(state, 'lys')).toBe(0)
     expect(getLearnedLevel(state, 'hytj')).toBe(0)
     expect(getLearnedLevel(state, 'lyfb')).toBe(0)
     expect(getLearnedLevel(state, 'jdy')).toBe(0)
     expect(getLearnedLevel(state, 'qsez')).toBe(0)
     expect(getLearnedLevel(state, 'sx')).toBe(0)
-    expect(totalLearnedCount(state)).toBe(1)
+    expect(totalLearnedCount(state)).toBe(0)
   })
 
-  it('school levels are exactly enough to have unlocked only that first slot', () => {
+  it('starts both schools at level zero so souls unlock the first slot', () => {
     const state = createDefaultSkillTreeState()
-    expect(state.schools[0].level).toBe(1) // unlocks slz only
+    expect(state.schools[0].level).toBe(0)
     expect(state.schools[1].level).toBe(0)
-    expect(getUnlockedSlotCount(state.schools[0].level)).toBe(1)
+    expect(getUnlockedSlotCount(state.schools[0].level)).toBe(0)
     expect(getUnlockedSlotCount(state.schools[1].level)).toBe(0)
   })
 })

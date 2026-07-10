@@ -58,6 +58,24 @@ export class MonsterHpBar {
   }
 }
 
+export function bossHpLayout(barWidth: number): {
+  left: number
+  right: number
+  plateX: number
+  barX: number
+} {
+  const plateW = 120
+  const gap = 8
+  const totalW = plateW + gap + barWidth
+  const left = -totalW / 2
+  return {
+    left,
+    right: totalW / 2,
+    plateX: left,
+    barX: left + plateW + gap,
+  }
+}
+
 export class BossHpBar {
   readonly container: Phaser.GameObjects.Container
   private readonly cover: Phaser.GameObjects.Graphics
@@ -67,15 +85,16 @@ export class BossHpBar {
   private readonly barW: number
   private readonly barH: number
 
-  constructor(scene: Phaser.Scene, x = 480, y = 34, opts: { barWidth?: number } = {}) {
+  constructor(scene: Phaser.Scene, x = 480, y = 66, opts: { barWidth?: number } = {}) {
     this.barW = opts.barWidth ?? 430
     this.barH = 24
-    this.barX = -this.barW / 2 + 60 // shift right to leave room for the name plate
+    const layout = bossHpLayout(this.barW)
+    this.barX = layout.barX
     const children: Phaser.GameObjects.GameObject[] = []
 
     // Name plate (dark ink blob + gold edge), left of the bar.
     const plateW = 120
-    const plateX = this.barX - plateW - 8
+    const plateX = layout.plateX
     const plate = scene.add.graphics()
     plate.fillStyle(HUD_COLORS.ink, 0.92).fillRoundedRect(plateX, -this.barH / 2 - 4, plateW, this.barH + 8, 8)
     plate.lineStyle(2, HUD_COLORS.gold, 0.9).strokeRoundedRect(plateX, -this.barH / 2 - 4, plateW, this.barH + 8, 8)

@@ -5,6 +5,7 @@ import { HUD_COLORS, ICON_FALLBACK_KEY } from './hudTheme'
 import { rarityCss, rarityName } from './rarity'
 import { withinRect, type Rect } from '../screenHit'
 import { getSharedSocialClient, resolveSocialServerBaseUrl } from '../../net/socialClient'
+import { logicalPointerPosition } from '../../systems/renderScale'
 
 // 个人资料/背包 window — S4 rebuild on the ORIGINAL layout, dual-source per
 // docs/playbooks/ui-port-dual-source.md:
@@ -254,20 +255,6 @@ const PORTRAIT_FRAME = 0
 // the exact same transform (position/origin/scale) with no extra math.
 const WEAPON_TEX = 'role1_equip0'
 
-// equipment.json `items` where type === 'zbwq' (武器), across all 4 heroes;
-// Item.id === fillName at runtime (see furnaceRecipe.ts's `id: source.
-// fillName`). None of these 31 ids has its own icon in extracted/icons/, so
-// they'd otherwise all fall back to the generic crate icon; `star_blade` is
-// the one weapon-flavored sprite in that set (see hudTheme's HUD_ICON_IDS)
-// and stands in for all of them until the art pipeline draws per-weapon
-// icons (see backpack-polish-report.md for the full id list this covers).
-const WEAPON_ITEM_IDS: ReadonlySet<string> = new Set([
-  'ptdxzg', 'ptdcz', 'ptddp', 'ptdyyc', 'kyg', 'kyz', 'xhc', 'whg', 'jmc', 'qybd',
-  'hylc', 'hylz', 'wtp', 'zjksf', 'zjbtg', 'smz', 'ydjg', 'xlth', 'xltc', 'xltz',
-  'xlts', 'zjxmc', 'qlg', 'plz', 'ylf', 'jlg', 'jlc', 'ryjgb', 'lhz', 'jcdp', 'mdflc',
-])
-const WEAPON_FALLBACK_ICON = 'icon_star_blade'
-
 const DEFAULT_STATS: BackpackHeroStats = {
   name: '', level: 1, combatPower: 0, hp: 0, maxHp: 1, mp: 0, maxMp: 1, atk: 0, def: 0,
   luck: 0, magicDefPct: 0, critPct: 0, dodgePct: 0, hpRegen: 0, mpRegen: 0, exp: 0, expToNext: 1, soul: 0,
@@ -446,7 +433,8 @@ export class BackpackWindow {
    * the container is scrollFactor(0), scale 1, unrotated -- see the hit-
    * testing note above SlotSpec. */
   private toLocal(pointer: Phaser.Input.Pointer): { lx: number; ly: number } {
-    return { lx: pointer.x - this.container.x, ly: pointer.y - this.container.y }
+    const p = logicalPointerPosition(pointer)
+    return { lx: p.x - this.container.x, ly: p.y - this.container.y }
   }
 
   private resolveHit(lx: number, ly: number): HitResult | null {
@@ -647,18 +635,8 @@ export class BackpackWindow {
     }
   }
 
-  /** Wraps the caller-supplied iconKeyFor with a weapon-id override: none of
-   * the 31 zbwq ids in WEAPON_ITEM_IDS has its own icon yet, so the caller's
-   * lookup always falls through to the generic crate fallback for them --
-   * swap in WEAPON_FALLBACK_ICON (star_blade) instead when that happens, see
-   * WEAPON_ITEM_IDS' comment. Leaves non-weapon items and any item that
-   * already resolves to a real icon untouched. */
   private resolveIconKey(item: Item): string {
-    const key = this.opts.iconKeyFor(item)
-    if (key === ICON_FALLBACK_KEY && WEAPON_ITEM_IDS.has(item.id) && this.scene.textures.exists(WEAPON_FALLBACK_ICON)) {
-      return WEAPON_FALLBACK_ICON
-    }
-    return key
+    return this.opts.iconKeyFor(item)
   }
 
   /** Ports BackPack.as leveImage(): single digit centered, multi-digit spliced

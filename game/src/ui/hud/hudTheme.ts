@@ -30,10 +30,10 @@ export const HUD_COLORS = {
 // 2026-07-10 二轮拍板：数字不带正负号（颜色即语义），再大一号再粗一档；
 // EXP/灵魂拾取不飘字（玩家看左上黄条/计数器）。
 export const FLOAT_STYLES = {
-  damage: { color: '#ff9c1a', fontSize: 30, fontStyle: 'bold', risePx: 52, durationMs: 820, stroke: '#4a2404', strokeThickness: 6 },
-  crit: { color: '#ff2d2d', fontSize: 44, fontStyle: 'bold', risePx: 62, durationMs: 950, stroke: '#4a0808', strokeThickness: 7 },
-  hurt: { color: '#c07dff', fontSize: 26, fontStyle: 'bold', risePx: 46, durationMs: 800, stroke: '#2c0a4a', strokeThickness: 5 },
-  heal: { color: '#5ef07a', fontSize: 24, fontStyle: 'bold', risePx: 44, durationMs: 780, stroke: '#0e3a14', strokeThickness: 5 },
+  damage: { color: '#ff9c1a', fontSize: 40, fontStyle: 'bold', risePx: 62, durationMs: 860, stroke: '#4a2404', strokeThickness: 8 },
+  crit: { color: '#ff2d2d', fontSize: 54, fontStyle: 'bold', risePx: 72, durationMs: 980, stroke: '#4a0808', strokeThickness: 9 },
+  hurt: { color: '#c07dff', fontSize: 36, fontStyle: 'bold', risePx: 56, durationMs: 840, stroke: '#2c0a4a', strokeThickness: 7 },
+  heal: { color: '#5ef07a', fontSize: 32, fontStyle: 'bold', risePx: 52, durationMs: 820, stroke: '#0e3a14', strokeThickness: 7 },
   burn: { color: '#ff7a4d', fontSize: 22, fontStyle: 'bold', risePx: 36, durationMs: 680, stroke: '#3a1408', strokeThickness: 4 },
   exp: { color: '#c8b0ff', fontSize: 18, fontStyle: 'bold', risePx: 32, durationMs: 700, stroke: '#241a3a', strokeThickness: 4 },
 } as const
@@ -85,7 +85,17 @@ export const HUD_ICON_IDS = [
   'spirit_grass', 'star_blade', 'torn_charm',
 ] as const
 
-export const HUD_ICONS: TextureRef[] = HUD_ICON_IDS.map((id) => ({ key: `icon_${id}`, url: `${ICON}${id}.png` }))
+/** Original `type === 'zbwq'` equipment bitmaps extracted from EIcon1.swf. */
+export const HUD_WEAPON_ICON_IDS = [
+  'ptdxzg', 'ptdcz', 'ptddp', 'ptdyyc', 'kyg', 'kyz', 'xhc', 'whg', 'jmc', 'qybd',
+  'hylc', 'hylz', 'wtp', 'zjksf', 'zjbtg', 'smz', 'ydjg', 'xlth', 'xltc', 'xltz',
+  'xlts', 'zjxmc', 'qlg', 'plz', 'ylf', 'jlg', 'jlc', 'ryjgb', 'lhz', 'jcdp', 'mdflc',
+] as const
+
+export const HUD_ICONS: TextureRef[] = [...HUD_ICON_IDS, ...HUD_WEAPON_ICON_IDS].map((id) => ({
+  key: `icon_${id}`,
+  url: `${ICON}${id}.png`,
+}))
 
 export const ICON_FALLBACK_KEY = 'icon_fallback'
 

@@ -1,0 +1,254 @@
+{
+  "hit1": {
+    "sourceSymbol": "Role1Bullet1",
+    "frameCount": 4,
+    "sourceSize": [
+      189,
+      84
+    ],
+    "cropBox": [
+      18,
+      14,
+      169,
+      71
+    ],
+    "outputSize": [
+      151,
+      57
+    ]
+  },
+  "hit3": {
+    "sourceSymbol": "Role1Bullet3",
+    "frameCount": 5,
+    "sourceSize": [
+      215,
+      216
+    ],
+    "cropBox": [
+      4,
+      6,
+      210,
+      211
+    ],
+    "outputSize": [
+      206,
+      205
+    ]
+  },
+  "hit4": {
+    "sourceSymbol": "Role1Bullet4",
+    "frameCount": 4,
+    "sourceSize": [
+      332,
+      76
+    ],
+    "cropBox": [
+      5,
+      6,
+      329,
+      72
+    ],
+    "outputSize": [
+      324,
+      66
+    ]
+  },
+  "hit5": {
+    "sourceSymbol": "Role1Bullet5",
+    "frameCount": 4,
+    "sourceSize": [
+      345,
+      112
+    ],
+    "cropBox": [
+      13,
+      13,
+      326,
+      101
+    ],
+    "outputSize": [
+      313,
+      88
+    ]
+  },
+  "hit6": {
+    "sourceSymbol": "Role1Bullet6",
+    "frameCount": 6,
+    "sourceSize": [
+      143,
+      194
+    ],
+    "cropBox": [
+      0,
+      0,
+      143,
+      194
+    ],
+    "outputSize": [
+      143,
+      194
+    ]
+  },
+  "hit7": {
+    "sourceSymbol": "Role1Bullet7",
+    "frameCount": 15,
+    "sourceSize": [
+      290,
+      90
+    ],
+    "cropBox": [
+      0,
+      0,
+      290,
+      90
+    ],
+    "outputSize": [
+      290,
+      90
+    ]
+  },
+  "hit8": {
+    "sourceSymbol": "Role1Bullet8",
+    "frameCount": 10,
+    "sourceSize": [
+      369,
+      159
+    ],
+    "cropBox": [
+      0,
+      0,
+      369,
+      159
+    ],
+    "outputSize": [
+      369,
+      159
+    ]
+  },
+  "hit9": {
+    "sourceSymbol": "Role1Bullet9",
+    "frameCount": 10,
+    "sourceSize": [
+      225,
+      98
+    ],
+    "cropBox": [
+      0,
+      0,
+      225,
+      98
+    ],
+    "outputSize": [
+      225,
+      98
+    ]
+  },
+  "hit10": {
+    "sourceSymbol": "Role1Bullet10_2",
+    "frameCount": 44,
+    "sourceSize": [
+      369,
+      232
+    ],
+    "cropBox": [
+      0,
+      0,
+      369,
+      232
+    ],
+    "outputSize": [
+      369,
+      232
+    ]
+  },
+  "hit11_1": {
+    "sourceSymbol": "Role1Bullet11_1",
+    "frameCount": 35,
+    "sourceSize": [
+      237,
+      183
+    ],
+    "cropBox": [
+      0,
+      0,
+      237,
+      159
+    ],
+    "outputSize": [
+      237,
+      159
+    ]
+  },
+  "hit11_2": {
+    "sourceSymbol": "Role1Bullet11_2",
+    "frameCount": 35,
+    "sourceSize": [
+      210,
+      224
+    ],
+    "cropBox": [
+      0,
+      0,
+      210,
+      224
+    ],
+    "outputSize": [
+      210,
+      224
+    ]
+  },
+  "hit12": {
+    "sourceSymbol": "Role1Bullet12",
+    "frameCount": 15,
+    "sourceSize": [
+      1728,
+      960
+    ],
+    "cropBox": [
+      765,
+      381,
+      963,
+      579
+    ],
+    "outputSize": [
+      198,
+      198
+    ]
+  },
+  "hit13": {
+    "sourceSymbol": "Role1Bullet13",
+    "frameCount": 30,
+    "sourceSize": [
+      1728,
+      1852
+    ],
+    "cropBox": [
+      700,
+      791,
+      976,
+      1072
+    ],
+    "outputSize": [
+      276,
+      281
+    ]
+  },
+  "hit14": {
+    "sourceSymbol": "Role1Bullet14_1",
+    "frameCount": 15,
+    "sourceSize": [
+      1350,
+      750
+    ],
+    "cropBox": [
+      596,
+      296,
+      755,
+      455
+    ],
+    "outputSize": [
+      159,
+      159
+    ]
+  }
+}

@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { withinRect, type Rect } from './screenHit'
+import { logicalPointerPosition } from '../systems/renderScale'
 
 // NPC dialogue panel in the original ink-brush / warm-wood visual language:
 //  - background = the central brush band of the original 水墨 text panel art
@@ -151,7 +152,8 @@ export class DialogueBox {
       this.craftEnterRect = { x: bx - rectW / 2, y: by - rectH / 2, w: rectW, h: rectH }
       const onDown = (pointer: Phaser.Input.Pointer): void => {
         if (!this._open || !this.craftEnterRect) return
-        if (withinRect(pointer.x, pointer.y, this.craftEnterRect)) this.cfg.onCraftEnter?.()
+        const p = logicalPointerPosition(pointer)
+        if (withinRect(p.x, p.y, this.craftEnterRect)) this.cfg.onCraftEnter?.()
       }
       this.scene.input.on('pointerdown', onDown)
       this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scene.input.off('pointerdown', onDown))

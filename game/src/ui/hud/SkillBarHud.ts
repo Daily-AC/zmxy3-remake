@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { logicalPointerPosition } from '../../systems/renderScale'
 
 // Bottom-left skill dock, rebuilt on the original 造梦 chrome: the extracted
 // export.RoleInfo bottom bar (hud_roleinfo_bottom_skilldock) supplies the 无双
@@ -95,10 +96,11 @@ export class SkillBarHud {
       // live 2026-07-08: geometrically-correct clicks did nothing mid-level).
       // pointer.x/y are true screen coordinates, immune to camera scroll.
       const onDown = (pointer: Phaser.Input.Pointer) => {
+        const p = logicalPointerPosition(pointer)
         const r2 = (19 * this.scale) ** 2
         for (const icon of DOCK_ICONS) {
-          const dx = pointer.x - (x + icon.cx * this.scale)
-          const dy = pointer.y - (y + icon.cy * this.scale)
+          const dx = p.x - (x + icon.cx * this.scale)
+          const dy = p.y - (y + icon.cy * this.scale)
           if (dx * dx + dy * dy <= r2) {
             opts.onIconClick?.(icon.id)
             return

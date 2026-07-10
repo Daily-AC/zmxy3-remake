@@ -80,4 +80,13 @@ describe('BattleScene visual fidelity helpers', () => {
     expect(spec.nearbyFrame).toBe(false)
     expect(spec.nameColor.toLowerCase()).toBe('#d9a441')
   })
+
+  it('uses larger, heavier floating combat numbers for the third visual pass', async () => {
+    const { FLOAT_STYLES } = await import('../src/ui/hud/hudTheme')
+
+    expect(FLOAT_STYLES.damage.fontSize).toBeGreaterThanOrEqual(38)
+    expect(FLOAT_STYLES.damage.strokeThickness).toBeGreaterThanOrEqual(7)
+    expect(FLOAT_STYLES.hurt.fontSize).toBeGreaterThanOrEqual(34)
+    expect(FLOAT_STYLES.crit.fontSize).toBeGreaterThanOrEqual(50)
+  })
 })
