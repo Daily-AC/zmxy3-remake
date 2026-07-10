@@ -231,6 +231,14 @@ import {
   role1EffectFrameUrl,
   type Role1EffectAction,
 } from '../data/role1Effects'
+import {
+  monsterHit1EffectAnimationKey,
+  monsterHit1EffectFrameKey,
+  monsterHit1EffectFrameUrl,
+  monsterHit1EffectPhases,
+  monsterHit1VisualForAttackFrame,
+  type MonsterHit1EffectPhase,
+} from '../data/monsterHit1Effects'
 import { PrefabLoader, type PrefabDocument } from '../prefab/PrefabLoader'
 import bg12PrefabDoc from '../data/prefab/bg12.prefab.json'
 import bg13PrefabDoc from '../data/prefab/bg13.prefab.json'
@@ -975,6 +983,12 @@ export class BattleScene extends Phaser.Scene {
         this.load.image(role1EffectFrameKey(action, frame), role1EffectFrameUrl(action, frame))
       }
     }
+    for (const phase of monsterHit1EffectPhases()) {
+      for (let frame = 1; frame <= phase.shippedFrames; frame++) {
+        const url = monsterHit1EffectFrameUrl(phase, frame)
+        if (url) this.load.image(monsterHit1EffectFrameKey(phase, frame), url)
+      }
+    }
     for (let i = 1; i <= TRANSFERWIND_FRAME_COUNT; i++) {
       this.load.image(`transferwind_${i}`, `assets/extracted/effects/transferwind_${i}.png`)
     }
@@ -1012,6 +1026,7 @@ export class BattleScene extends Phaser.Scene {
     this.registerNpcIdle()
     this.registerTransferWind()
     this.registerRole1Effects()
+    this.registerMonsterHit1Effects()
 
     this.hero = this.add.sprite(480, GROUND_Y, HERO_TEX).setScale(HERO_SCALE).setDepth(10)
     // Weapon overlay: frame-perfect mirror of the hero, shown only when armed.
@@ -1690,6 +1705,25 @@ export class BattleScene extends Phaser.Scene {
         })),
         frameRate: spec.fps,
         repeat: 0,
+      })
+    }
+  }
+
+  private registerMonsterHit1Effects(): void {
+    for (const phase of monsterHit1EffectPhases()) {
+      if (phase.kind === 'hitbox-only') continue
+      const animKey = monsterHit1EffectAnimationKey(phase)
+      if (this.anims.exists(animKey)) continue
+      this.anims.create({
+        key: animKey,
+        frames: Array.from({ length: phase.shippedFrames }, (_, index) => ({
+          key: monsterHit1EffectFrameKey(phase, index + 1),
+        })),
+        frameRate: phase.fps,
+        // Monster30's adapted moving collision entity can outlive one source
+        // rotation; keep its official blade visible until that entity hits or
+        // expires. Every attached melee effect plays once and self-destructs.
+        repeat: phase.sourceSymbol === 'Monster30Bullet1' ? -1 : 0,
       })
     }
   }
@@ -3294,7 +3328,7 @@ export class BattleScene extends Phaser.Scene {
     )
     for (const ev of events) {
       if (ev.type === 'hurt') this.playSfx('monHurt', 0.6)
-      else if (ev.type === 'attack-frame') this.resolveMonsterAttackFrame(e)
+      else if (ev.type === 'attack-frame') this.resolveMonsterAttackFrame(e, ev.attackFrameIndex ?? 0)
       else if (ev.type === 'projectile-spawn') this.spawnMonsterProjectile(e, ev)
       else if (ev.type === 'death') {
         this.spawnDrops(ev.x, ev.y, e.species)
@@ -3340,14 +3374,36 @@ export class BattleScene extends Phaser.Scene {
     return centeredBox(center.x, center.y, HERO_HURTBOX_W, HERO_HURTBOX_H)
   }
 
-  private resolveMonsterAttackFrame(e: MonsterEntity): void {
+  private resolveMonsterAttackFrame(e: MonsterEntity, attackFrameIndex: number): void {
     // Monster30's frame launches a projectile; its moving bullet owns damage.
     if (e.config.rangedAttack) return
     const spec = e.config.attackSpec
     if (!spec) return
-    const resolved = resolveAttackSpec(spec, this.monsterVisualCenter(e), e.state.facing)
+    const visual = monsterHit1VisualForAttackFrame(e.species, attackFrameIndex)
+    const resolved = resolveAttackSpec(
+      visual ? { ...spec, effect: visual.effect } : spec,
+      this.monsterVisualCenter(e),
+      e.state.facing,
+    )
+    if (visual && resolved.effect) this.spawnMonsterHit1Effect(visual.phase, resolved.effect)
     if (overlaps(resolved.hitbox, this.currentHeroHurtbox())) this.monsterHitsHero(e)
     this.sendRemoteHeroHits(e, resolved.hitbox, e.attackPower, e.attackKind)
+  }
+
+  private spawnMonsterHit1Effect(
+    phase: MonsterHit1EffectPhase,
+    resolved: { x: number; y: number; originX: number; originY: number; flipX: boolean },
+  ): void {
+    const sprite = this.add
+      .sprite(resolved.x, resolved.y, monsterHit1EffectFrameKey(phase, 1))
+      .setDisplayOrigin(resolved.originX, resolved.originY)
+      .setFlipX(resolved.flipX)
+      .setDepth(12)
+    sprite.play(monsterHit1EffectAnimationKey(phase))
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.destroy())
+    this.time.delayedCall(Math.ceil((phase.timelineFrames / phase.fps) * 1000) + 100, () => {
+      if (sprite.active) sprite.destroy()
+    })
   }
 
   private sendRemoteHeroHits(
@@ -3545,9 +3601,20 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private makeEnemyProjectileSprite(projectile: EnemyProjectile): Phaser.GameObjects.Container {
-    const glow = this.add.circle(0, 0, projectile.radius, 0xb8c2cc, 0.12)
-    const core = this.add.circle(0, 0, 8, 0x636b76, 0.9).setStrokeStyle(2, 0xdfe7ef, 0.75)
-    return this.add.container(projectile.x, projectile.y, [glow, core]).setDepth(8)
+    const visual = monsterHit1VisualForAttackFrame('monster30', 0)
+    if (!visual) return this.add.container(projectile.x, projectile.y).setDepth(8)
+    const facing = projectile.vx >= 0 ? 1 : -1
+    const spec = monsterAttackSpecFor('monster30', 'hit1')
+    const resolved = spec
+      ? resolveAttackSpec({ ...spec, effect: visual.effect }, { x: 0, y: 0 }, facing).effect
+      : undefined
+    if (!resolved) return this.add.container(projectile.x, projectile.y).setDepth(8)
+    const sprite = this.add
+      .sprite(resolved.x, resolved.y, monsterHit1EffectFrameKey(visual.phase, 1))
+      .setDisplayOrigin(resolved.originX, resolved.originY)
+      .setFlipX(resolved.flipX)
+    sprite.play(monsterHit1EffectAnimationKey(visual.phase))
+    return this.add.container(projectile.x, projectile.y, [sprite]).setDepth(8)
   }
 
   private stepEnemyProjectiles(delta: number): void {
@@ -4016,7 +4083,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private doSellEquipmentItem(item: Item): void {
-    const result = sellEquipmentItem(this.inventory, this.soulPurse, item.id)
+    const result = sellEquipmentItem(this.inventory, this.soulPurse, item)
     if (!result.sold) {
       this.showToast('这件物品无法出售', '#c8cfe6')
       return
