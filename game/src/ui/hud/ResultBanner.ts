@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { HUD_COLORS } from './hudTheme'
 import { MenuButton } from '../menu/MenuButton'
 import { withinRect, type Rect } from '../screenHit'
+import { logicalPointerPosition } from '../../systems/renderScale'
 
 // Stage clear / fail result screen: dim overlay + a big 挑战成功/失败 banner +
 // a results strip with stats + retry / continue buttons. Meant for the level
@@ -64,8 +65,9 @@ export class ResultBanner {
 
   private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
     if (!this.container.visible) return
+    const p = logicalPointerPosition(pointer)
     for (const h of this.hotspots) {
-      if (withinRect(pointer.x, pointer.y, h.rect)) {
+      if (withinRect(p.x, p.y, h.rect)) {
         h.onClick()
         return
       }
@@ -74,8 +76,9 @@ export class ResultBanner {
 
   private readonly onPointerMove = (pointer: Phaser.Input.Pointer): void => {
     if (!this.container.visible) return
+    const p = logicalPointerPosition(pointer)
     for (const h of this.hotspots) {
-      const over = withinRect(pointer.x, pointer.y, h.rect)
+      const over = withinRect(p.x, p.y, h.rect)
       if (over && !h.hovered) {
         h.hovered = true
         h.onEnter?.()

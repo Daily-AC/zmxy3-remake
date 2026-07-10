@@ -11,6 +11,7 @@ import {
   type SlotSummary,
 } from '../systems/saveSlots'
 import { restoreGameState } from '../systems/save'
+import { configureLogicalCamera } from '../systems/renderScale'
 
 // Save panel redone against the 造梦西游 Online "存档记录" dialog
 // (docs/reference/user-flow-refs/saveslots-original.png, spec S3 -- user
@@ -86,6 +87,7 @@ export class SlotSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    configureLogicalCamera(this)
     // Dimmed key-art backdrop (unifies with the main menu). The dark overlay
     // is a functional legibility layer (save cards need contrast against
     // whatever key art sits behind them), not a style choice -- flagged as

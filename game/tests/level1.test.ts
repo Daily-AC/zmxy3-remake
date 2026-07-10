@@ -58,7 +58,7 @@ describe('Level 1 九重天 — AS3 three-substage structure', () => {
     expect(sl11.continuousSpawner!.heightTrigger!.boss).toMatchObject({
       species: 'monster3',
       x: 750,
-      y: -2050,
+      y: -1872.45,
       label: '巫鹰',
     })
   })

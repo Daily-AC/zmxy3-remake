@@ -6,6 +6,7 @@ import { createProgression, type HeroId } from '../systems/progression'
 import { createEquipment } from '../systems/equipment'
 import { createInventory } from '../systems/inventory'
 import { activeArtFont } from '../systems/artFont'
+import { configureLogicalCamera } from '../systems/renderScale'
 
 // SelectRole, redone against the original AS3 (`打开我开始玩.swf` ->
 // `export.SelectRole`, tasks/decompile-as3-ui-report-codex.md) + real per-panel
@@ -159,6 +160,7 @@ export class CharacterSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    configureLogicalCamera(this)
     // Base ink black under everything, then the blurred ambient derivative of
     // the artwork itself cover-fills the canvas (see AMBIENT_BG_TEX comment),
     // with a soft edge vignette so the sharp panel row stays the focal point.

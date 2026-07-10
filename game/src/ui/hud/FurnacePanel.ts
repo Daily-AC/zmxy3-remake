@@ -4,6 +4,7 @@ import { HUD_COLORS, ICON_FALLBACK_KEY } from './hudTheme'
 import { rarityCss } from './rarity'
 import { withinRect, type Rect } from '../screenHit'
 import { MODAL_PANEL_DEPTH } from './depths'
+import { logicalPointerPosition } from '../../systems/renderScale'
 
 // 炼丹炉 (forge) window on the ORIGINAL art: the official StrengthEquipment 打造
 // tab. Two pieces of real 4399 art compose it:
@@ -192,8 +193,9 @@ export class FurnacePanel {
    * open()/rebuildChips() never need their own listener wiring/cleanup. */
   private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
     if (!this.container.visible) return
-    const lx = pointer.x - this.container.x
-    const ly = pointer.y - this.container.y
+    const p = logicalPointerPosition(pointer)
+    const lx = p.x - this.container.x
+    const ly = p.y - this.container.y
     if (withinRect(lx, ly, this.closeRect)) {
       this.close()
       return
@@ -212,8 +214,9 @@ export class FurnacePanel {
 
   private readonly onPointerMove = (pointer: Phaser.Input.Pointer): void => {
     if (!this.container.visible) return
-    const lx = pointer.x - this.container.x
-    const ly = pointer.y - this.container.y
+    const p = logicalPointerPosition(pointer)
+    const lx = p.x - this.container.x
+    const ly = p.y - this.container.y
     const overCraft = !this.locked && withinRect(lx, ly, this.craftRect)
     this.craftBtn.setFillStyle(0xffffff, overCraft ? 0.12 : 0.001)
     const overAny = overCraft || withinRect(lx, ly, this.closeRect) || this.chips.some((c) => withinRect(lx, ly, c.hitRect))

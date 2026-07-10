@@ -15,6 +15,7 @@ import {
   type SocialRoomConnection,
 } from '../net/socialClient'
 import { SCENE } from './shellShared'
+import { configureLogicalCamera } from '../systems/renderScale'
 
 // 2026-07-09 视觉重做（用户打磨反馈：素面板 → 全游戏统一的水墨×暗金基调）。
 // 逻辑/协议/验收 hook 与重做前完全一致，只换了渲染层：地图暗化作底、双线金边
@@ -124,6 +125,7 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   create(): void {
+    configureLogicalCamera(this)
     this.client = runtimeSocialClient()
     if (!this.client.getSession()) {
       this.scene.start(SCENE.coopLogin)

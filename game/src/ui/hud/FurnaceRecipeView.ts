@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { logicalPointerPosition } from '../../systems/renderScale'
 import type { CraftCheck, FurnaceRecipe } from '../../systems/furnaceRecipe'
 import { HUD_COLORS } from './hudTheme'
 import { rarityCss } from './rarity'
@@ -27,7 +28,7 @@ import { CHAT_HISTORY_LIMIT, loadChatHistory, saveChatHistory, type ChatHistoryS
 //   - ChatGPT 式布局：用户消息=右对齐圆角气泡，老君回复=左侧无气泡平铺文
 //     本；npcLines: string[] 换成结构化 ChatMessage[]，堆叠高度按实测文本/
 //     气泡高度动态排（见 systems/chatLayout.ts 的纯函数）。
-//   - 历史可滚动：chatContentLayer 套 GeometryMask 裁剪到 CHAT_VIEWPORT，滚
+//   - 历史可滚动：chatContentLayer 套 WebGL Mask filter 裁剪到 CHAT_VIEWPORT，滚
 //     轮在抽屉开启 + 指针落在该矩形内时平移内容，clamp 逻辑同样在
 //     chatLayout.ts；新消息到达强制回滚到底部（snap-to-bottom）。
 //   - 按账号持久化：localStorage 经 systems/chatHistory.ts 存取，key 按当前
@@ -102,6 +103,7 @@ export class FurnaceRecipeView {
   private readonly rowLayer: Phaser.GameObjects.Container
   private readonly chatDrawer: Phaser.GameObjects.Container
   private readonly chatContentLayer: Phaser.GameObjects.Container
+  private readonly chatMaskShape: Phaser.GameObjects.Graphics
   private readonly scrollIndicator: Phaser.GameObjects.Rectangle
   private readonly pageText: Phaser.GameObjects.Text
   private readonly sendButton: Phaser.GameObjects.Rectangle
@@ -220,15 +222,13 @@ export class FurnaceRecipeView {
 
     // Scrollable message log: chatContentLayer holds every message group
     // stacked oldest-top -> newest-bottom (see rebuildChat/applyChatScroll);
-    // it's masked to CHAT_VIEWPORT via a detached Graphics object (never
-    // added to any container/display list -- `scene.add.graphics()` +
-    // `.setVisible(false)` keeps it out of the normal render pass while
-    // still usable as a GeometryMask source) so overflowing history clips
-    // instead of spilling past the drawer's chrome.
+    // it's masked to CHAT_VIEWPORT via Phaser 4's WebGL Mask filter. The mask
+    // shape is created off-list so it does not render as ordinary scene art.
     this.chatContentLayer = scene.add.container(0, 0)
-    const maskShape = scene.add.graphics().setVisible(false).setScrollFactor(0)
-    maskShape.fillStyle(0xffffff, 1).fillRect(CHAT_VIEWPORT.x, CHAT_VIEWPORT.y, CHAT_VIEWPORT.w, CHAT_VIEWPORT.h)
-    this.chatContentLayer.setMask(maskShape.createGeometryMask())
+    this.chatMaskShape = scene.make.graphics({}, false).setScrollFactor(0)
+    this.chatMaskShape.fillStyle(0xffffff, 1).fillRect(CHAT_VIEWPORT.x, CHAT_VIEWPORT.y, CHAT_VIEWPORT.w, CHAT_VIEWPORT.h)
+    this.chatContentLayer.enableFilters()
+    this.chatContentLayer.filters!.external.addMask(this.chatMaskShape, false, scene.cameras.main)
     drawerChildren.push(this.chatContentLayer)
 
     // Thin gold scroll indicator on the drawer's inner right edge -- hidden
@@ -258,6 +258,7 @@ export class FurnaceRecipeView {
       scene.input.off('pointerdown', this.onPointerDown)
       scene.input.off('pointermove', this.onPointerMove)
       scene.input.off('wheel', this.onWheel)
+      this.chatMaskShape.destroy()
     })
     this.setDrawerOpen(false)
     this.refresh()
@@ -393,8 +394,9 @@ export class FurnaceRecipeView {
 
   private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
     if (!this.container.visible) return
-    const lx = pointer.x - this.container.x
-    const ly = pointer.y - this.container.y
+    const p = logicalPointerPosition(pointer)
+    const lx = p.x - this.container.x
+    const ly = p.y - this.container.y
     if (withinRect(lx, ly, this.closeRect)) {
       this.close()
       return
@@ -435,8 +437,9 @@ export class FurnaceRecipeView {
 
   private readonly onPointerMove = (pointer: Phaser.Input.Pointer): void => {
     if (!this.container.visible) return
-    const lx = pointer.x - this.container.x
-    const ly = pointer.y - this.container.y
+    const p = logicalPointerPosition(pointer)
+    const lx = p.x - this.container.x
+    const ly = p.y - this.container.y
     const overRow = this.rows.some((row) => !this.locked && row.canCraftNow && withinRect(lx, ly, row.hitRect))
     const overControl =
       withinRect(lx, ly, this.closeRect) ||
@@ -448,8 +451,9 @@ export class FurnaceRecipeView {
 
   private readonly onWheel = (pointer: Phaser.Input.Pointer, _objects: unknown, _dx: number, dy: number): void => {
     if (!this.container.visible || !this.drawerOpen) return
-    const lx = pointer.x - this.container.x
-    const ly = pointer.y - this.container.y
+    const p = logicalPointerPosition(pointer)
+    const lx = p.x - this.container.x
+    const ly = p.y - this.container.y
     if (!withinRect(lx, ly, CHAT_VIEWPORT)) return
     this.chatScroll = clampChatScroll(this.chatScroll + dy, this.chatContentHeight, CHAT_VIEWPORT.h)
     this.applyChatScroll()

@@ -150,6 +150,7 @@ const TEXTURE_SIZES: Record<string, { w: number; h: number }> = {
   backpack_exp_fill: { w: 214, h: 20 },
   role1_0: { w: 200, h: 200 },
   role1_equip0: { w: 200, h: 200 },
+  icon_ptdxzg: { w: 50, h: 50 },
   icon_star_blade: { w: 64, h: 64 },
 }
 
@@ -305,7 +306,7 @@ describe('BackpackWindow layout invariants', () => {
     expect(weaponOverlay!.visible).toBe(false)
   })
 
-  it('maps a weapon-slot item with no dedicated icon to icon_star_blade instead of the generic fallback', async () => {
+  it('uses the weapon-specific EIcon1 bitmap when the weapon slot is filled', async () => {
     const backpack = await makeBackpack()
     const eq = createEquipment()
     eq.weapon = mockWeaponItem()
@@ -313,7 +314,7 @@ describe('BackpackWindow layout invariants', () => {
 
     const equipLayer = (backpack as unknown as { equipLayer: FakeContainer }).equipLayer
     const icon = equipLayer.children.find((c): c is FakeImage => c instanceof FakeImage)
-    expect(icon?.key).toBe('icon_star_blade')
+    expect(icon?.key).toBe('icon_ptdxzg')
   })
 
   it('shows the logged-in social username instead of the hero name, falling back when logged out', async () => {

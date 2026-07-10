@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { SCENE } from './shellShared'
 import { addEmbers } from '../ui/embers'
+import { configureLogicalCamera } from '../systems/renderScale'
 
 // 2026-07-09 screen-flow change (用户拍板，总纲 3d): the traditional menu list
 // (新的开始/继续游戏/游戏帮助/关于我们/退出游戏/联机共斗) is cut for the
@@ -29,6 +30,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    configureLogicalCamera(this)
     if (this.textures.exists(KEYART_BG)) {
       // 2736x1536 art designed for full-bleed 16:9 -- title calligraphy is part
       // of the composition (right third), so no shift, no crop games.

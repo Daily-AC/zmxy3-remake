@@ -8,6 +8,7 @@ import { LoginScene } from './scenes/LoginScene'
 import { LobbyScene } from './scenes/LobbyScene'
 import { BattleScene } from './scenes/BattleScene'
 import { ensureArtFontsLoaded } from './systems/artFont'
+import { RENDER_METRICS, installHiDpiTextFactory } from './systems/renderScale'
 
 // Milestone 2 combat slice: ground physics, jump/double-jump, five-hit combo.
 // All game rules live in Phaser-independent modules under src/systems/; this
@@ -22,11 +23,12 @@ import { ensureArtFontsLoaded } from './systems/artFont'
 // frame with the browser's fallback font and never refresh once the real
 // face swaps in (Phaser Text doesn't watch document.fonts on its own).
 ensureArtFontsLoaded().finally(() => {
+  installHiDpiTextFactory(Phaser.GameObjects.GameObjectFactory.prototype)
   new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'app',
-    width: 960,
-    height: 540,
+    width: RENDER_METRICS.width,
+    height: RENDER_METRICS.height,
     // 2026-07-09 用户点名"四周黑色背景没处理"：此前没配 Scale Manager，画布
     // 固定 960x540 CSS 像素居中，大窗口下四周全是黑。FIT=等比放大铺满窗口
     // 短边，letterbox 余量由 index.html 的暗化 keyart 页面背景兜住。

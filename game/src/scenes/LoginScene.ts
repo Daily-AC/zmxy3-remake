@@ -10,6 +10,7 @@ import { SCENE, REG, shellStorage } from './shellShared'
 import { readSlot } from '../systems/saveSlots'
 import { restoreGameState } from '../systems/save'
 import { addEmbers } from '../ui/embers'
+import { configureLogicalCamera } from '../systems/renderScale'
 
 // 2026-07-09 用户拍板终稿 mock（login-mock-v2, 四人探头版）即素材：整张效果图
 // 铺满画布当背景，功能件（输入框/印章热区/模式切换）像素对位叠在画中对应元素
@@ -64,6 +65,7 @@ export class LoginScene extends Phaser.Scene {
   }
 
   create(): void {
+    configureLogicalCamera(this)
     this.client = runtimeSocialClient()
     if (this.client.getSession()) {
       this.enterGame()

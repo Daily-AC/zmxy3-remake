@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { withinRect, type Rect } from '../screenHit'
+import { logicalPointerPosition } from '../../systems/renderScale'
 
 // Reusable menu button in the game's established visual DNA: warm-wood /
 // orange-yellow rounded plate with a dark-brown edge and a thin gold inner line,
@@ -127,7 +128,8 @@ export class MenuButton {
     }
     const onMove = (pointer: Phaser.Input.Pointer): void => {
       if (!this.enabled || !this.container.visible) return
-      const over = withinRect(pointer.x, pointer.y, rectNow())
+      const p = logicalPointerPosition(pointer)
+      const over = withinRect(p.x, p.y, rectNow())
       if (over && this.state === 'idle') {
         this.state = 'hover'
         this.redraw()
@@ -138,14 +140,16 @@ export class MenuButton {
     }
     const onDown = (pointer: Phaser.Input.Pointer): void => {
       if (!this.enabled || !this.container.visible) return
-      if (!withinRect(pointer.x, pointer.y, rectNow())) return
+      const p = logicalPointerPosition(pointer)
+      if (!withinRect(p.x, p.y, rectNow())) return
       this.state = 'down'
       this.redraw()
     }
     const onUp = (pointer: Phaser.Input.Pointer): void => {
       if (!this.enabled || !this.container.visible) return
       const wasDown = this.state === 'down'
-      const over = withinRect(pointer.x, pointer.y, rectNow())
+      const p = logicalPointerPosition(pointer)
+      const over = withinRect(p.x, p.y, rectNow())
       this.state = over ? 'hover' : 'idle'
       this.redraw()
       if (wasDown && over) this.opts.onClick()

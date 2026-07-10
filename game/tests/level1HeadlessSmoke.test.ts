@@ -75,7 +75,12 @@ describe('Level 1 headless smoke (systems only)', () => {
     const spawner = createContinuousSpawnerState(sl11.continuousSpawner!)
     const top = updateContinuousSpawner(spawner, { x: hero.x, y: -1900, alive: true }, 3000, () => 0.5)
     expect(top.spawns.map((s) => s.species)).toEqual(['monster30', 'monster30'])
-    expect(top.bossSpawn).toMatchObject({ species: 'monster3', x: 750, y: -2050 })
+    const configuredBoss = sl11.continuousSpawner!.heightTrigger!.boss
+    expect(top.bossSpawn).toMatchObject({
+      species: configuredBoss.species,
+      x: configuredBoss.x,
+      y: configuredBoss.y,
+    })
 
     const bossCfg = monsterCfg('monster3')
     const boss = initMonster(bossCfg, top.bossSpawn!.x, top.bossSpawn!.y)

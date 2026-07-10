@@ -29,6 +29,7 @@ import {
   computeBudget,
 } from '../systems/furnace'
 import type { MaterialLot, CraftTransaction, AttributeBudget } from '../systems/furnace'
+import { configureLogicalCamera } from '../systems/renderScale'
 import { NpcClient, resolveNpcServerUrl } from '../net/npcClient'
 import type { ServerMessage, CraftedItem } from '../net/npcClient'
 import { FurnacePanel } from '../ui/hud/FurnacePanel'
@@ -168,6 +169,7 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   create(): void {
+    configureLogicalCamera(this)
     const storage = shellStorage()
     this.slot = asSlotId(this.registry.get(REG.activeSlot))
     const env = this.slot !== null ? readSlot(storage, this.slot) : undefined

@@ -167,17 +167,11 @@ export function createEmptySkillTreeState(): SkillTreeState {
   }
 }
 
-/** Bootstrap default for a brand-new character: only the first school slot is
- * unlocked/learned and bound to Y. The AS3 User constructor starts fully empty
- * (`isstudyskill` xflevel 0, `skillbykey=[]`), but this project keeps one
- * starter active skill so a new save can use the skill system immediately
- * without resurrecting the old five-skill demo loadout. */
+/** Bootstrap default for a brand-new character. The AS3 User constructor is
+ * fully empty (`isstudyskill` xflevel 0, `skillbykey=[]`): players earn souls,
+ * raise a heart-school, then activate skills one by one. */
 export function createDefaultSkillTreeState(): SkillTreeState {
-  const state = createEmptySkillTreeState()
-  state.schools[0].level = 1 // unlocks allSklName[0][0] = slz
-  state.schools[0].learned.push({ skillName: 'slz', level: 1 })
-  state.bindings = { Y: 'slz', U: null, I: null, O: null, L: null }
-  return state
+  return createEmptySkillTreeState()
 }
 
 /** Pre-S5 demo loadout (all 4 fire-school skills pre-learned). Originally the

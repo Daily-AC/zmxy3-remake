@@ -26,7 +26,9 @@ import type { SkillTreeState, Role1TreeSkillId, BindKey } from '../systems/skill
 import { Toast } from '../ui/hud/Toast'
 import { HUD_COLORS } from '../ui/hud/hudTheme'
 import { MenuButton } from '../ui/menu/MenuButton'
+import { schoolCardLayout } from '../ui/skillTreeLayout'
 import { ensureArtFontsLoaded, activeArtFont } from '../systems/artFont'
+import { configureLogicalCamera } from '../systems/renderScale'
 
 // S5 技能树/学习技能 -- 2026-07-08 full rewrite (user: "与其后面改倒不如从0到1").
 //
@@ -257,6 +259,7 @@ export class SkillTreeScene extends Phaser.Scene {
   }
 
   create(): void {
+    configureLogicalCamera(this)
     const storage = shellStorage()
     this.slot = asSlotId(this.registry.get(REG.activeSlot))
     const env = this.slot !== null ? readSlot(storage, this.slot) : undefined
@@ -352,12 +355,6 @@ export class SkillTreeScene extends Phaser.Scene {
       this.artFontTexts.push(t)
     }
     this.root.add(this.add.rectangle(TABLE_X + 12, y + 18, TABLE_W - 24, 1, DIVIDER, 0.8).setOrigin(0, 0.5))
-    // "心法一" card-column header sits at the same y as the table header row,
-    // matching the reference's aligned two-panel top edge.
-    const cardHeader = this.add.text(CARD_X + CARD_W / 2, y, '心法一', { fontFamily: ART_FONT_CSS, fontSize: '14px', color: CREAM, fontStyle: 'bold' }).setOrigin(0.5)
-    this.root.add(cardHeader)
-    this.artFontTexts.push(cardHeader)
-    this.root.add(this.add.rectangle(CARD_X + 12, y + 18, CARD_W - 24, 1, DIVIDER, 0.8).setOrigin(0, 0.5))
   }
 
   private buildBottomBar(): void {
@@ -405,7 +402,7 @@ export class SkillTreeScene extends Phaser.Scene {
     for (const schoolIndex of [0, 1] as const) {
       const cardY = schoolIndex === 0 ? CARD1_Y : CARD2_Y
       const school = this.skillTree.schools[schoolIndex]
-      const labelY = cardY + 36
+      const layout = schoolCardLayout(cardY)
       const selected = this.selectedSchool === schoolIndex
 
       // Whole-card select zone, added FIRST so it sits under every other hit
@@ -420,12 +417,19 @@ export class SkillTreeScene extends Phaser.Scene {
       })
       this.cardsLayer.add(hit)
 
-      if (schoolIndex === 1) {
-        const h2 = this.add.text(CARD_X + CARD_W / 2, cardY + 4, '心法二', { fontFamily: ART_FONT_CSS, fontSize: '14px', color: CREAM, fontStyle: 'bold' }).setOrigin(0.5, 0)
-        this.cardsLayer.add(h2)
-        this.artFontTexts.push(h2)
-        this.cardsLayer.add(this.add.rectangle(CARD_X + 12, cardY + 22, CARD_W - 24, 1, DIVIDER, 0.8).setOrigin(0, 0.5))
-      }
+      const header = this.add
+        .text(CARD_X + CARD_W / 2, layout.headerY, `心法${schoolIndex === 0 ? '一' : '二'}`, {
+          fontFamily: ART_FONT_CSS,
+          fontSize: '14px',
+          color: CREAM,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+      this.cardsLayer.add(header)
+      this.artFontTexts.push(header)
+      this.cardsLayer.add(
+        this.add.rectangle(CARD_X + 12, layout.dividerY, CARD_W - 24, 1, DIVIDER, 0.8).setOrigin(0, 0.5),
+      )
 
       // Selection highlight: a brighter gold inset ring around the selected
       // card, on top of the shared panel border -- the only extra selection
@@ -437,9 +441,11 @@ export class SkillTreeScene extends Phaser.Scene {
         this.cardsLayer.add(ring)
       }
 
-      this.cardsLayer.add(this.add.image(CARD_X + 18, labelY, `st_card_icon_${schoolIndex}`).setOrigin(0, 0.5).setDisplaySize(70, 68))
+      this.cardsLayer.add(
+        this.add.image(CARD_X + 18, layout.iconY, `st_card_icon_${schoolIndex}`).setOrigin(0, 0.5).setDisplaySize(64, 62),
+      )
       const schoolName = this.add
-        .text(CARD_X + 100, labelY - 12, ROLE1_SCHOOLS[schoolIndex].name, { fontFamily: ART_FONT_CSS, fontSize: '15px', color: CREAM, fontStyle: 'bold' })
+        .text(CARD_X + 94, layout.nameY, ROLE1_SCHOOLS[schoolIndex].name, { fontFamily: ART_FONT_CSS, fontSize: '15px', color: CREAM, fontStyle: 'bold' })
         .setOrigin(0, 0.5)
       this.cardsLayer.add(schoolName)
       this.artFontTexts.push(schoolName)
@@ -451,10 +457,10 @@ export class SkillTreeScene extends Phaser.Scene {
         // per-skill upgrade button that used to sit in the table to the
         // right.
         const btnColor = selected ? GOLD_BRIGHT : LOCKED
-        const btnText = this.add.text(CARD_X + 100, labelY + 14, '提升心法', { fontSize: '14px', color: btnColor, fontStyle: 'bold' }).setOrigin(0, 0.5)
+        const btnText = this.add.text(CARD_X + 94, layout.actionY, '提升心法', { fontSize: '14px', color: btnColor, fontStyle: 'bold' }).setOrigin(0, 0.5)
         this.cardsLayer.add(btnText)
         if (selected) {
-          const hitBtn = this.add.rectangle(CARD_X + 140, labelY + 14, 96, 24, 0xffffff, 0).setInteractive({ useHandCursor: true })
+          const hitBtn = this.add.rectangle(CARD_X + 136, layout.actionY, 96, 24, 0xffffff, 0).setInteractive({ useHandCursor: true })
           hitBtn.on('pointerover', () => btnText.setColor(CREAM))
           hitBtn.on('pointerout', () => btnText.setColor(GOLD_BRIGHT))
           hitBtn.on('pointerdown', () => this.onUpgradeSchool(schoolIndex))
@@ -462,12 +468,10 @@ export class SkillTreeScene extends Phaser.Scene {
         }
       }
 
-      const statY1 = labelY + 46
-      const statY2 = statY1 + 26
-      this.cardsLayer.add(this.add.text(CARD_X + 16, statY1, `当前等级：${school.level}`, { fontSize: '13px', color: DIM }).setOrigin(0, 0.5))
+      this.cardsLayer.add(this.add.text(CARD_X + 16, layout.levelY, `当前等级：${school.level}`, { fontSize: '13px', color: DIM }).setOrigin(0, 0.5))
       this.cardsLayer.add(
         this.add
-          .text(CARD_X + 16, statY2, cost === undefined ? '心法已满级' : `提升所需灵魂：${cost}`, { fontSize: '13px', color: DIM })
+          .text(CARD_X + 16, layout.costY, cost === undefined ? '心法已满级' : `提升所需灵魂：${cost}`, { fontSize: '13px', color: DIM })
           .setOrigin(0, 0.5),
       )
     }
@@ -573,7 +577,7 @@ export class SkillTreeScene extends Phaser.Scene {
       } else {
         // Locked state: 心法等级不足, nothing clickable in either column.
         this.rowsLayer.add(this.add.text(ROW_BIND_X, y, '--', { fontSize: '14px', color: LOCKED }).setOrigin(0.5))
-        this.rowsLayer.add(this.add.text(ROW_ACTION_X, y, '锁定', { fontSize: '14px', color: LOCKED, fontStyle: 'bold' }).setOrigin(0.5))
+        this.rowsLayer.add(this.add.text(ROW_ACTION_X, y, '心法不足', { fontSize: '13px', color: LOCKED, fontStyle: 'bold' }).setOrigin(0.5))
       }
     }
   }

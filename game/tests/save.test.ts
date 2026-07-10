@@ -231,10 +231,10 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
       inventory: createInventory(4),
     })
     expect(save.pets).toEqual([])
-    // S5: fresh saves default to the starter single-skill state, not the old
-    // five-skill demo loadout.
+    // Fresh characters start with no learned skills; souls unlock heart-school
+    // levels before individual skills can be activated.
     expect(save.skills).not.toBeNull()
-    expect(save.skills?.bindings).toEqual({ Y: 'slz', U: null, I: null, O: null, L: null })
+    expect(save.skills?.bindings).toEqual({ Y: null, U: null, I: null, O: null, L: null })
     expect(save.soul).toBe(0)
   })
 
@@ -259,7 +259,7 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
     expect(loaded.soul).toBe(1234)
   })
 
-  it('restoreGameState migrates skills:null legacy saves to the starter single-skill default (2026-07-09 拍板)', () => {
+  it('restoreGameState migrates skills:null legacy saves to the empty default', () => {
     // Previously fell back to createLegacySkillTreeState()'s old five-skill
     // demo loadout; changed per tasks/skilltree-redo-brief.md point 3 -- a
     // legacy save never actually earned those four extra skills, so
@@ -270,11 +270,11 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
       soul: undefined as unknown as number,
     }
     const loaded = restoreGameState(legacy)
-    expect(loaded.skillTree.bindings).toEqual({ Y: 'slz', U: null, I: null, O: null, L: null })
+    expect(loaded.skillTree.bindings).toEqual({ Y: null, U: null, I: null, O: null, L: null })
     expect(loaded.soul).toBe(0)
   })
 
-  it('restoreGameState preserves a valid old five-skill saved state instead of re-defaulting it', () => {
+  it('restoreGameState performs the one-time cleanup of the persisted demo five-skill loadout', () => {
     const fiveSkillTree: import('../src/systems/skillTree').SkillTreeState = {
       schools: [
         { level: 1, learned: [{ skillName: 'slz', level: 1 }] },
@@ -296,7 +296,12 @@ describe('versioned save/load (kagami SaveSystem port)', () => {
       inventory: createInventory(4),
       skillTree: fiveSkillTree,
     })
+    ;(save as GameSave & { skillTreeVersion?: number }).skillTreeVersion = undefined
     const loaded = restoreGameState(save)
-    expect(loaded.skillTree).toEqual(fiveSkillTree)
+    expect(loaded.skillTree.bindings).toEqual({ Y: null, U: null, I: null, O: null, L: null })
+    expect(loaded.skillTree.schools).toEqual([
+      { level: 0, learned: [] },
+      { level: 0, learned: [] },
+    ])
   })
 })
