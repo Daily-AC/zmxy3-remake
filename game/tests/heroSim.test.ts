@@ -91,7 +91,8 @@ describe('heroSim integration (fixed-timestep 组合)', () => {
     expect(s.attackId).toBe(0)
     advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg) // hit1
     expect(s.attackId).toBe(1)
-    advanceHero(s, NO_EDGES, 300, cfg) // finish hit1 swing
+    for (let i = 0; i < 9; i++) advanceHero(s, NO_EDGES, TICK_MS, cfg) // finish hit1 swing
+    expect(s.attacking).toBe(false)
     advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg) // chain hit2
     expect(s.combo.stage).toBe(2)
     expect(s.attackId).toBe(2) // new swing -> new id
@@ -187,5 +188,37 @@ describe('heroSim integration (fixed-timestep 组合)', () => {
     while (!s.vertical.grounded) advanceHero(s, NO_EDGES, TICK_MS, cfg)
     expect(s.combo.stage).toBe(0)
     expect(s.attackId).toBe(1)
+  })
+
+  it('does not latch 1ms key-repeat presses from an active ground swing into hit2', () => {
+    const s = initHeroState(cfg, 480)
+
+    advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg)
+    for (let i = 0; i < 301; i++) advanceHero(s, edges({ pressAttack: true }), 1, cfg)
+
+    expect(s.combo.stage).toBe(1)
+    expect(s.attacking).toBe(false)
+    expect(s.attackId).toBe(1)
+
+    advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg)
+    expect(s.combo.stage).toBe(2)
+    expect(s.attackId).toBe(2)
+  })
+
+  it('does not latch 1ms key-repeat presses into a second air attack', () => {
+    const s = initHeroState(cfg, 480)
+
+    advanceHero(s, edges({ pressJump: true }), TICK_MS, cfg)
+    advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg)
+    for (let i = 0; i < 301; i++) advanceHero(s, edges({ pressAttack: true }), 1, cfg)
+
+    expect(s.vertical.grounded).toBe(false)
+    expect(s.airAttack).toBe(null)
+    expect(s.combo.stage).toBe(0)
+    expect(s.attackId).toBe(1)
+
+    advanceHero(s, edges({ pressAttack: true }), TICK_MS, cfg)
+    expect(s.action).toBe('hit1')
+    expect(s.attackId).toBe(2)
   })
 })
