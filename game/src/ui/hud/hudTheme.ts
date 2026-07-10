@@ -92,7 +92,10 @@ export const HUD_WEAPON_ICON_IDS = [
   'xlts', 'zjxmc', 'qlg', 'plz', 'ylf', 'jlg', 'jlc', 'ryjgb', 'lhz', 'jcdp', 'mdflc',
 ] as const
 
-export const HUD_ICONS: TextureRef[] = [...HUD_ICON_IDS, ...HUD_WEAPON_ICON_IDS].map((id) => ({
+/** Official armor bitmaps currently reachable by the Wukong-only L1/L2 MVP. */
+export const HUD_ARMOR_ICON_IDS = ['ptdxzf', 'kys'] as const
+
+export const HUD_ICONS: TextureRef[] = [...HUD_ICON_IDS, ...HUD_WEAPON_ICON_IDS, ...HUD_ARMOR_ICON_IDS].map((id) => ({
   key: `icon_${id}`,
   url: `${ICON}${id}.png`,
 }))
