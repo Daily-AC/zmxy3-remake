@@ -44,6 +44,23 @@ describe('BattleScene pickup wiring', () => {
     expect(source).toMatch(/return `\$\{book\} · \$\{mats\.join\(' · '\)\} · 灵魂 \$\{recipe\.soulCost\}`/)
   })
 
+  it('seeds every persisted battle subsystem from one fresh slot snapshot', () => {
+    const source = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
+    const seedFromSave = source.slice(source.indexOf('private seedFromSave('), source.indexOf('private learnedSkillLevels('))
+
+    expect(source).toMatch(/import \{ loadBattleSaveSeed \} from '\.\.\/systems\/battleSaveSeed'/)
+    expect(seedFromSave.match(/loadBattleSaveSeed\(/g)).toHaveLength(1)
+    expect(seedFromSave).toMatch(/const seed = loadBattleSaveSeed\(/)
+    expect(seedFromSave).toMatch(/const loaded = seed\.loaded/)
+    expect(seedFromSave).toMatch(/this\.identity\.progression = loaded\.progression/)
+    expect(seedFromSave).toMatch(/this\.equipment = loaded\.equipment/)
+    expect(seedFromSave).toMatch(/this\.inventory = loaded\.inventory/)
+    expect(seedFromSave).toMatch(/this\.skillTreeState = loaded\.skillTree/)
+    expect(seedFromSave).toMatch(/this\.soulPurse = createSoulPurse\(loaded\.soul\)/)
+    expect(seedFromSave).toMatch(/this\.playtimeSec = seed\.playtimeSec/)
+    expect(seedFromSave).not.toMatch(/const freshEnv =/)
+  })
+
   it('spawns AS3 cure pickups on death and applies them through collectWorldPickup', () => {
     const source = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
 

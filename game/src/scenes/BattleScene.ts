@@ -139,6 +139,7 @@ import type { LoadedGameState } from '../systems/save'
 import { createGameSave, restoreGameState } from '../systems/save'
 import type { SlotId } from '../systems/saveSlots'
 import { buildSlotEnvelope, writeSlot, readSlot, heroName, asSlotId } from '../systems/saveSlots'
+import { loadBattleSaveSeed } from '../systems/battleSaveSeed'
 import {
   readCampaignIndex,
   writeCampaignIndex,
@@ -1070,17 +1071,25 @@ export class BattleScene extends Phaser.Scene {
     this.activeSlot = asSlotId(this.registry.get(REG.activeSlot))
     this.saveOrigin = this.registry.get('shell.origin') === 'continue' ? 'continue' : 'new'
 
-    const loaded = this.registry.get('shell.loadedState') as LoadedGameState | undefined
-    if (loaded && this.saveOrigin === 'continue') {
+    const registryLoaded = this.registry.get('shell.loadedState') as LoadedGameState | undefined
+    const seed = loadBattleSaveSeed(window.localStorage, this.activeSlot, registryLoaded, this.saveOrigin)
+    if (seed) {
+      const loaded = seed.loaded
       this.identity = createHeroIdentity(loaded.progression.heroId, loaded.progression.level)
       // Exact exp (createProgression already set expToNext + clamped for the level).
       this.identity.progression = loaded.progression
       this.equipment = loaded.equipment
       this.inventory = loaded.inventory
+      this.skillTreeState = loaded.skillTree
+      this.soulPurse = createSoulPurse(loaded.soul)
+      this.playtimeSec = seed.playtimeSec
     } else {
       this.identity = createHeroIdentity(HERO_ID)
       this.equipment = createEquipment()
       this.inventory = createInventory(24)
+      this.skillTreeState = createDefaultSkillTreeState()
+      this.soulPurse = createSoulPurse(0)
+      this.playtimeSec = 0
     }
     // Fold the equipped gear's hp/mp affixes into the live pools.
     syncHeroEquipment(this.identity, this.equipment)
@@ -1088,18 +1097,6 @@ export class BattleScene extends Phaser.Scene {
 
     // Continue accruing from the slot's stored playtime (lives only in slot meta).
     this.playtimeAccMs = 0
-    // S5: skillTree bindings/learned levels + soul are read fresh from the
-    // slot's storage here (not `loaded`/the registry snapshot above) because
-    // WorldMapScene's "学习技能" button and SkillTreeScene both write straight
-    // to storage after the shell registry snapshot was taken -- reading the
-    // snapshot would show whatever the player's loadout was at CharacterSelect/
-    // SlotSelect time, silently ignoring anything changed since. One extra
-    // readSlot() is cheap and keeps this the single source of truth.
-    const freshEnv = this.activeSlot !== null ? readSlot(window.localStorage, this.activeSlot) : undefined
-    const fresh = freshEnv ? restoreGameState(freshEnv.save) : undefined
-    this.playtimeSec = freshEnv?.meta.playtimeSec ?? 0
-    this.skillTreeState = fresh?.skillTree ?? createDefaultSkillTreeState()
-    this.soulPurse = createSoulPurse(fresh?.soul ?? 0)
 
     // MP (full) sized to the hero's level; skill runtime synced to the real
     // learned levels from skillTreeState (S5 -- replaces the old fixed demo
