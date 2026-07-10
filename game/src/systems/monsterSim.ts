@@ -362,8 +362,8 @@ function tickMonster(
 }
 
 /**
- * Advance the monster by a real-time delta (ms). `incomingHit` applies on the
- * first fixed tick only (like hero input edges). Returns emitted events.
+ * Advance the monster by a real-time delta (ms). `incomingHit` resolves once
+ * immediately, while timers and AI advance only on accumulated fixed ticks.
  */
 export function advanceMonster(
   state: MonsterState,
@@ -384,7 +384,7 @@ export function advanceMonster(
   if (budget <= 0) state.accMs = 0
   // Apply a hit even on a sub-tick frame so a fast frame never drops it.
   if (first && input.incomingHit) {
-    events.push(...tickMonster(state, input.incomingHit, input.heroX, input.heroY, input.heroAlive, cfg))
+    events.push(...applyHit(state, input.incomingHit, cfg))
   }
   return events
 }
