@@ -24,6 +24,39 @@ describe('official Role1 effect mapping', () => {
     expect(Object.keys(ROLE1_EFFECTS)).toHaveLength(14)
   })
 
+  it('records the Role1.as hero-local spawn offsets for the mapped attacks', () => {
+    const expectedAttachments = {
+      hit1: { anchor: 'hero', offset: { forward: 120, y: 5 }, followAnchor: true },
+      hit3: { anchor: 'hero', offset: { forward: 30, y: -110 }, followAnchor: true },
+      hit4: { anchor: 'hero', offset: { forward: 160, y: -10 }, followAnchor: true },
+      hit5: { anchor: 'hero', offset: { forward: 165, y: -20 }, followAnchor: true },
+      hit6: { anchor: 'hero', offset: { forward: 30, y: 40 }, followAnchor: true },
+      hit7: { anchor: 'hero', offset: { forward: 175, y: -30 }, followAnchor: true },
+      hit8: { anchor: 'hero', offset: { forward: -20, y: 30 }, followAnchor: true },
+      hit9: { anchor: 'hero', offset: { forward: 120, y: -50 }, followAnchor: true },
+      hit10: { anchor: 'hero', offset: { forward: 150, y: -35 }, followAnchor: false },
+      hit11_1: { anchor: 'hero', offset: { forward: 50, y: -50 }, followAnchor: true },
+      hit11_2: { anchor: 'hero', offset: { forward: 0, y: -50 }, followAnchor: true },
+      hit12: { anchor: 'target', offset: { forward: 0, y: 0 }, followAnchor: false },
+      hit13: { anchor: 'target', offset: { forward: 0, y: 0 }, followAnchor: false },
+      hit14: { anchor: 'hero', offset: { forward: -15, y: -85 }, followAnchor: false },
+    } as const
+
+    for (const [action, attachment] of Object.entries(expectedAttachments)) {
+      expect(role1EffectForAction(action), action).toMatchObject(attachment)
+    }
+  })
+
+  it('defines a source attachment contract for every mapped effect', () => {
+    for (const [action, effect] of Object.entries(ROLE1_EFFECTS)) {
+      expect(['hero', 'target', 'world'], `${action} anchor`).toContain(effect.anchor)
+      expect(effect.pivotPx.x, `${action} pivot x`).toBeTypeOf('number')
+      expect(effect.pivotPx.y, `${action} pivot y`).toBeTypeOf('number')
+      expect(effect.scale, `${action} scale`).toBe(1)
+      expect(effect.followAnchor, `${action} follow anchor`).toBeTypeOf('boolean')
+    }
+  })
+
   it('ships every mapped PNG frame in the public asset tree', () => {
     for (const [action, spec] of Object.entries(ROLE1_EFFECTS)) {
       for (let frame = 1; frame <= spec.frames; frame++) {
