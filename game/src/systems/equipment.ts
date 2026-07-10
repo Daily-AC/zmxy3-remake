@@ -3,7 +3,7 @@
 // effects.ts) so a bag item can be worn, taken off, and made to matter in combat.
 
 import type { Item } from './items'
-import { Inventory, addItem, removeItem } from './inventory'
+import { Inventory, addItem, removeItemInstance } from './inventory'
 import { applyEquipStats, BaseStats } from './effects'
 import type { HeroId } from './progression'
 import originalEquipment from '../data/original/equipment.json'
@@ -50,22 +50,26 @@ export function createEquipment(): Equipment {
   return { weapon: null, armor: null, accessory: null, talisman: null }
 }
 
+function catalogMetaForItem(item: Item): EquipmentCatalogMeta | undefined {
+  return equipmentCatalog.get(item.id) ?? equipmentCatalog.get(item.sourceFillName ?? '')
+}
+
 export function slotForItem(item: Item): EquipSlot | null {
   if (item.kind !== 'equip') return null
-  const sourceType = item.sourceType ?? equipmentCatalog.get(item.sourceFillName ?? item.id)?.type
+  const sourceType = catalogMetaForItem(item)?.type ?? item.sourceType
   if (!sourceType) return null
   return SUPPORTED_SLOT_BY_SOURCE_TYPE[sourceType] ?? null
 }
 
 export function equipEligibility(item: Item, heroId: HeroId): EquipEligibility {
   if (item.kind !== 'equip') return 'not_equipment'
-  const catalog = equipmentCatalog.get(item.sourceFillName ?? item.id)
-  const sourceType = item.sourceType ?? catalog?.type
+  const catalog = catalogMetaForItem(item)
+  const sourceType = catalog?.type ?? item.sourceType
   if (!sourceType) return 'missing_type'
   if (!SUPPORTED_SLOT_BY_SOURCE_TYPE[sourceType]) return 'unsupported_slot'
 
   const roleName = ROLE_NAME_BY_HERO_ID[heroId]
-  const sourceUser = item.sourceUser ?? catalog?.user
+  const sourceUser = catalog?.user ?? item.sourceUser
   if (!roleName || sourceUser === undefined) return 'wrong_role'
   if (sourceUser !== '' && sourceUser !== roleName) return 'wrong_role'
   return 'ok'
@@ -90,22 +94,16 @@ export function equip(eq: Equipment, inv: Inventory, item: Item, heroId: HeroId)
   if (equipEligibility(item, heroId) !== 'ok') return false
   const slot = slotForItem(item)
   if (!slot) return false
-  if (!removeItem(inv, item.id, 1)) return false
+  const beforeStacks = inv.stacks.map((stack) => ({ item: stack.item, qty: stack.qty }))
+  if (!removeItemInstance(inv, item)) return false
   const prev = eq[slot]
-  // Mirror unequip()'s check-before-commit below: verify the bag can accept
-  // `prev` back BEFORE writing eq[slot], instead of writing it unconditionally
-  // and only trying (and possibly failing) to return prev afterward. Without
-  // this, a full bag with no stack for prev to merge into silently deletes
-  // prev -- not in inventory, not equipped (blue-team major#4 / red-team's
-  // refined trigger: reproduces whenever the equipped item comes from a stack
-  // of qty>=2, since removeItem above only frees a bag slot when it empties a
-  // qty=1 stack down to zero).
+  // Verify the bag can accept `prev` before committing the new slot. A normal
+  // one-item equipment stack frees a slot; this guard still protects malformed
+  // legacy saves that contain stacked equipment.
   if (prev && !addItem(inv, prev, 1).ok) {
-    // Roll back: put `item` back exactly where it came from (guaranteed to
-    // succeed -- either its stack still exists with room, per the qty>=2
-    // case above, or removeItem just freed the one slot this needs) and
-    // reject the swap.
-    addItem(inv, item, 1)
+    // Restore the exact pre-swap layout, including malformed legacy equipment
+    // stacks that cannot be reconstructed through addItem's one-item rule.
+    inv.stacks.splice(0, inv.stacks.length, ...beforeStacks)
     return false
   }
   eq[slot] = item

@@ -29,22 +29,36 @@ export function addItem(
 ): { ok: boolean; overflow: number } {
   let remaining = normalizeQty(qty)
 
-  for (const stack of inv.stacks) {
-    if (remaining === 0) break
-    if (stack.item.id !== item.id || stack.qty >= MAX_STACK_SIZE) continue
+  // Equipment carries an independently rolled stat payload. Two copies with
+  // the same fillName are still distinct objects and must never be merged.
+  if (item.kind !== 'equip') {
+    for (const stack of inv.stacks) {
+      if (remaining === 0) break
+      if (stack.item.id !== item.id || stack.qty >= MAX_STACK_SIZE) continue
 
-    const moved = Math.min(MAX_STACK_SIZE - stack.qty, remaining)
-    stack.qty += moved
-    remaining -= moved
+      const moved = Math.min(MAX_STACK_SIZE - stack.qty, remaining)
+      stack.qty += moved
+      remaining -= moved
+    }
   }
 
   while (remaining > 0 && inv.stacks.length < inv.capacity) {
-    const moved = Math.min(MAX_STACK_SIZE, remaining)
+    const moved = item.kind === 'equip' ? 1 : Math.min(MAX_STACK_SIZE, remaining)
     inv.stacks.push({ item, qty: moved })
     remaining -= moved
   }
 
   return { ok: remaining === 0, overflow: remaining }
+}
+
+/** Remove the exact equipment object selected by the backpack UI. */
+export function removeItemInstance(inv: Inventory, item: Item): boolean {
+  const index = inv.stacks.findIndex((stack) => stack.item === item && stack.qty > 0)
+  if (index < 0) return false
+  const stack = inv.stacks[index]
+  stack.qty -= 1
+  if (stack.qty === 0) inv.stacks.splice(index, 1)
+  return true
 }
 
 export function removeItem(inv: Inventory, itemId: string, qty: number): boolean {

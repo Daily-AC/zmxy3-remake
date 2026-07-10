@@ -6,7 +6,7 @@ describe('BattleScene pickup wiring', () => {
     const source = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
 
     expect(source).toMatch(
-      /const heroCenter = this\.heroVisualCenter\(\)\s+const \{ remaining, picked \} = stepDrops\(this\.drops, this\.heroState\.x, heroCenter\.y, this\.pickupCfg\)/,
+      /const heroCenter = this\.heroVisualCenter\(\)\s+const previousDrops = this\.drops\s+const \{ remaining, picked \} = stepDrops\(previousDrops, this\.heroState\.x, heroCenter\.y, this\.pickupCfg\)/,
     )
   })
 
@@ -15,6 +15,17 @@ describe('BattleScene pickup wiring', () => {
 
     expect(source).toMatch(/spawnSoulDrop\(monsterSoulDropAmount\(species, context\), x, y\)/)
     expect(source).toMatch(/if \(pickedDrop\.kind === 'soul'\)\s*{\s*addSoul\(this\.soulPurse, pickedDrop\.amount\)/)
+  })
+
+  it('keeps item overflow on the ground when the backpack is full', () => {
+    const source = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
+    const pickup = source.slice(source.indexOf('private stepDropsAndPickup()'), source.indexOf('private collectEdges()'))
+
+    expect(pickup).toMatch(/const pickedEntities = previousDrops\.filter\(\(drop\) => !remaining\.includes\(drop\)\)/)
+    expect(pickup).toMatch(/const added = addItem\(this\.inventory, pickedDrop\.item, pickedDrop\.qty\)/)
+    expect(pickup).toMatch(/sourceDrop\.qty = added\.overflow/)
+    expect(pickup).toMatch(/this\.drops\.push\(sourceDrop\)/)
+    expect(pickup).toMatch(/this\.showToast\('背包已满，物品留在地上'/)
   })
 
   it('passes the current AS3 stage/level context into rollDrops', () => {

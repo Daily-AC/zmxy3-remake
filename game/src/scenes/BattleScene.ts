@@ -802,6 +802,7 @@ export class BattleScene extends Phaser.Scene {
   private pillarBg?: Phaser.GameObjects.TileSprite
   private drops: DropEntity[] = []
   private dropSprites = new Map<DropEntity, Phaser.GameObjects.Container>()
+  private lastBagFullToastAtMs = -Infinity
   private enemyProjectiles: EnemyProjectile[] = []
   private enemyProjectileSprites = new Map<EnemyProjectile, Phaser.GameObjects.Container>()
   private nextEnemyProjectileId = 1
@@ -3791,21 +3792,20 @@ export class BattleScene extends Phaser.Scene {
 
   private stepDropsAndPickup(): void {
     const heroCenter = this.heroVisualCenter()
-    const { remaining, picked } = stepDrops(this.drops, this.heroState.x, heroCenter.y, this.pickupCfg)
-    for (const d of this.drops) {
-      if (!remaining.includes(d)) {
-        this.dropSprites.get(d)?.destroy()
-        this.dropSprites.delete(d)
-      }
-    }
+    const previousDrops = this.drops
+    const { remaining, picked } = stepDrops(previousDrops, this.heroState.x, heroCenter.y, this.pickupCfg)
+    const pickedEntities = previousDrops.filter((drop) => !remaining.includes(drop))
     this.drops = remaining
-    // 掉落物贴可视地面（+STAND_SINK-半径余量），别悬在逻辑线上。
-    for (const d of this.drops) this.dropSprites.get(d)?.setPosition(d.x, d.y + (d.kind === 'soul' ? 0 : STAND_SINK - 14))
+    let stateChanged = false
     if (picked.length > 0) {
-      for (const pickedDrop of picked) {
+      for (let index = 0; index < picked.length; index += 1) {
+        const pickedDrop = picked[index]
+        const sourceDrop = pickedEntities[index]
+        let fullyCollected = true
         if (pickedDrop.kind === 'soul') {
           addSoul(this.soulPurse, pickedDrop.amount)
           this.npcClient.worldEvent('soul_obtained', { amount: pickedDrop.amount })
+          stateChanged = true
         } else if (pickedDrop.kind === 'consumable') {
           const result = collectWorldPickup(
             pickedDrop.consumableId,
@@ -3827,11 +3827,40 @@ export class BattleScene extends Phaser.Scene {
             resource: result.resource,
             amountRequested: Math.round(result.amountRequested),
           })
+          stateChanged = true
         } else {
-          addItem(this.inventory, pickedDrop.item, pickedDrop.qty)
-          this.npcClient.worldEvent('item_obtained', { item: pickedDrop.item.name, qty: pickedDrop.qty })
+          const added = addItem(this.inventory, pickedDrop.item, pickedDrop.qty)
+          const acceptedQty = pickedDrop.qty - added.overflow
+          if (acceptedQty > 0) {
+            this.npcClient.worldEvent('item_obtained', { item: pickedDrop.item.name, qty: acceptedQty })
+            stateChanged = true
+          }
+          if (
+            added.overflow > 0 &&
+            sourceDrop &&
+            sourceDrop.kind !== 'soul' &&
+            sourceDrop.kind !== 'consumable'
+          ) {
+            sourceDrop.qty = added.overflow
+            this.drops.push(sourceDrop)
+            fullyCollected = false
+            if (this.time.now - this.lastBagFullToastAtMs >= 1000) {
+              this.lastBagFullToastAtMs = this.time.now
+              this.showToast('背包已满，物品留在地上', '#ff8a6b')
+            }
+          }
+        }
+        if (fullyCollected && sourceDrop) {
+          this.dropSprites.get(sourceDrop)?.destroy()
+          this.dropSprites.delete(sourceDrop)
         }
       }
+    }
+    // 掉落物贴可视地面（+STAND_SINK-半径余量），别悬在逻辑线上。
+    for (const d of this.drops) {
+      this.dropSprites.get(d)?.setPosition(d.x, d.y + (d.kind === 'soul' ? 0 : STAND_SINK - 14))
+    }
+    if (stateChanged) {
       this.playSfx('pickup', 0.7)
       this.saveToSlot()
     }
