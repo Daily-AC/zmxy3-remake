@@ -103,6 +103,7 @@ import {
   createSubStageChainState,
   currentSubStage,
   currentSubStageDoor,
+  expandMonsterSpawnRoster,
   updateLevelSpawn,
   updateContinuousSpawner,
   getActiveWaveRoster,
@@ -115,10 +116,15 @@ import {
   tryAdvanceSubStage,
   isSubStageChainCleared,
 } from '../systems/level'
-import { LEVEL_1_WUYING, LEVEL1_MONSTER_NAMES, LEVEL1_MONSTER_STATS } from '../data/levels/level1'
+import {
+  LEVEL_1_WUYING,
+  LEVEL_2_TIANGONGDAO,
+  LEVEL1_MONSTER_NAMES,
+  LEVEL1_MONSTER_STATS,
+} from '../data/levels/level1'
 import { resolveHorizontalMotion, resolveVerticalMotion, type Wall } from '../systems/platformSim'
 import { wallsForLevel1SubStage } from '../systems/level1Geometry'
-import { LEVEL_2_TIANWANG, LEVEL2_MONSTER_NAMES } from '../data/levels/level2'
+import { LEVEL2_MONSTER_NAMES } from '../data/levels/level2'
 import { LEVEL_3_ERLANGSHEN, LEVEL3_MONSTER_NAMES } from '../data/levels/level3'
 import { LEVEL_4_XIENIAN, LEVEL4_MONSTER_NAMES } from '../data/levels/level4'
 import { monsterExp } from '../data/monsterExp'
@@ -665,9 +671,8 @@ function isSubStageCampaign(def: CampaignEntry): def is SubStageChainDef {
   return 'subStages' in def
 }
 
-/** The campaign level chain L1 -> L2 -> L3 -> L4. L1 is a three-substage AS3
- * chain; L2-L4 stay on the existing LevelDef wave/boss model. */
-const CAMPAIGN: CampaignEntry[] = [LEVEL_1_WUYING, LEVEL_2_TIANWANG, LEVEL_3_ERLANGSHEN, LEVEL_4_XIENIAN]
+/** Active L1/L2 are the separate AS3 sl11 九重天 and sl12 天宫道 levels. */
+const CAMPAIGN: CampaignEntry[] = [LEVEL_1_WUYING, LEVEL_2_TIANGONGDAO, LEVEL_3_ERLANGSHEN, LEVEL_4_XIENIAN]
 
 /** One live monster: its sim state + config, its sprite, and the render/combat
  * facts (data table, per-monster elemental status, attack power). */
@@ -725,6 +730,8 @@ export class BattleScene extends Phaser.Scene {
   private campaignIndex = 0
   private levelState!: LevelState
   private monsters: MonsterEntity[] = []
+  private pendingWaveSpawns = 0
+  private waveSpawnGeneration = 0
   private level1Chain?: SubStageChainState
   private level1Spawner?: ContinuousSpawnerState
   private currentWalls: Wall[] = []
@@ -734,8 +741,7 @@ export class BattleScene extends Phaser.Scene {
   // 天王/广目天王, see MINIBOSS_SPECIES) borrows the top BossHpBar while
   // it's alive -- these spawn via spawnActiveWave() with isBoss=false (that
   // flag is overloaded with "exempt from aliveGruntCount()'s wave-clear
-  // count", which they must NOT be: level1/2.ts already gives each its own
-  // solo stop-point wave, and flipping isBoss=true would make
+  // count", which they must NOT be: flipping isBoss=true would make
   // aliveGruntCount() see 0 grunts the instant it spawns, skipping the wave
   // instead of waiting for it to die). Tracked separately so updateBossHud()
   // can feature it without touching that counting semantics.
@@ -1684,6 +1690,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private resetLiveLevelObjects(): void {
+    this.waveSpawnGeneration += 1
+    this.pendingWaveSpawns = 0
     for (const e of this.monsters) {
       e.hpBar?.destroy()
       e.sprite.destroy()
@@ -1809,11 +1817,14 @@ export class BattleScene extends Phaser.Scene {
     } else {
       this.pillarBg?.setVisible(false)
       this.bgBase?.setVisible(true)
-      this.bgBase?.setTexture(stage.background.base, '__BASE').setScale(1).setPosition(bgPlacement.x, bgPlacement.y)
-      this.bgBase?.setScrollFactor(bgPlacement.scrollFactorX, bgPlacement.scrollFactorY)
+      this.bgBase
+        ?.setTexture(stage.background.base, '__BASE')
+        .setScale(1)
+        .setPosition(0, 0)
+        .setScrollFactor(stage.background.scrollFactorX ?? 0, 0)
     }
-    this.bg12Layer?.setVisible(stage.id === 'sl12')
-    this.bg13Layer?.setVisible(stage.id === 'sl13')
+    this.bg12Layer?.setVisible(stage.background.foreground === 'bg12')
+    this.bg13Layer?.setVisible(stage.background.foreground === 'bg13')
     this.bg12Layer?.setScale(1).setPosition(0, 0).setScrollFactor(1, 0)
     this.bg13Layer?.setScale(1).setPosition(0, 0).setScrollFactor(1, 0)
     if (stage.background.floor && this.floorImg && this.textures.exists(stage.background.floor)) {
@@ -1912,7 +1923,9 @@ export class BattleScene extends Phaser.Scene {
         this.showToast(`BOSS · ${update.bossSpawn.label}`, '#ff9a5a')
       }
     } else if (stage.waveLevel) {
-      if (updateLevelSpawn(this.levelState, this.aliveGruntCount())) this.spawnActiveWave()
+      if (updateLevelSpawn(this.levelState, this.aliveGruntCount() + this.pendingWaveSpawns, 1, this.heroState.x)) {
+        this.spawnActiveWave()
+      }
     }
 
     if (!this.coopSession) for (const e of this.monsters) this.advanceEntity(e, delta, heroAlive)
@@ -1921,10 +1934,14 @@ export class BattleScene extends Phaser.Scene {
 
     const door = currentSubStageDoor(this.level1Chain)
     const climbBossDead = stage.mode === 'climb' && this.bossEntity && isBossDead(this.bossEntity.state)
-    const wavesCleared = stage.mode === 'horizontal' && areStopPointsCleared(this.levelState) && this.aliveGruntCount() === 0
+    const wavesCleared =
+      stage.mode === 'horizontal' &&
+      areStopPointsCleared(this.levelState) &&
+      this.aliveGruntCount() + this.pendingWaveSpawns === 0
     if ((climbBossDead || wavesCleared) && !door.visible) {
       markCurrentSubStageCleared(this.level1Chain)
-      if (stage.id === 'sl13') this.showResultBanner()
+      const isFinalSubStage = this.level1Chain.currentIndex === this.level1Chain.def.subStages.length - 1
+      if (isFinalSubStage) this.showResultBanner()
       else this.showPortal()
     }
   }
@@ -2053,19 +2070,25 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private spawnActiveWave(): void {
-    const roster = getActiveWaveRoster(this.levelState)
+    const roster = expandMonsterSpawnRoster(getActiveWaveRoster(this.levelState))
     const bounds = this.level1Chain ? currentSubStage(this.level1Chain).bounds : { left: MIN_X, right: MAX_X }
+    const generation = this.waveSpawnGeneration
+    this.pendingWaveSpawns += roster.length
     roster.forEach((spec: MonsterSpawnSpec, i) => {
-      const x = Math.min(bounds.right - 120, Math.max(bounds.left + 120, 720 + i * 190))
-      const entity = this.spawnEntity(spec.species, spec.stats, x, false)
-      // l1-truth pen: level1/2.ts always give a miniboss its own solo wave
-      // (never mixed with grunts or another miniboss), so at most one of
-      // these fires per spawnActiveWave() call -- feature it on the top bar
-      // and announce it the same way spawnBoss() announces the arena boss.
-      if (MINIBOSS_SPECIES.has(spec.species)) {
-        this.activeMiniBoss = entity
-        this.showToast(`BOSS · ${MONSTER_NAMES[spec.species] ?? spec.species}`, '#ff9a5a')
+      const spawn = (): void => {
+        if (generation !== this.waveSpawnGeneration) return
+        this.pendingWaveSpawns = Math.max(0, this.pendingWaveSpawns - 1)
+        const x = spec.x ?? Math.min(bounds.right - 120, Math.max(bounds.left + 120, 720 + i * 190))
+        const entity = this.spawnEntity(spec.species, spec.stats, x, false)
+        // Feature recovered miniboss appear points on the shared top bar. The
+        // official 天宫道 finale contains 千里眼 and 顺风耳 at the same StopPoint;
+        // the latest spawned one owns the bar while both remain live entities.
+        if (MINIBOSS_SPECIES.has(spec.species)) {
+          this.activeMiniBoss = entity
+          this.showToast(`BOSS · ${MONSTER_NAMES[spec.species] ?? spec.species}`, '#ff9a5a')
+        }
       }
+      this.time.delayedCall(spec.delayMs ?? 0, spawn)
     })
   }
 
@@ -2126,7 +2149,10 @@ export class BattleScene extends Phaser.Scene {
     // repo per CLAUDE.md's scope cut but have no map entry, so there really
     // is no next level to walk into) -- the portal still just returns to the
     // world map either way, only the toast's claim about what's next changes.
-    const isL1SubStageDoor = this.level1Chain && !isSubStageChainCleared(this.level1Chain)
+    const hasFollowingSubStage =
+      this.level1Chain &&
+      this.level1Chain.currentIndex < this.level1Chain.def.subStages.length - 1
+    const isL1SubStageDoor = Boolean(hasFollowingSubStage)
     const isFinalActiveLevel = this.campaignIndex + 1 >= ACTIVE_CAMPAIGN_LENGTH
     this.showToast(
       isL1SubStageDoor
@@ -3029,7 +3055,7 @@ export class BattleScene extends Phaser.Scene {
   private updateLevel(delta: number): void {
     const heroAlive = !isHeroDead(this.identity)
     // Spawn the next wave when the machine says so.
-    if (updateLevelSpawn(this.levelState, this.aliveGruntCount())) this.spawnActiveWave()
+    if (updateLevelSpawn(this.levelState, this.aliveGruntCount() + this.pendingWaveSpawns)) this.spawnActiveWave()
     // All stops cleared -> spawn the arena boss (once).
     if (isBossZoneTriggered(this.levelState)) {
       markBossTriggered(this.levelState)
@@ -3428,6 +3454,7 @@ export class BattleScene extends Phaser.Scene {
 
   private dropRollContext(): DropRollContext {
     if (this.campaignIndex === 0) return { stage: 1, level: 1 }
+    if (this.campaignIndex === 1) return { stage: 1, level: 2 }
     return { stage: this.campaignIndex + 1, level: 1 }
   }
 
