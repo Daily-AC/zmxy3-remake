@@ -8,6 +8,13 @@ import { applyEquipStats, BaseStats } from './effects'
 
 export type EquipSlot = 'weapon' | 'armor' | 'accessory' | 'talisman'
 
+const SLOT_BY_SOURCE_TYPE: Record<string, EquipSlot> = {
+  zbwq: 'weapon',
+  zbfj: 'armor',
+  zbsp: 'accessory',
+  zbfb: 'talisman',
+}
+
 export interface Equipment {
   weapon: Item | null
   armor: Item | null
@@ -19,10 +26,10 @@ export function createEquipment(): Equipment {
   return { weapon: null, armor: null, accessory: null, talisman: null }
 }
 
-// Stage A: every 'equip' item goes to the weapon slot — item data carries no
-// per-item slot yet. TODO: add a slot field when armor/accessory items exist.
 export function slotForItem(item: Item): EquipSlot | null {
-  return item.kind === 'equip' ? 'weapon' : null
+  if (item.kind !== 'equip') return null
+  if (!item.sourceType) return 'weapon'
+  return SLOT_BY_SOURCE_TYPE[item.sourceType] ?? null
 }
 
 export function equippedList(eq: Equipment): Item[] {
