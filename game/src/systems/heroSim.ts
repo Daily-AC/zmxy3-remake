@@ -199,7 +199,7 @@ export function advanceHero(
   dtMs: number,
   cfg: HeroConfig,
 ): HeroState {
-  mergeEdges(state.pendingEdges, edges)
+  mergeEdges(state, edges)
   state.accMs += dtMs
   let first = true
   // Guard against spiral-of-death on huge deltas (e.g. tab regains focus).
@@ -215,13 +215,14 @@ export function advanceHero(
   return state
 }
 
-function mergeEdges(target: HeroEdges, incoming: HeroEdges): void {
+function mergeEdges(state: HeroState, incoming: HeroEdges): void {
+  const target = state.pendingEdges
   target.pressLeft ||= incoming.pressLeft
   target.releaseLeft ||= incoming.releaseLeft
   target.pressRight ||= incoming.pressRight
   target.releaseRight ||= incoming.releaseRight
   target.pressJump ||= incoming.pressJump
-  target.pressAttack ||= incoming.pressAttack
+  if (!state.attacking) target.pressAttack ||= incoming.pressAttack
 }
 
 /** Build a HeroConfig from stage geometry and the combo stage durations. */

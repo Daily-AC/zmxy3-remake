@@ -1368,7 +1368,7 @@ export class BattleScene extends Phaser.Scene {
     // Combo <-> skill mutual exclusion: don't cast mid-combo, and the shared
     // busy-lock (collectEdges blocks input while cooldownMs > 0) keeps the combo
     // from interrupting a cast.
-    if (this.heroState.combo.stage !== 0) return
+    if (this.heroState.combo.stage !== 0 || this.heroState.attacking) return
 
     const ctx = {
       sourcePower: heroTotalAtk(this.identity, this.equipment),
@@ -1382,6 +1382,8 @@ export class BattleScene extends Phaser.Scene {
       this.showSkillFail(result.reason)
       return
     }
+    this.heroState.pendingEdges.pressAttack = false
+    this.heroState.pendingEdges.pressJump = false
     // Hold the cast pose for the skill's action duration (shared busy-lock).
     const action = result.reentered && skillId === 'jdy' ? 'hit11_2' : SKILL_ACTION[skillId]
     this.skillAnim = { action, untilMs: this.simClockMs + Math.max(200, this.skillRuntime.cooldownMs) }
