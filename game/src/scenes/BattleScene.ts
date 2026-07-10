@@ -587,6 +587,17 @@ const COMBO_GRACE_MS = 1500
 // combo.stage (1-5) -> the normal-attack hit key whose real coefficient drives
 // damage (heroScale.NORMAL_ATTACK_COEFFICIENT). Index 0 is unused (stage 0 = idle).
 const COMBO_STAGE_HIT: (NormalAttackHit | null)[] = [null, 'hit1', 'hit2', 'hit3', 'hit4', 'hit5']
+
+export function role1AttackEffectForSwing(
+  previousAttackId: number,
+  currentAttackId: number,
+  comboStage: number,
+): Role1EffectAction | null {
+  if (currentAttackId === previousAttackId) return null
+  const action = COMBO_STAGE_HIT[comboStage]
+  if (!action) return null
+  return action === 'hit2' ? 'hit1' : action
+}
 const MON_START_X = 900
 // Monster hit-test box baseline (see monsterHitbox()) -- 120x140 is the
 // project-chosen AABB size this project has used for a "hero-sized" monster
@@ -648,6 +659,14 @@ const REAL_SKILL_BY_ACTION: Record<string, RealSkillId> = {
 const SKILL_ACTION: Record<Role1SkillId, string> = {
   slz: 'hit6', lys: 'hit9', hytj: 'hit7', lyfb: 'hit8', jdy: 'hit11_1',
   qsez: 'hit13', zz: 'hit14', hmz: 'hit10', hyjj: 'hit12',
+}
+
+export function boundSkillCastFailure(
+  skillId: Role1TreeSkillId | null,
+): 'not-learned' | 'passive' | null {
+  if (!skillId) return 'not-learned'
+  if (skillId === 'sx') return 'passive'
+  return null
 }
 
 const CONSUMABLE_TEXTURES: Record<ConsumableId, { key: string; url: string }> = {
@@ -728,6 +747,7 @@ export class BattleScene extends Phaser.Scene {
   private npc!: Phaser.GameObjects.Sprite
   private keys!: Record<'a' | 'd' | 'j' | 'k', Phaser.Input.Keyboard.Key>
   private heroState!: HeroState
+  private lastAttackEffectId = 0
   private heroConfig!: HeroConfig
   // Level chain: the wave/boss state machine (level.ts) + the live monsters it
   // has spawned (grunts and, once the boss zone triggers, the boss entity).
@@ -1035,6 +1055,7 @@ export class BattleScene extends Phaser.Scene {
       comboGraceMs: COMBO_GRACE_MS,
     })
     this.heroState = initHeroState(this.heroConfig, HERO_START_X)
+    this.lastAttackEffectId = this.heroState.attackId
     this.seedFromSave()
     this.startLevel(this.campaignIndex)
 
@@ -1331,11 +1352,15 @@ export class BattleScene extends Phaser.Scene {
   /** Y/U/I/O/L keydown entry point: look up the skill currently bound to
    * `key` (systems/skillTree.ts, player-set in SkillTreeScene) and cast it.
    * An empty slot or `sx` (a passive -- no tryCastRole1Skill id, see
-   * heroSkill.ts) is a silent no-op, matching AS3 pressing an unbound key. */
+   * heroSkill.ts) reports why no cast occurred instead of appearing broken. */
   private castBoundSkill(key: BindKey): void {
     const skillId = this.skillTreeState.bindings[key]
-    if (!skillId || skillId === 'sx') return
-    this.castSkill(skillId)
+    const failure = boundSkillCastFailure(skillId)
+    if (failure) {
+      this.showSkillFail(failure)
+      return
+    }
+    this.castSkill(skillId as Role1SkillId)
   }
 
   private castSkill(skillId: Role1SkillId): void {
@@ -1392,6 +1417,7 @@ export class BattleScene extends Phaser.Scene {
       reason === 'mp' ? '法力不足' :
       reason === 'cooldown' ? '招式未收' :
       reason === 'not-learned' ? '未习得' :
+      reason === 'passive' ? '被动技能无需施放' :
       '无目标'
     this.showToast(msg, '#e0b060')
   }
@@ -2628,6 +2654,7 @@ export class BattleScene extends Phaser.Scene {
     const jumped = edges.pressJump && this.heroState.vertical.grounded
     advanceHero(this.heroState, edges, delta, this.heroConfig)
     if (jumped) this.playSfx('heroJump', 0.4)
+    this.spawnHeroSwingEffect()
 
     // Hero melee: push combo damage into every monster the swing overlaps.
     this.resolveHeroHits()
@@ -2840,25 +2867,43 @@ export class BattleScene extends Phaser.Scene {
       this.playedHitIds.add(s.attackId)
       this.playSfx(this.hitSfxKey(s.combo.stage), 0.5)
       this.rollHitProcs(firstHit)
-      const fc = this.monsterVisualCenter(firstHit)
-      this.onLocalHitFx(fc.x, fc.y, s.facing, hitKey)
+      this.onLocalHitFx()
     }
   }
 
   // ---------- 打击感（2026-07-10 用户拍板：攻击特效 + N连击横幅） ----------
 
-  /** 每次本地攻击真实命中调用：命中点刀光特效 + 连击计数（1.5s 窗口，与
-   * combo.ts 的 AS3 链击窗口同源）。 */
+  /** 每次本地攻击真实命中调用：命中震屏 + 连击计数（1.5s 窗口，与
+   * combo.ts 的 AS3 链击窗口同源）。刀光在挥击起手生成，挥空也可见。 */
   private comboFxCount = 0
   private comboFxLastMs = 0
   private comboFxBanner?: Phaser.GameObjects.Container
   private comboFxFadeTimer?: Phaser.Time.TimerEvent
 
-  private onLocalHitFx(x: number, y: number, facing: number, action: string): void {
-    this.spawnRole1Effect(action === 'hit2' ? 'hit1' : action, x, y, facing)
+  private onLocalHitFx(): void {
+    this.cameras.main.shake(70, 0.0022)
     this.comboFxCount = this.simClockMs - this.comboFxLastMs <= 1500 ? this.comboFxCount + 1 : 1
     this.comboFxLastMs = this.simClockMs
     if (this.comboFxCount >= 2) this.showComboBanner(this.comboFxCount)
+  }
+
+  private spawnHeroSwingEffect(): void {
+    const action = role1AttackEffectForSwing(
+      this.lastAttackEffectId,
+      this.heroState.attackId,
+      this.heroState.combo.stage,
+    )
+    if (!action) return
+    this.lastAttackEffectId = this.heroState.attackId
+    const center = this.heroVisualCenter()
+    const forward = action === 'hit3' ? 54 : 72
+    this.spawnRole1Effect(
+      action,
+      center.x + this.heroState.facing * forward,
+      center.y - 10,
+      this.heroState.facing,
+      false,
+    )
   }
 
   /** 连击横幅 v2（2026-07-10 用户打回"人机"版重做，酷优先）：斜切墨条 +
@@ -2945,7 +2990,7 @@ export class BattleScene extends Phaser.Scene {
     })
   }
 
-  private spawnRole1Effect(action: string, x: number, y: number, facing: number): void {
+  private spawnRole1Effect(action: string, x: number, y: number, facing: number, shake = true): void {
     const spec = role1EffectForAction(action)
     if (!spec) return
     const effectAction = action as Role1EffectAction
@@ -2959,7 +3004,7 @@ export class BattleScene extends Phaser.Scene {
     this.time.delayedCall(Math.ceil((spec.frames / spec.fps) * 1000) + 200, () => {
       if (sprite.active) sprite.destroy()
     })
-    this.cameras.main.shake(70, 0.0022)
+    if (shake) this.cameras.main.shake(70, 0.0022)
   }
 
   private rollHitProcs(target: MonsterEntity): void {
@@ -3805,7 +3850,7 @@ export class BattleScene extends Phaser.Scene {
     // 验收专用：刀光/连击横幅是 ~200ms 瞬时效果，盲截图逮不住帧——暴露演示钩子。
     w.__fxDemo = (n: number) => {
       const c = this.heroVisualCenter()
-      this.spawnRole1Effect('hit5', c.x + 60, c.y, this.heroState.facing)
+      this.spawnRole1Effect('hit5', c.x + this.heroState.facing * 72, c.y - 10, this.heroState.facing)
       this.showComboBanner(n)
     }
     w.__heroState = () => ({

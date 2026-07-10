@@ -89,4 +89,31 @@ describe('BattleScene visual regression helpers', () => {
       expect(readFileSync(file).subarray(1, 4).toString('ascii'), name).toBe('PNG')
     }
   })
+
+  it('starts the normal-attack effect on the swing, even when no monster is present', async () => {
+    const mod = await import('../src/scenes/BattleScene') as unknown as {
+      role1AttackEffectForSwing?: (
+        previousAttackId: number,
+        currentAttackId: number,
+        comboStage: number,
+      ) => string | null
+    }
+
+    expect(mod.role1AttackEffectForSwing).toBeTypeOf('function')
+    expect(mod.role1AttackEffectForSwing!(0, 1, 1)).toBe('hit1')
+    expect(mod.role1AttackEffectForSwing!(1, 2, 2)).toBe('hit1')
+    expect(mod.role1AttackEffectForSwing!(2, 3, 3)).toBe('hit3')
+    expect(mod.role1AttackEffectForSwing!(3, 3, 3)).toBeNull()
+  })
+
+  it('reports an empty or passive skill slot instead of silently swallowing the key press', async () => {
+    const mod = await import('../src/scenes/BattleScene') as unknown as {
+      boundSkillCastFailure?: (skillId: string | null) => 'not-learned' | 'passive' | null
+    }
+
+    expect(mod.boundSkillCastFailure).toBeTypeOf('function')
+    expect(mod.boundSkillCastFailure!(null)).toBe('not-learned')
+    expect(mod.boundSkillCastFailure!('sx')).toBe('passive')
+    expect(mod.boundSkillCastFailure!('slz')).toBeNull()
+  })
 })
