@@ -10,6 +10,7 @@ import {
   VerticalFollowConfig,
 } from '../src/systems/monsterSim'
 import { TICK_MS } from '../src/systems/tick'
+import { MONSTER_ATTACKS } from '../src/systems/attackSpec'
 
 // Advance one fixed tick at a time for `ms`, so the per-call 8-tick budget cap
 // (a spiral-of-death guard, irrelevant at real frame deltas) never truncates.
@@ -109,69 +110,53 @@ describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
     expect(m.action).toBe('wait') // in range, holding
   })
 
-  describe('melee hit-frame decoupled from attack-start (battle-fidelity 追加单, 2026-07-08)', () => {
-    // meleeReach(100) deliberately much smaller than attackRange(250, from
-    // MONSTER30_STATS) -- attackRange is the "decide to engage" sensing
-    // radius; meleeReach is the real swing reach, checked only at the hit
-    // frame. attackHitFraction 0.5 of attackDurationMs(300) = hit frame at
-    // 150ms into the swing (tick 5 of 9, TICK_MS≈33.33).
+  describe('attack frame decoupled from attack-start and collision', () => {
     function meleeCfg(rng: () => number = () => 0): MonsterConfig {
-      return { ...makeCfg(rng), attackDurationMs: 300, attackHitFraction: 0.5, meleeReach: 100 }
+      return { ...makeCfg(rng), attackDurationMs: 300, attackSpec: MONSTER_ATTACKS.monster7.hit1 }
     }
 
-    it('does not deal damage if the hero leaves meleeReach between attack-start and the hit frame', () => {
+    it('emits attack-frame even if the hero leaves the old melee reach before that frame', () => {
       const cfg = meleeCfg()
       const m = initMonster(cfg, 500, 400)
-      // Decision tick at ~1000ms starts the attack with hero at dist 80 (in
-      // both attackRange and meleeReach) -- this must NOT fire attack-hit
-      // immediately (that was the bug: attack-start used to deal damage here).
       let events = run(m, noHit(580, true), 1000, cfg)
       expect(m.mode).toBe('attack')
       expect(events.some((e) => e.type === 'attack-start')).toBe(true)
-      expect(events.some((e) => e.type === 'attack-hit')).toBe(false)
-      // Hero retreats to dist 300 (> meleeReach 100, still < attackRange 250)
-      // before the hit frame (150ms) elapses.
+      expect(events.some((e) => e.type === 'attack-frame')).toBe(false)
       events = run(m, noHit(800, true), 100, cfg)
-      expect(events.some((e) => e.type === 'attack-hit')).toBe(false)
-      // Advance past the hit frame and the whole attack, hero still far away.
+      expect(events.some((e) => e.type === 'attack-frame')).toBe(false)
       events = run(m, noHit(800, true), 250, cfg)
-      expect(events.some((e) => e.type === 'attack-hit')).toBe(false)
+      expect(events.filter((e) => e.type === 'attack-frame')).toHaveLength(1)
       expect(m.mode).toBe('chase') // attack completed (as a total whiff)
     })
 
-    it('deals damage exactly once, at the real hit frame, when the hero stays in meleeReach', () => {
+    it('emits attack-frame exactly once when the action crosses its configured fraction', () => {
       const cfg = meleeCfg()
       const m = initMonster(cfg, 500, 400)
-      let events = run(m, noHit(580, true), 1000, cfg) // starts attack, dist 80, modeElapsedMs=0
-      expect(events.some((e) => e.type === 'attack-hit')).toBe(false) // not yet -- still frame 0
-      events = run(m, noHit(580, true), 170, cfg) // crosses the 150ms hit frame (~200ms elapsed)
-      expect(events.filter((e) => e.type === 'attack-hit')).toHaveLength(1)
-      // Finishing out the swing (total attackDurationMs 300ms) must not fire a second attack-hit.
+      let events = run(m, noHit(580, true), 1000, cfg)
+      expect(events.some((e) => e.type === 'attack-frame')).toBe(false)
+      events = run(m, noHit(580, true), 200, cfg)
+      expect(events.filter((e) => e.type === 'attack-frame')).toHaveLength(1)
       events = run(m, noHit(580, true), 150, cfg)
-      expect(events.some((e) => e.type === 'attack-hit')).toBe(false)
+      expect(events.some((e) => e.type === 'attack-frame')).toBe(false)
       expect(m.mode).toBe('chase')
     })
 
-    it('misses if the hero ends up behind the monster (wrong facing side) at the hit frame', () => {
+    it('leaves crossing and facing geometry to the scene hitbox resolver', () => {
       const cfg = meleeCfg()
       const m = initMonster(cfg, 500, 400)
-      // Hero starts to the right (dist 80) -> monster commits to facing +1.
       run(m, noHit(580, true), 1000, cfg)
       expect(m.facing).toBe(1)
-      // Hero darts to the monster's LEFT side, still well within meleeReach
-      // by distance alone, before the hit frame.
       const events = run(m, noHit(450, true), 200, cfg)
-      expect(events.some((e) => e.type === 'attack-hit')).toBe(false)
+      expect(events.filter((e) => e.type === 'attack-frame')).toHaveLength(1)
     })
 
-    it('falls back to 0.5 fraction / stats.attackRange reach when attackHitFraction/meleeReach are omitted (back-compat)', () => {
-      const cfg = makeCfg() // no attackHitFraction/meleeReach -- every pre-existing config literal in this repo
+    it('falls back to a 0.5 hit fraction when AttackSpec is omitted', () => {
+      const cfg = makeCfg()
       const m = initMonster(cfg, 500, 400)
-      // attackDurationMs(333) * 0.5 = 166.5ms hit frame; dist(100) <= attackRange(250).
       let events = run(m, noHit(600, true), 1000, cfg)
-      expect(events.some((e) => e.type === 'attack-hit')).toBe(false) // frame 0, not yet
+      expect(events.some((e) => e.type === 'attack-frame')).toBe(false)
       events = run(m, noHit(600, true), 200, cfg)
-      expect(events.some((e) => e.type === 'attack-hit')).toBe(true)
+      expect(events.some((e) => e.type === 'attack-frame')).toBe(true)
     })
   })
 
@@ -179,15 +164,15 @@ describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
     const cfg: MonsterConfig = {
       ...makeCfg(() => 0),
       attackDurationMs: 300,
-      attackHitFraction: 0.5,
+      attackSpec: MONSTER_ATTACKS.monster30.hit1,
       rangedAttack: { kind: 'Monster30Bullet1', speedPxPerSecond: 600, radius: 50, ttlMs: 900 },
     }
     const m = initMonster(cfg, 500, 400)
     let events = run(m, { heroX: 600, heroY: 410, heroAlive: true, incomingHit: null }, 1000, cfg)
     expect(events.some((e) => e.type === 'attack-start')).toBe(true)
-    expect(events.some((e) => e.type === 'attack-hit')).toBe(false)
+    expect(events.some((e) => e.type === 'attack-frame')).toBe(false)
 
-    events = run(m, { heroX: 600, heroY: 410, heroAlive: true, incomingHit: null }, 170, cfg)
+    events = run(m, { heroX: 600, heroY: 410, heroAlive: true, incomingHit: null }, 310, cfg)
     expect(events.filter((e) => e.type === 'projectile-spawn')).toEqual([
       {
         type: 'projectile-spawn',
@@ -199,7 +184,7 @@ describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
         projectile: cfg.rangedAttack,
       },
     ])
-    expect(events.some((e) => e.type === 'attack-hit')).toBe(false)
+    expect(events.filter((e) => e.type === 'attack-frame')).toHaveLength(1)
   })
 
   it('takes a hit once per attack id and enters hurt', () => {
