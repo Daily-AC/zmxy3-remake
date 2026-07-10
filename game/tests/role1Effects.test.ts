@@ -7,6 +7,21 @@ import {
   type Role1EffectAction,
 } from '../src/data/role1Effects'
 
+interface Role1EffectManifestEntry {
+  sourceSymbol: string
+  frames: number
+  fps: number
+  scale: number
+  pivotPx: { x: number; y: number }
+  anchor: string
+  offset: { forward: number; y: number }
+  followAnchor: boolean
+}
+
+const ROLE1_EFFECT_MANIFEST = JSON.parse(
+  readFileSync(new URL('../public/assets/extracted/role1-effects/manifest.json', import.meta.url), 'utf-8'),
+) as Record<string, Role1EffectManifestEntry>
+
 describe('official Role1 effect mapping', () => {
   it('maps normal combo actions to the matching official bullet symbols', () => {
     expect(role1EffectForAction('hit1')?.sourceSymbol).toBe('Role1Bullet1')
@@ -54,6 +69,33 @@ describe('official Role1 effect mapping', () => {
       expect(effect.pivotPx.y, `${action} pivot y`).toBeTypeOf('number')
       expect(effect.scale, `${action} scale`).toBe(1)
       expect(effect.followAnchor, `${action} follow anchor`).toBeTypeOf('boolean')
+    }
+  })
+
+  it('keeps every runtime effect field aligned with the tracked manifest', () => {
+    expect(Object.keys(ROLE1_EFFECTS)).toEqual(Object.keys(ROLE1_EFFECT_MANIFEST))
+
+    for (const [action, effect] of Object.entries(ROLE1_EFFECTS)) {
+      const manifestEffect = ROLE1_EFFECT_MANIFEST[action]
+      expect({
+        sourceSymbol: effect.sourceSymbol,
+        frames: effect.frames,
+        fps: effect.fps,
+        scale: effect.scale,
+        pivotPx: effect.pivotPx,
+        anchor: effect.anchor,
+        offset: effect.offset,
+        followAnchor: effect.followAnchor,
+      }, action).toEqual({
+        sourceSymbol: manifestEffect.sourceSymbol,
+        frames: manifestEffect.frames,
+        fps: manifestEffect.fps,
+        scale: manifestEffect.scale,
+        pivotPx: manifestEffect.pivotPx,
+        anchor: manifestEffect.anchor,
+        offset: manifestEffect.offset,
+        followAnchor: manifestEffect.followAnchor,
+      })
     }
   })
 
