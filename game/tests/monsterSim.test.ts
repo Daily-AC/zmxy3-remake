@@ -219,68 +219,102 @@ describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
     expect(events.some((e) => e.type === 'death')).toBe(true)
   })
 
-  describe('hit-stun protection (combat-triage pen, 2026-07-10 -- fixes "怪物无限眩晕不反击")', () => {
-    // BaseMonster.as: every landed hit adds Role1's own addprotection(2.5) to
-    // beattackedtimes; crossing the threshold (59 grunt / 49 boss) grants
-    // ~3000ms of full hit-immunity and resets the counter. See monsterSim.ts's
-    // file header for the exact decompile citations.
-    function spamHits(m: MonsterState, cfg: MonsterConfig, count: number): void {
-      for (let i = 1; i <= count; i++) {
-        // Each hit lands on its own fresh attackId, well inside hurtDurationMs
-        // (500) of the previous one -- exactly the rapid-combo scenario the
-        // user reported ("连续攻击时怪物永远处于受击硬直"). Chip damage (1 per
-        // hit, after def) so MONSTER30_STATS's 150 hp survives the whole
-        // sequence -- this test is about the stun lock, not lethality.
-        advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId: i, damage: 4 } }, 10, cfg)
-      }
+  describe('short stagger armor', () => {
+    function hit(m: MonsterState, cfg: MonsterConfig, attackId: number, damage = 8): void {
+      advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId, damage } }, TICK_MS, cfg)
     }
 
-    it('a grunt stays perpetually re-hurt below the protection threshold (reproduces the reported exploit)', () => {
+    it('lets a grunt take damage but stops re-entering hurt after four consecutive staggers', () => {
       const cfg = makeCfg()
       const m = initMonster(cfg, 500, 400)
-      spamHits(m, cfg, 23) // 23 * 2.5 = 57.5 <= 59 threshold -- protection not yet granted
-      expect(m.mode).toBe('hurt') // still locked, exactly the reported bug
-      expect(m.protectionMs).toBe(0)
+      for (let id = 1; id <= 4; id++) hit(m, cfg, id)
+      const hp = m.hp
+
+      hit(m, cfg, 5)
+
+      expect(m.hp).toBeLessThan(hp)
+      expect(m.staggerArmorMs).toBeGreaterThan(0)
+      expect(m.mode).toBe('chase')
     })
 
-    it('grants ~3s of full hit-immunity once a grunt crosses the 59 threshold, breaking the lock', () => {
+    it('uses six consecutive staggers for a boss', () => {
+      const cfg: MonsterConfig = { ...makeCfg(), isBoss: true }
+      const m = initMonster(cfg, 500, 400)
+      for (let id = 1; id <= 5; id++) hit(m, cfg, id)
+      expect(m.mode).toBe('hurt')
+      expect(m.staggerArmorMs).toBe(0)
+
+      hit(m, cfg, 6)
+
+      expect(m.staggerArmorMs).toBe(1200)
+      expect(m.staggerHits).toBe(0)
+      expect(m.mode).toBe('chase')
+    })
+
+    it('resets consecutive stagger progress after 2000ms without a new hit', () => {
+      const cfg = makeCfg(() => 1)
+      const m = initMonster(cfg, 500, 400)
+      for (let id = 1; id <= 3; id++) hit(m, cfg, id)
+      expect(m.staggerHits).toBe(3)
+
+      run(m, noHit(500, true), 1900, cfg)
+      expect(m.staggerHits).toBe(3)
+      expect(m.staggerResetMs).toBeGreaterThan(0)
+
+      run(m, noHit(500, true), 100, cfg)
+      expect(m.staggerHits).toBe(0)
+      expect(m.staggerResetMs).toBe(0)
+
+      hit(m, cfg, 4)
+      expect(m.staggerHits).toBe(1)
+      expect(m.staggerArmorMs).toBe(0)
+      expect(m.mode).toBe('hurt')
+    })
+
+    it('continues applying damage while stagger armor is active', () => {
       const cfg = makeCfg()
       const m = initMonster(cfg, 500, 400)
-      spamHits(m, cfg, 24) // 24 * 2.5 = 60 > 59 -- protection triggers on this hit
-      expect(m.protectionMs).toBe(3000)
-      expect(m.beattackedTimes).toBe(0) // reset on trigger
-      const hpAfterTrigger = m.hp
+      for (let id = 1; id <= 4; id++) hit(m, cfg, id)
+      const hp = m.hp
 
-      // Further hits are fully ignored while protected -- no damage, no re-hurt.
-      advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId: 999, damage: 30 } }, 10, cfg)
-      expect(m.hp).toBe(hpAfterTrigger)
+      hit(m, cfg, 5, 30)
 
-      // The hurt animation is free to run to completion (nothing is re-resetting
-      // modeElapsedMs anymore), so the monster genuinely leaves 'hurt' and can
-      // act again -- this is the "怪物会反击" acceptance bar.
-      run(m, noHit(500, true), cfg.hurtDurationMs + 10, cfg)
+      expect(m.hp).toBe(hp - (30 - cfg.stats.def))
+      expect(m.staggerArmorMs).toBeGreaterThan(0)
       expect(m.mode).not.toBe('hurt')
     })
 
-    it('uses the boss threshold (49, lower than grunt) when cfg.isBoss is set', () => {
-      const cfg: MonsterConfig = { ...makeCfg(), isBoss: true }
-      const m = initMonster(cfg, 500, 400)
-      spamHits(m, cfg, 19) // 19 * 2.5 = 47.5 <= 49 -- not yet
-      expect(m.protectionMs).toBe(0)
-      advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId: 20, damage: 30 } }, 10, cfg) // 20*2.5=50 > 49
-      expect(m.protectionMs).toBe(3000)
-    })
-
-    it('protection decays back to 0 over real time, letting future hits land again', () => {
+    it('does not interrupt an attack when hit during active stagger armor', () => {
       const cfg = makeCfg()
       const m = initMonster(cfg, 500, 400)
-      spamHits(m, cfg, 24) // trigger protection
-      expect(m.protectionMs).toBe(3000)
-      run(m, noHit(500, true), 3000, cfg)
-      expect(m.protectionMs).toBe(0)
-      const hpBefore = m.hp
-      advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId: 5000, damage: 30 } }, 10, cfg)
-      expect(m.hp).toBeLessThan(hpBefore) // hits connect again once protection lapses
+      for (let id = 1; id <= 4; id++) hit(m, cfg, id)
+      m.mode = 'attack'
+      m.action = 'hit1'
+      m.modeElapsedMs = 80
+      const hp = m.hp
+
+      hit(m, cfg, 5, 30)
+
+      expect(m.hp).toBe(hp - (30 - cfg.stats.def))
+      expect(m.mode).toBe('attack')
+      expect(m.action).toBe('hit1')
+      expect(m.modeElapsedMs).toBeGreaterThan(80)
+    })
+
+    it('still deduplicates and applies lethal damage immediately during stagger armor', () => {
+      const cfg = makeCfg()
+      const m = initMonster(cfg, 500, 400)
+      for (let id = 1; id <= 4; id++) hit(m, cfg, id)
+      expect(m.staggerArmorMs).toBe(1200)
+
+      hit(m, cfg, 5, 30)
+      const hp = m.hp
+      hit(m, cfg, 5, 30)
+      expect(m.hp).toBe(hp)
+
+      hit(m, cfg, 6, 999)
+      expect(m.hp).toBe(0)
+      expect(m.mode).toBe('dead')
     })
   })
 
