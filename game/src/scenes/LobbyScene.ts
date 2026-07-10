@@ -550,7 +550,9 @@ export class LobbyScene extends Phaser.Scene {
     }
     this.suppressCloseToast = true
     this.connection?.dispose()
-    this.scene.start(SCENE.battle, { campaignIndex: levelIdToIndex(levelId), coopSession })
+    this.scene.start(SCENE.battleLoading, {
+      battleData: { campaignIndex: levelIdToIndex(levelId), coopSession },
+    })
   }
 }
 
