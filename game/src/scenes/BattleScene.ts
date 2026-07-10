@@ -1974,6 +1974,7 @@ export class BattleScene extends Phaser.Scene {
         .setPosition(stage.background.floorX ?? 0, GROUND_Y - 5)
         .setScale(1)
         .setScrollFactor(1, 1)
+        .setDepth(stage.id === 'sl12' ? -7 : -10)
     } else {
       this.floorImg?.setVisible(false)
     }
@@ -2245,7 +2246,10 @@ export class BattleScene extends Phaser.Scene {
     const ready = advanceWaveSpawnQueue(this.pendingWaveSpawns, delta, availableSlots)
     ready.forEach((spec: MonsterSpawnSpec, index) => {
       const x = spec.x ?? Math.min(bounds.right - 120, Math.max(bounds.left + 120, 720 + index * 190))
-      const entity = this.spawnEntity(spec.species, spec.stats, x, false, spec.y)
+      const horizontalGroundY = this.level1Chain && currentSubStage(this.level1Chain).mode === 'horizontal'
+        ? this.heroConfig.jump.groundY
+        : spec.y
+      const entity = this.spawnEntity(spec.species, spec.stats, x, false, horizontalGroundY)
       if (MINIBOSS_SPECIES.has(spec.species)) {
         this.activeMiniBoss = entity
         this.showToast(`BOSS · ${MONSTER_NAMES[spec.species] ?? spec.species}`, '#ff9a5a')
