@@ -107,7 +107,7 @@ export interface MonsterSpawnSpec {
   stats: MonsterStats
   /** Recovered MonsterAppearPoint registration coordinate. */
   x?: number
-  /** Recovered per-point timing. The current renderer expands the complete point immediately. */
+  /** Recovered per-point timing. Runtime queues each concrete spawn independently. */
   delayMs?: number
   intervalMs?: number
   quantity?: number
@@ -133,7 +133,7 @@ export function expandMonsterSpawnRoster(roster: MonsterSpawnSpec[]): MonsterSpa
   return roster.flatMap((point) =>
     Array.from({ length: Math.max(1, Math.floor(point.quantity ?? 1)) }, (_, index) => ({
       ...point,
-      delayMs: (point.delayMs ?? 0) + index * (point.intervalMs ?? 0),
+      delayMs: (point.delayMs ?? 0) + (index + 1) * (point.intervalMs ?? 0),
       quantity: 1,
     })),
   )
@@ -430,6 +430,14 @@ export function updateLevelSpawn(
 export function getActiveWaveRoster(state: LevelState): MonsterSpawnSpec[] {
   if (state.activeStopIndex < 0) return []
   return state.stopPoints[state.activeStopIndex].wave.roster
+}
+
+/** Rightmost x the hero may reach while a horizontal StopPoint remains uncleared. */
+export function horizontalProgressMaxX(state: LevelState, levelMaxX: number): number {
+  const idx = findNextStopIndex(state.stopPoints)
+  if (idx === -1) return levelMaxX
+  const stopX = state.stopPoints[idx].wave.stopX
+  return stopX === undefined ? levelMaxX : Math.min(levelMaxX, stopX)
 }
 
 export function areStopPointsCleared(state: LevelState): boolean {

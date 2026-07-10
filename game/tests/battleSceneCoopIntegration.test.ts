@@ -30,6 +30,35 @@ describe('BattleScene coop integration wiring', () => {
     expect(battle).toMatch(/if \(this\.coopSession && !this\.coopSession\.isHost\) \{[\s\S]*this\.applyRemoteMonsterSnapshots\(delta\)/)
     expect(battle).toMatch(/else this\.updateCoopMonsters\(delta, heroAlive\)/)
     expect(battle).toMatch(/private broadcastMonsterState\(includeRecentlyDead = false\): void/)
+    expect(battle).toMatch(/const runsAuthority = !this\.coopSession \|\| this\.coopSession\.isHost/)
+    expect(battle).toMatch(/if \(runsAuthority && stage\.mode === 'climb'/)
+    expect(battle).toMatch(/if \(runsAuthority && updateLevelSpawn\(/)
+  })
+
+  it('creates missing peer monsters from host snapshots and binds the exact host id', () => {
+    const battle = source()
+
+    expect(battle).toMatch(/missingHostMonsterSnapshots\(/)
+    expect(battle).toMatch(/snapshot\.species/)
+    expect(battle).toMatch(/snapshot\.isBoss/)
+    expect(battle).toMatch(/snapshot\.monsterId/)
+    expect(battle).toMatch(/species: e\.species/)
+    expect(battle).toMatch(/isBoss: e\.isBoss/)
+  })
+
+  it('clears stale monster identities when a level runtime resets', () => {
+    const battle = source()
+
+    expect(battle).toMatch(/this\.coopMonsterIds = new WeakMap<MonsterEntity, string>\(\)/)
+    expect(battle).toMatch(/this\.coopMonsterById\.clear\(\)/)
+    expect(battle).toMatch(/monsters: \{\}/)
+  })
+
+  it('uses the host-broadcast StopPoint boundary on peers', () => {
+    const battle = source()
+
+    expect(battle).toMatch(/this\.coopSyncState\?\.hostProgressMaxX/)
+    expect(battle).toMatch(/sendMonsterState\([\s\S]*this\.currentHeroBounds\(\)\.maxX/)
   })
 
   it('routes peer hits as hit-intent events and host boss clear as a level event', () => {
