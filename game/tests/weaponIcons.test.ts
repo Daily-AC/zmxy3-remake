@@ -52,4 +52,23 @@ describe('official transparent world-drop icons', () => {
     expect(sha256(file), id).toBe(expectedHash)
     expect(sha256(file), id).not.toBe(sha256(new URL(`../public/assets/extracted/icons/${id}.png`, import.meta.url)))
   })
+
+  it('uses the original timber bitmaps in the backpack and on the ground', () => {
+    expect(HUD_ICONS).toContainEqual({
+      key: 'icon_wptm',
+      url: 'assets/extracted/icons/wptm.png',
+    })
+    expect(WORLD_DROP_ICONS).toContainEqual({
+      key: 'drop_icon_wptm',
+      url: 'assets/extracted/drop-icons/wptm.png',
+    })
+
+    const backpack = new URL('../public/assets/extracted/icons/wptm.png', import.meta.url)
+    const ground = new URL('../public/assets/extracted/drop-icons/wptm.png', import.meta.url)
+    expect(existsSync(backpack)).toBe(true)
+    expect(existsSync(ground)).toBe(true)
+    expect(sha256(backpack)).toBe('7147aef07390c295cc8c365c9b5e4ce9ea2f5f1cb9d574560e65387a94d6bbb4')
+    expect(sha256(ground)).toBe('409d1ae6f2a69d503310b310b256424dd1875867cf2dc7bce03422f4bf0444d9')
+    expect(sha256(ground)).not.toBe(sha256(backpack))
+  })
 })

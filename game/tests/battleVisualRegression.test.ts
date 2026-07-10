@@ -49,6 +49,30 @@ describe('BattleScene visual regression helpers', () => {
     expect(mod.climbBackgroundVisibility(false)).toEqual({ pillar: false, fallback: true })
   })
 
+  it('aligns the extracted sl11 scene art and transfer wind to the same visual floor', async () => {
+    const mod = await import('../src/scenes/BattleScene') as unknown as {
+      climbSceneArtPlacement?: () => { x: number; y: number; scale: number }
+      transferDoorVisualCenter?: (
+        door: { x: number; y: number; width: number; height: number },
+        climb: boolean,
+      ) => { x: number; y: number }
+    }
+    const file = new URL('../public/assets/extracted/level1/online_sl11_full.png', import.meta.url)
+
+    expect(existsSync(file)).toBe(true)
+    expect(mod.climbSceneArtPlacement).toBeTypeOf('function')
+    expect(mod.transferDoorVisualCenter).toBeTypeOf('function')
+
+    const art = mod.climbSceneArtPlacement!()
+    expect(art.x + 443 * art.scale).toBeCloseTo(622.699, 0)
+    expect(art.y + 271 * art.scale).toBeCloseTo(-1872.45 + 84, 0)
+    expect(art.y + 1540 * art.scale).toBeCloseTo(498.55 + 84, 0)
+    expect(mod.transferDoorVisualCenter!(
+      { x: 716.85, y: -2037.45, width: 185.8, height: 165 },
+      true,
+    )).toEqual({ x: 809.75, y: -1870.95 })
+  })
+
   it('excludes the mirrored rail seam from the pillar tile frame', async () => {
     const mod = await import('../src/scenes/BattleScene') as unknown as {
       pillarTileFrame: (sourceHeight: number) => { x: number; y: number; width: number; height: number }

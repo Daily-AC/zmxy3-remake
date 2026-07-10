@@ -95,13 +95,21 @@ export const HUD_WEAPON_ICON_IDS = [
 /** Official armor bitmaps currently reachable by the Wukong-only L1/L2 MVP. */
 export const HUD_ARMOR_ICON_IDS = ['ptdxzf', 'kys'] as const
 
-export const HUD_ICONS: TextureRef[] = [...HUD_ICON_IDS, ...HUD_WEAPON_ICON_IDS, ...HUD_ARMOR_ICON_IDS].map((id) => ({
+/** Original material bitmap currently reachable through the L1 reward loop. */
+export const HUD_MATERIAL_ICON_IDS = ['wptm'] as const
+
+export const HUD_ICONS: TextureRef[] = [
+  ...HUD_ICON_IDS,
+  ...HUD_WEAPON_ICON_IDS,
+  ...HUD_ARMOR_ICON_IDS,
+  ...HUD_MATERIAL_ICON_IDS,
+].map((id) => ({
   key: `icon_${id}`,
   url: `${ICON}${id}.png`,
 }))
 
 /** EIcon1's separate transparent `fall_*` bitmaps for equipment on the ground. */
-export const WORLD_DROP_ICON_IDS = ['ptdxzg', 'whg', 'ptdxzf', 'kys'] as const
+export const WORLD_DROP_ICON_IDS = ['ptdxzg', 'whg', 'ptdxzf', 'kys', 'wptm'] as const
 export const WORLD_DROP_ICONS: TextureRef[] = WORLD_DROP_ICON_IDS.map((id) => ({
   key: `drop_icon_${id}`,
   url: `assets/extracted/drop-icons/${id}.png`,
