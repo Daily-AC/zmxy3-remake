@@ -45,6 +45,26 @@ describe('furnace recipe catalog', () => {
     ])
   })
 
+  it('preserves the minimum fractional crit roll on 虬龙棍', () => {
+    const crit = equipmentItemByFillName('qlg', () => 0)?.effects
+      ?.find((effect) => effect.type === 'stat' && effect.stat === 'crit')
+
+    expect(crit?.value).toBeCloseTo(0.05)
+  })
+
+  it('preserves the maximum fractional crit roll on 虬龙棍', () => {
+    const crit = equipmentItemByFillName('qlg', () => 1)?.effects
+      ?.find((effect) => effect.type === 'stat' && effect.stat === 'crit')
+
+    expect(crit?.value).toBeCloseTo(0.08)
+  })
+
+  it('uses the original Math.round semantics for integer stat ranges', () => {
+    expect(equipmentItemByFillName('ptdxzg', () => 0.2)?.effects).toEqual([
+      { type: 'stat', stat: 'atk', value: 3 },
+    ])
+  })
+
   it('does not attach meaningless runtime effects to materials', () => {
     expect(equipmentItemByFillName('wptm')).not.toHaveProperty('effects')
   })
