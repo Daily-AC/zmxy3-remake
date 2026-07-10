@@ -301,6 +301,34 @@ describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
       expect(m.modeElapsedMs).toBeGreaterThan(80)
     })
 
+    it('applies sub-tick hits immediately without advancing armor or attack timers', () => {
+      const cfg = makeCfg()
+      const m = initMonster(cfg, 500, 400)
+      for (let id = 1; id <= 4; id++) hit(m, cfg, id)
+      m.mode = 'attack'
+      m.action = 'hit1'
+      m.modeElapsedMs = 80
+      m.cooldownMs = 500
+      const hp = m.hp
+
+      for (let id = 5; id < 38; id++) {
+        advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId: id, damage: 4 } }, 1, cfg)
+      }
+
+      expect(m.hp).toBe(hp - 33)
+      expect(m.staggerArmorMs).toBe(1200)
+      expect(m.cooldownMs).toBe(500)
+      expect(m.mode).toBe('attack')
+      expect(m.modeElapsedMs).toBe(80)
+
+      advanceMonster(m, { heroX: 500, heroAlive: true, incomingHit: { attackId: 38, damage: 4 } }, 1, cfg)
+      expect(m.hp).toBe(hp - 34)
+      expect(m.staggerArmorMs).toBeCloseTo(1200 - TICK_MS, 8)
+      expect(m.cooldownMs).toBeCloseTo(500 - TICK_MS, 8)
+      expect(m.mode).toBe('attack')
+      expect(m.modeElapsedMs).toBeCloseTo(80 + TICK_MS, 8)
+    })
+
     it('still deduplicates and applies lethal damage immediately during stagger armor', () => {
       const cfg = makeCfg()
       const m = initMonster(cfg, 500, 400)
