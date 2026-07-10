@@ -3749,16 +3749,10 @@ export class BattleScene extends Phaser.Scene {
     const px = this.heroState.x + off.x * HERO_SCALE
     const py = this.heroState.vertical.y + off.y * HERO_SCALE
     this.hero.setPosition(px, py)
-    // Weapon overlay: frame-perfect mirror of the hero (zero offset). Always
-    // shown now (battle-fidelity brief #5/B3): role1_equip0 IS 悟空's default
-    // 金箍棒 (confirmed by tasks/integration-batch-report.md/furnace-report.md,
-    // which call the same overlay texture "金箍棒上手" when a weapon gets
-    // equipped) -- it was previously gated behind `equipment.weapon` so a
-    // fresh/unarmed hero showed bare fists, when the original always has him
-    // holding the staff. Since only one overlay skin exists (Stage A note
-    // above), a crafted weapon still renders as this same jingubang art; this
-    // just stops hiding it in the (equally approximate) unequipped state.
-    this.weaponSprite.setVisible(true)
+    // The shipped milestone has one Wukong weapon overlay skin, so every
+    // supported weapon currently shares that appearance. Visibility still
+    // follows the real weapon slot: bare-handed means no overlay.
+    this.weaponSprite.setVisible(Boolean(this.equipment.weapon))
     this.weaponSprite.setFrame(this.hero.frame.name)
     this.weaponSprite.setFlipX(this.heroState.facing === 1)
     this.weaponSprite.setAngle(this.hero.angle)
