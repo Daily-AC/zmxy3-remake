@@ -37,6 +37,7 @@ import type { CraftMaterialOption } from '../ui/hud/FurnacePanel'
 import { FurnaceRecipeView } from '../ui/hud/FurnaceRecipeView'
 import { HUD_TEXTURES, HUD_ICONS, ICON_FALLBACK_KEY } from '../ui/hud/hudTheme'
 import { Toast } from '../ui/hud/Toast'
+import { BATTLE_LOADING_BACKGROUNDS } from './battleLoadingContent'
 
 // S1 世界地图 hub. Everything below the map art (nodes/decorations/buttons +
 // coordinates) is data-driven from data/worldmapNodes.ts, which is
@@ -146,6 +147,9 @@ export class WorldMapScene extends Phaser.Scene {
 
   preload(): void {
     if (!this.textures.exists(MAP_BG_TEX)) this.load.image(MAP_BG_TEX, `${WORLDMAP_DIR}map_bg.jpg`)
+    for (const background of BATTLE_LOADING_BACKGROUNDS) {
+      if (!this.textures.exists(background.key)) this.load.image(background.key, background.url)
+    }
 
     const keys = new Set<string>()
     for (const n of WORLDMAP_NODES) {

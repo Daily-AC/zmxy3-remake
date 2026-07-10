@@ -4,7 +4,7 @@
 
 **Goal:** Replace the black battle preload window with a visible thinking-style loading transition for both solo and co-op entry.
 
-**Architecture:** A dedicated `BattleLoadingScene` renders without loading assets, launches `BattleScene` behind itself, observes the real Battle loader progress, and exits only after an explicit Battle ready event. Existing battle payloads are passed through unchanged.
+**Architecture:** A dedicated `BattleLoadingScene` uses level-specific key art preloaded by the world map/lobby, launches `BattleScene` behind itself, observes the real Battle loader progress, and exits only after an explicit Battle ready event. Existing battle payloads are passed through unchanged.
 
 **Tech Stack:** TypeScript, Phaser 4 scenes/events/loader, Vitest source-wiring tests, Playwright browser acceptance.
 
@@ -19,7 +19,7 @@
 
 - [ ] **Step 1: Write failing tests** for level-label mapping, progress clamping, and the explicit `battle-ready` event constant.
 - [ ] **Step 2: Run** `npm test -- --run tests/battleLoadingScene.test.ts` and confirm the missing module fails.
-- [ ] **Step 3: Implement** a scene that calls `drawInkBackdrop`, renders the title/context/status/progress UI, subscribes to Battle loader progress, launches Battle with the supplied payload, brings itself to top, and removes all listeners on shutdown.
+- [x] **Step 3: Implement** a full-bleed, home-page-matched poster scene that renders title/context/status/progress UI, subscribes to Battle loader progress, launches Battle with the supplied payload, brings itself to top, and removes all listeners on shutdown.
 - [ ] **Step 4: Run** `npm test -- --run tests/battleLoadingScene.test.ts` and confirm all tests pass.
 
 ### Task 2: Route solo and co-op entry through the transition

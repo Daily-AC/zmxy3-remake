@@ -6,17 +6,20 @@
 
 ## Chosen Design
 
-Add a zero-asset `BattleLoadingScene`. Both battle entry points start this scene with the original battle payload. It draws an immediate warm-ink backdrop, the selected level name, `天庭推演中`, a rotating thinking line, and a real loader progress bar. It then launches `BattleScene` behind itself and stays above it until battle initialization is complete.
+Add a `BattleLoadingScene`. Both battle entry points start this scene with the original battle payload. The world map and lobby preload one level-specific loading key art, so the transition can render immediately while `BattleScene` loads behind it. It shows the selected level name, `天庭推演中`, a rotating thinking line, and a real loader progress indicator, then stays above Battle until initialization is complete.
 
 `BattleScene` emits an explicit ready event at the end of `create()`. The loading scene owns and removes its loader/ready listeners on shutdown, then stops itself after the ready event. Direct debug launches of `BattleScene` remain valid because stopping an inactive loading scene is a no-op.
 
 ## Visual Behavior
 
-- Full-canvas warm ink backdrop using the existing `drawInkBackdrop()` helper, with no new image dependency.
-- Brush-font title `天庭推演中`.
+- Full-canvas cinematic key art generated in the same handcrafted plush-doll, fiery orange-gold visual language as the home page.
+- L1 and L2 use distinct 九重天 / 天宫道 compositions while preserving the home page's fabric texture, character proportions, ember palette, and celestial architecture.
+- Design DNA takes Lamborghini's full-bleed cinematic hierarchy and thin horizon progress line, but translates its black/gold restraint into the existing game's warm charcoal/fire-orange palette.
+- Left-aligned brush-font title `天庭推演中`, with dark negative space reserved in the artwork rather than a floating panel.
 - Context line `正在推演九重天` or `正在推演天宫道`.
 - Three-dot thinking animation and rotating short status text.
-- A restrained gold progress track driven by Phaser loader progress, never a fake percentage.
+- A sharp, two-pixel horizon track with an orange-gold fill and angular marker, driven by Phaser loader progress, never a fake percentage.
+- No rounded cards, rounded progress bars, gradient UI surfaces, or centered text stack.
 
 ## Data Flow
 
@@ -28,7 +31,7 @@ Add a zero-asset `BattleLoadingScene`. Both battle entry points start this scene
 
 ## Failure Handling
 
-Loader progress is clamped to `0..1`. Repeated scene entries replace old listeners during shutdown. Asset load errors do not remove the status layer; Phaser can continue its existing fallback behavior while the player still sees an active loading state.
+Loader progress is clamped to `0..1`. Repeated scene entries replace old listeners during shutdown. If the preloaded key art is unavailable, the scene falls back to a warm charcoal canvas and preserves all status/progress behavior.
 
 ## Verification
 
