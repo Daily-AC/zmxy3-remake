@@ -81,7 +81,7 @@ describe('BattleScene pickup wiring', () => {
 
     expect(source).toMatch(/onSellItem: \(item\) => this\.doSellEquipmentItem\(item\)/)
     expect(source).toMatch(/equip\(this\.equipment, this\.inventory, item, this\.identity\.heroId\)/)
-    expect(source).toMatch(/sellEquipmentItem\(this\.inventory, this\.soulPurse, item\.id\)/)
+    expect(source).toMatch(/sellEquipmentItem\(this\.inventory, this\.soulPurse, item\)/)
     expect(source).toMatch(/id: 'test_chiyan',[\s\S]*sourceType: 'zbwq',[\s\S]*sourceUser: '悟空'/)
     expect(source).toMatch(/this\.weaponSprite\.setVisible\(Boolean\(this\.equipment\.weapon\)\)/)
   })
