@@ -41,6 +41,14 @@ export interface EnemyProjectileHit {
   y: number
   damage: number
   attackKind: AttackKind
+  targetId?: string
+}
+
+export interface EnemyProjectileTarget {
+  targetId: string
+  x: number
+  y: number
+  alive: boolean
 }
 
 export function spawnEnemyProjectile(spawn: EnemyProjectileSpawn): EnemyProjectile {
@@ -71,6 +79,22 @@ export function stepEnemyProjectiles(
   hero: { x: number; y: number; alive: boolean },
   dtMs: number,
 ): { remaining: EnemyProjectile[]; hits: EnemyProjectileHit[] } {
+  const result = stepEnemyProjectilesAgainstTargets(
+    projectiles,
+    [{ targetId: '__local__', ...hero }],
+    dtMs,
+  )
+  return {
+    remaining: result.remaining,
+    hits: result.hits.map(({ targetId: _targetId, ...hit }) => hit),
+  }
+}
+
+export function stepEnemyProjectilesAgainstTargets(
+  projectiles: EnemyProjectile[],
+  targets: EnemyProjectileTarget[],
+  dtMs: number,
+): { remaining: EnemyProjectile[]; hits: EnemyProjectileHit[] } {
   const remaining: EnemyProjectile[] = []
   const hits: EnemyProjectileHit[] = []
   const dtSeconds = Math.max(0, dtMs) / 1000
@@ -82,7 +106,12 @@ export function stepEnemyProjectiles(
     p.x += p.vx * dtSeconds
     p.y += p.vy * dtSeconds
 
-    if (hero.alive && distancePointToSegment(hero.x, hero.y, fromX, fromY, p.x, p.y) <= p.radius) {
+    const target = targets.find(
+      (candidate) =>
+        candidate.alive &&
+        distancePointToSegment(candidate.x, candidate.y, fromX, fromY, p.x, p.y) <= p.radius,
+    )
+    if (target) {
       hits.push({
         kind: p.kind,
         sourceId: p.sourceId,
@@ -91,6 +120,7 @@ export function stepEnemyProjectiles(
         y: p.y,
         damage: p.damage,
         attackKind: p.attackKind,
+        targetId: target.targetId,
       })
       continue
     }

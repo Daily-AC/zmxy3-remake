@@ -32,6 +32,7 @@ import {
 import { heroAttackBox, centeredBox, overlaps, type Rect } from '../systems/hitbox'
 import {
   fallbackMonsterAttackSpec,
+  horizontalAttackReach,
   monsterAttackSpecFor,
   resolveAttackSpec,
 } from '../systems/attackSpec'
@@ -92,9 +93,10 @@ import {
 } from '../systems/heroScale'
 import {
   spawnEnemyProjectile,
-  stepEnemyProjectiles,
+  stepEnemyProjectilesAgainstTargets,
   type EnemyProjectile,
   type EnemyProjectileHit,
+  type EnemyProjectileTarget,
 } from '../systems/enemyProjectiles'
 import { RealSkillId, calculateRealSkillDamage } from '../systems/skillDamageReal'
 import {
@@ -197,7 +199,12 @@ import {
   type HitIntentPayload,
   type MonsterStateSnapshot,
 } from '../systems/coopSync'
-import { resolveCoopHeroHitDamage, selectRemoteHeroHitTargets } from '../systems/coopHeroDamage'
+import {
+  resolveCoopHeroHitDamage,
+  selectNearestAliveHeroTarget,
+  selectRemoteHeroHitTargets,
+  type AliveHeroTarget,
+} from '../systems/coopHeroDamage'
 import { missingHostMonsterSnapshots } from '../systems/coopMonsterRuntime'
 import {
   advanceWaveSpawnQueue,
@@ -2043,6 +2050,14 @@ export class BattleScene extends Phaser.Scene {
       tickMs: TICK_MS,
       rng: Math.random,
       attackSpec,
+      targetingGeometry: {
+        selfOffsetX: data.offset.x * HERO_SCALE,
+        targetOffsetX: roleData.offset.x * HERO_SCALE,
+        attackReach:
+          species === 'monster30'
+            ? stats.attackRange
+            : Math.max(0, horizontalAttackReach(attackSpec, HERO_HURTBOX_W) - 1),
+      },
       rangedAttack: species === 'monster30' ? MONSTER30_BULLET : undefined,
       // StageListener11: Monster30 is a flying, gravity-free climb threat.
       // Keep vertical pursuit opt-in so ground waves and L2-L4 remain on the
@@ -3270,9 +3285,10 @@ export class BattleScene extends Phaser.Scene {
     }
     const frozen = this.simClockMs < e.frozenUntilMs
     const incomingHit = e.hitQueue.shift() ?? null
+    const target = this.selectMonsterTarget(e, heroAlive)
     const events = advanceMonster(
       e.state,
-      { heroX: this.heroState.x, heroY: this.heroState.vertical.y, heroAlive, incomingHit },
+      { heroX: target.x, heroY: target.y, heroAlive: target.alive, incomingHit },
       frozen ? delta * 0.15 : delta,
       e.config,
     )
@@ -3286,6 +3302,20 @@ export class BattleScene extends Phaser.Scene {
         this.awardKillExp(ev.x, ev.y, e.species)
       }
     }
+  }
+
+  private selectMonsterTarget(e: MonsterEntity, localAlive: boolean): AliveHeroTarget {
+    const local: AliveHeroTarget = {
+      userId: this.coopSession?.myUserId ?? '__local__',
+      x: this.heroState.x,
+      y: this.heroState.vertical.y,
+      alive: localAlive,
+    }
+    if (!this.coopSession?.isHost || !this.coopSyncState) return local
+    const remotes = Object.values(this.coopSyncState.heroes)
+      .map((view) => view.snapshot)
+      .filter((snapshot) => snapshot.userId !== this.coopSession?.myUserId)
+    return selectNearestAliveHeroTarget({ x: e.state.x, y: e.state.y }, local, remotes) ?? local
   }
 
   /** A skill hitbox (Monster3's hit2) reached its spawnAtMs -- test it against
@@ -3473,7 +3503,7 @@ export class BattleScene extends Phaser.Scene {
     )
     const knockbackX = this.heroState.x < e.state.x ? -1 : 1
     const hit: HeroHit = {
-      sourceId: e.species,
+      sourceId: this.coopMonsterId(e),
       attackId: ++e.attackId,
       damage: mitigated,
       knockbackX,
@@ -3497,7 +3527,7 @@ export class BattleScene extends Phaser.Scene {
     const projectile = spawnEnemyProjectile({
       id: this.nextEnemyProjectileId++,
       kind: ev.projectile.kind,
-      sourceId: e.species,
+      sourceId: this.coopMonsterId(e),
       attackId: ++e.attackId,
       x: ev.x,
       y: ev.y,
@@ -3521,10 +3551,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private stepEnemyProjectiles(delta: number): void {
-    const heroCenter = this.heroVisualCenter()
-    const { remaining, hits } = stepEnemyProjectiles(
+    const { remaining, hits } = stepEnemyProjectilesAgainstTargets(
       this.enemyProjectiles,
-      { x: heroCenter.x, y: heroCenter.y, alive: !isHeroDead(this.identity) },
+      this.enemyProjectileTargets(),
       delta,
     )
     for (const p of this.enemyProjectiles) {
@@ -3538,7 +3567,33 @@ export class BattleScene extends Phaser.Scene {
     for (const hit of hits) this.enemyProjectileHitsHero(hit)
   }
 
+  private enemyProjectileTargets(): EnemyProjectileTarget[] {
+    const heroCenter = this.heroVisualCenter()
+    const targets: EnemyProjectileTarget[] = [{
+      targetId: this.coopSession?.myUserId ?? '__local__',
+      x: heroCenter.x,
+      y: heroCenter.y,
+      alive: !isHeroDead(this.identity),
+    }]
+    if (!this.coopSession?.isHost || !this.coopSyncState) return targets
+    for (const view of Object.values(this.coopSyncState.heroes)) {
+      const snapshot = view.snapshot
+      if (snapshot.userId === this.coopSession.myUserId) continue
+      targets.push({
+        targetId: snapshot.userId,
+        x: snapshot.x + roleData.offset.x * HERO_SCALE,
+        y: snapshot.y + roleData.offset.y * HERO_SCALE,
+        alive: snapshot.alive,
+      })
+    }
+    return targets
+  }
+
   private enemyProjectileHitsHero(hit: EnemyProjectileHit): void {
+    if (this.coopSession?.isHost && hit.targetId !== this.coopSession?.myUserId) {
+      this.sendRemoteHeroProjectileHit(hit)
+      return
+    }
     if (isHeroDead(this.identity)) return
     if (isHeroInvincible(this.identity, this.simClockMs)) return
     const mitigated = Math.max(
@@ -3572,6 +3627,20 @@ export class BattleScene extends Phaser.Scene {
         this.showToast('悟空倒地…　Esc 可回主菜单', '#ff6b6b')
       }
     }
+  }
+
+  private sendRemoteHeroProjectileHit(hit: EnemyProjectileHit): void {
+    if (!this.coopSession?.isHost || !this.coopSyncState || !this.coopChannel || !hit.targetId) return
+    const target = this.coopSyncState.heroes[hit.targetId]?.snapshot
+    if (!target?.alive) return
+    this.coopChannel.sendHeroHit({
+      targetUserId: hit.targetId,
+      sourceMonsterId: hit.sourceId,
+      attackId: `${hit.sourceId}:${hit.attackId}`,
+      power: hit.damage,
+      attackKind: hit.attackKind,
+      knockbackX: target.x < hit.x ? -1 : 1,
+    })
   }
 
   private onHeroRespawn(): void {

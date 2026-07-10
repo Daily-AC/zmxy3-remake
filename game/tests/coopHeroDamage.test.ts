@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   remoteHeroHurtbox,
   resolveCoopHeroHitDamage,
+  selectNearestAliveHeroTarget,
   selectRemoteHeroHitTargets,
 } from '../src/systems/coopHeroDamage'
 import type { HeroStateSnapshot, HeroHitPayload } from '../src/systems/coopSync'
@@ -71,5 +72,19 @@ describe('coop hero damage', () => {
 
     expect(resolveCoopHeroHitDamage(base, 20, 0)).toBe(166)
     expect(resolveCoopHeroHitDamage({ ...base, power: 999, attackKind: 'magic' }, 0, 0.3)).toBe(699)
+  })
+
+  it('selects the nearest live local or remote hero and keeps fighting after the host dies', () => {
+    const local = hero({ userId: 'u-host', x: 500 })
+    const peers = [
+      hero({ userId: 'u-near', x: 140 }),
+      hero({ userId: 'u-far', x: 700 }),
+      hero({ userId: 'u-dead', x: 110, alive: false }),
+    ]
+
+    expect(selectNearestAliveHeroTarget({ x: 100, y: 360 }, local, peers)?.userId).toBe('u-near')
+    expect(
+      selectNearestAliveHeroTarget({ x: 100, y: 360 }, { ...local, alive: false }, peers)?.userId,
+    ).toBe('u-near')
   })
 })

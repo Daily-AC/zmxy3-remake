@@ -85,6 +85,14 @@ export interface MonsterConfig {
   /** Shared action data for hit-frame timing, world collision, and effects.
    * Omit for undecompiled callers to retain the previous 0.5 timing fallback. */
   attackSpec?: AttackSpec
+  /** Visual-center geometry used by melee AI. AS3 attackRange registers a
+   * target, but the monster must keep walking until its actual hitbox reaches
+   * that target. Omit to preserve legacy raw-registration-point behavior. */
+  targetingGeometry?: {
+    selfOffsetX: number
+    targetOffsetX: number
+    attackReach: number
+  }
   /** If present, the hit frame also spawns a projectile. The scene does not
    * resolve the corresponding attack-frame as immediate melee damage. */
   rangedAttack?: RangedAttackConfig
@@ -132,6 +140,8 @@ export interface MonsterState {
    * multi-tick attack only ever gets one shot at connecting, never one per
    * tick past the threshold). Reset false whenever a new attack starts. */
   attackFrameResolved: boolean
+  /** Next entry in AttackSpec.hitFrameFractions to emit. */
+  nextAttackFrameIndex: number
   /** Consecutive nonlethal hits received outside the armor window. */
   staggerHits: number
   /** While active, hits deal damage but do not interrupt the current AI mode. */
@@ -163,6 +173,7 @@ export interface MonsterBasicEvent {
   type: 'hurt' | 'attack-start' | 'attack-frame' | 'death'
   x: number
   y: number
+  attackFrameIndex?: number
 }
 
 export interface MonsterProjectileSpawnEvent {
@@ -191,6 +202,7 @@ export function initMonster(cfg: MonsterConfig, x: number, y: number): MonsterSt
     resolvedAttackIds: [],
     accMs: 0,
     attackFrameResolved: false,
+    nextAttackFrameIndex: 0,
     staggerHits: 0,
     staggerArmorMs: 0,
     staggerResetMs: 0,
@@ -288,10 +300,13 @@ function tickMonster(
       // Facing is NOT re-tracked here (unlike chase): the scene resolves the
       // shared world hitbox using the direction committed at attack-start.
       state.modeElapsedMs += cfg.tickMs
-      const hitFrameMs = cfg.attackDurationMs * (cfg.attackSpec?.hitFrameFraction ?? 0.5)
-      if (!state.attackFrameResolved && state.modeElapsedMs >= hitFrameMs) {
-        state.attackFrameResolved = true
-        events.push({ type: 'attack-frame', x: state.x, y: state.y })
+      const hitFrameFractions = cfg.attackSpec?.hitFrameFractions ?? [cfg.attackSpec?.hitFrameFraction ?? 0.5]
+      while (
+        state.nextAttackFrameIndex < hitFrameFractions.length &&
+        state.modeElapsedMs >= cfg.attackDurationMs * hitFrameFractions[state.nextAttackFrameIndex]
+      ) {
+        const attackFrameIndex = state.nextAttackFrameIndex++
+        events.push({ type: 'attack-frame', x: state.x, y: state.y, attackFrameIndex })
         if (cfg.rangedAttack && heroAlive) {
           events.push({
             type: 'projectile-spawn',
@@ -304,6 +319,7 @@ function tickMonster(
           })
         }
       }
+      state.attackFrameResolved = state.nextAttackFrameIndex >= hitFrameFractions.length
       if (state.modeElapsedMs >= cfg.attackDurationMs) {
         state.mode = 'chase'
         state.cooldownMs = cfg.attackCooldownMs
@@ -316,8 +332,10 @@ function tickMonster(
   // patrol / chase: target acquisition first. BaseMonster.selectTarget() uses
   // full 2D distance for alertRange, while hasAttackTarget() gates the engaged
   // hit1 attack on x-distance only.
-  const xDist = Math.abs(heroX - state.x)
-  const acquisitionDist = Math.hypot(heroX - state.x, (heroY ?? state.y) - state.y)
+  const selfTargetX = state.x + (cfg.targetingGeometry?.selfOffsetX ?? 0)
+  const heroTargetX = heroX + (cfg.targetingGeometry?.targetOffsetX ?? 0)
+  const xDist = Math.abs(heroTargetX - selfTargetX)
+  const acquisitionDist = Math.hypot(heroTargetX - selfTargetX, (heroY ?? state.y) - state.y)
   const hasTarget = heroAlive && acquisitionDist <= cfg.stats.alertRange
 
   state.decisionAccMs += cfg.tickMs
@@ -327,21 +345,23 @@ function tickMonster(
   if (hasTarget) {
     state.mode = 'chase'
     if (cfg.verticalFollow) stepVertical(state, heroY, cfg.verticalFollow)
-    if (xDist <= cfg.stats.attackRange) {
-      faceHero(state, heroX)
+    const attackReach = cfg.targetingGeometry?.attackReach ?? cfg.stats.attackRange
+    if (xDist <= attackReach) {
+      faceHero(state, heroTargetX - (cfg.targetingGeometry?.selfOffsetX ?? 0))
       // In range: per-second roll to attack; otherwise hold position.
       if (decide && state.cooldownMs <= 0 && cfg.rng() < cfg.stats.normalAttackRate) {
         state.mode = 'attack'
         state.action = 'hit1'
         state.modeElapsedMs = 0
         state.attackFrameResolved = false
+        state.nextAttackFrameIndex = 0
         events.push({ type: 'attack-start', x: state.x, y: state.y })
       } else {
         state.action = 'wait'
       }
     } else {
       // Chase: walk toward the hero.
-      faceHero(state, heroX)
+      faceHero(state, heroTargetX - (cfg.targetingGeometry?.selfOffsetX ?? 0))
       state.x += state.facing * cfg.stats.speed
       state.action = 'walk'
     }

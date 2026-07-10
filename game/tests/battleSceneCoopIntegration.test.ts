@@ -79,6 +79,15 @@ describe('BattleScene coop integration wiring', () => {
     expect(battle).toMatch(/private resolveEnemySkillHit\([\s\S]*this\.sendRemoteHeroHits\(/)
   })
 
+  it('targets the nearest live coop hero for AI and settles Monster30 projectiles on peers', () => {
+    const battle = source()
+
+    expect(battle).toMatch(/selectNearestAliveHeroTarget\(/)
+    expect(battle).toMatch(/stepEnemyProjectilesAgainstTargets\(/)
+    expect(battle).toMatch(/hit\.targetId !== this\.coopSession\?\.myUserId/)
+    expect(battle).toMatch(/this\.sendRemoteHeroProjectileHit\(hit\)/)
+  })
+
   it('applies received host hero hits only on peers with payload deduplication', () => {
     const battle = source()
 

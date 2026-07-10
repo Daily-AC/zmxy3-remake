@@ -91,7 +91,7 @@ describe('BattleScene pickup wiring', () => {
 
     expect(source).toMatch(/rangedAttack: species === 'monster30' \? MONSTER30_BULLET : undefined/)
     expect(source).toMatch(/ev\.type === 'projectile-spawn'\) this\.spawnMonsterProjectile\(e, ev\)/)
-    expect(source).toMatch(/stepEnemyProjectiles\(\s*this\.enemyProjectiles,/)
+    expect(source).toMatch(/stepEnemyProjectilesAgainstTargets\(\s*this\.enemyProjectiles,/)
     expect(source).toMatch(/damageHero\(this\.identity, heroHit, this\.simClockMs\)/)
   })
 
