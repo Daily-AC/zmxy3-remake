@@ -33,10 +33,9 @@
 //    re-triggered by a held/rapid-buffered attack button.
 //  - Each hit is still a stationary ground action; horizontal move/jump are
 //    suppressed by the caller while a combo is active (unchanged).
-//  - Airborne attacks: skills-input-index.md documents no normal air normal-attack
-//    behaviour (only that some skills reject airborne release). So a combo can
-//    only START on the ground. TODO-verify: recover the original air normal-attack
-//    (if any) from BaseHero and lift this restriction.
+//  - Ground combos still only start on the ground. heroSim.ts handles airborne
+//    normal attacks separately as a single hit1-duration swing, without
+//    starting or chaining this ComboState.
 
 export type ComboStage = 0 | 1 | 2 | 3 | 4 | 5
 

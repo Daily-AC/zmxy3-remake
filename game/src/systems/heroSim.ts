@@ -45,25 +45,24 @@ export interface HeroState {
   vertical: VerticalState
   move: MoveState
   combo: ComboState
+  /** Input edges latched until the next real fixed tick. */
+  pendingEdges: HeroEdges
+  /** Standalone airborne hit1 swing; it never enters the ground ComboState. */
+  airAttack: { elapsedMs: number; durationMs: number } | null
   x: number
   action: string
   facing: -1 | 1
   /**
-   * Monotonic id of the current attack swing. Bumped each time a new combo
-   * stage begins, so a struck target can dedup and take each of the five hits
-   * at most once. 0 means no swing has started yet.
+   * Monotonic id of the current attack swing. Bumped for each new ground
+   * combo stage and air attack, so a struck target can dedup each swing.
+   * 0 means no swing has started yet.
    */
   attackId: number
-  /** True only while genuinely mid-swing (combo.ts's `attacking`, AS3's
-   * isAttacking()) -- false during the post-swing grace window even though
-   * `combo.stage` stays nonzero there as chain memory (see combo.ts's
-   * header). Callers that want to know "is the melee hitbox live right now"
-   * must check THIS, not `combo.stage !== 0` -- the same class of mixup
-   * jump-gating below was fixed for (see the `comboRes.attacking` comment on
-   * the jump line), left unfixed on BattleScene's own hero-hits resolver
-   * until the combat-triage pen (2026-07-10, "乌鸦还没被打就死了": the melee
-   * box was staying live, silently re-tested every frame at the hero's
-   * then-current position, for up to graceMs after every swing ended). */
+  /** True only while a ground combo swing or air attack is active. False
+   * during the ground combo's post-swing grace window even though
+   * `combo.stage` stays nonzero there as chain memory. Callers that want to
+   * know whether the melee hitbox is live must check this field, not
+   * `combo.stage !== 0`. */
   attacking: boolean
   /** Accumulated real time not yet consumed by a full tick. */
   accMs: number
@@ -90,11 +89,17 @@ export const NO_EDGES: HeroEdges = {
   pressAttack: false,
 }
 
+function noEdges(): HeroEdges {
+  return { ...NO_EDGES }
+}
+
 export function initHeroState(cfg: HeroConfig, x: number): HeroState {
   return {
     vertical: initVertical(cfg.jump.groundY),
     move: initMoveState(-1),
     combo: initCombo(),
+    pendingEdges: noEdges(),
+    airAttack: null,
     x,
     action: 'wait',
     facing: -1,
@@ -106,6 +111,7 @@ export function initHeroState(cfg: HeroConfig, x: number): HeroState {
 }
 
 function selectAction(state: HeroState, attacking: boolean, comboAction: string | null): string {
+  if (state.airAttack) return 'hit1'
   if (attacking && comboAction) return comboAction
   if (!state.vertical.grounded) return state.vertical.airAction ?? 'jump3'
   if (currentDir(state.move) !== 0) return state.move.running ? 'run' : 'walk'
@@ -122,10 +128,33 @@ function tick(state: HeroState, edges: HeroEdges, cfg: HeroConfig): void {
   if (edges.releaseLeft) releaseLeft(state.move)
   if (edges.releaseRight) releaseRight(state.move)
 
-  // Combo: starts only on the ground (see combo.ts airborne note).
+  const hadAirAttack = state.airAttack !== null
+  if (state.airAttack) {
+    state.airAttack.elapsedMs += cfg.tickMs
+    if (state.airAttack.elapsedMs >= state.airAttack.durationMs) state.airAttack = null
+  }
+
+  // An attack edge received during an active air attack is discarded even if
+  // that attack expires on this tick. A later fresh press may start another.
+  const startsAirAttack =
+    !hadAirAttack &&
+    !state.attacking &&
+    !state.vertical.grounded &&
+    edges.pressAttack
+  if (startsAirAttack) {
+    state.airAttack = { elapsedMs: 0, durationMs: cfg.combo.stageDurationsMs[1] }
+    state.attackId += 1
+  }
+
+  // Ground combo behavior remains owned by combo.ts. Air attack edges never
+  // enter or advance a combo stage, though existing combo timing still ages.
   const comboRes = stepCombo(
     state.combo,
-    { attackPressed: edges.pressAttack, grounded: state.vertical.grounded, dtMs: cfg.tickMs },
+    {
+      attackPressed: edges.pressAttack && state.vertical.grounded && !hadAirAttack,
+      grounded: state.vertical.grounded,
+      dtMs: cfg.tickMs,
+    },
     cfg.combo,
   )
 
@@ -156,7 +185,7 @@ function tick(state: HeroState, edges: HeroEdges, cfg: HeroConfig): void {
 
   stepVertical(state.vertical, cfg.jump, state.x)
 
-  state.attacking = comboRes.attacking
+  state.attacking = comboRes.attacking || state.airAttack !== null
   state.action = selectAction(state, comboRes.attacking, comboRes.action)
 }
 
@@ -170,32 +199,29 @@ export function advanceHero(
   dtMs: number,
   cfg: HeroConfig,
 ): HeroState {
+  mergeEdges(state.pendingEdges, edges)
   state.accMs += dtMs
   let first = true
   // Guard against spiral-of-death on huge deltas (e.g. tab regains focus).
   let budget = 8
   while (state.accMs >= cfg.tickMs && budget-- > 0) {
-    tick(state, first ? edges : NO_EDGES, cfg)
+    const tickEdges = first ? state.pendingEdges : NO_EDGES
+    if (first) state.pendingEdges = noEdges()
+    tick(state, tickEdges, cfg)
     state.accMs -= cfg.tickMs
     first = false
   }
   if (budget <= 0) state.accMs = 0
-  // If no full tick elapsed this frame, still apply edges next call by leaving
-  // them to the caller — but to avoid dropping a press on a fast frame we run
-  // one catch-up tick when edges are present and nothing ran.
-  if (first && hasEdge(edges)) tick(state, edges, cfg)
   return state
 }
 
-function hasEdge(e: HeroEdges): boolean {
-  return (
-    e.pressLeft ||
-    e.releaseLeft ||
-    e.pressRight ||
-    e.releaseRight ||
-    e.pressJump ||
-    e.pressAttack
-  )
+function mergeEdges(target: HeroEdges, incoming: HeroEdges): void {
+  target.pressLeft ||= incoming.pressLeft
+  target.releaseLeft ||= incoming.releaseLeft
+  target.pressRight ||= incoming.pressRight
+  target.releaseRight ||= incoming.releaseRight
+  target.pressJump ||= incoming.pressJump
+  target.pressAttack ||= incoming.pressAttack
 }
 
 /** Build a HeroConfig from stage geometry and the combo stage durations. */
