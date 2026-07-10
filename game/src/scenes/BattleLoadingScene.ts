@@ -1,11 +1,13 @@
 import Phaser from 'phaser'
 import type { CoopSession } from '../net/socialClient'
 import { activeArtFont } from '../systems/artFont'
-import { drawInkBackdrop } from '../ui/menu/inkBackdrop'
+import { addEmbers } from '../ui/embers'
 import { BATTLE_READY_EVENT } from './BattleScene'
 import {
+  battleLoadingBackground,
   battleLoadingContext,
   battleLoadingStatusFrames,
+  type BattleLoadingBackground,
   type BattleLoadingContext,
 } from './battleLoadingContent'
 import { SCENE } from './shellShared'
@@ -24,11 +26,13 @@ interface BattleLoadingState {
   readonly label: string
   readonly progress: number
   readonly status: string
+  readonly backgroundKey: string
 }
 
 export class BattleLoadingScene extends Phaser.Scene {
   private battleData: BattleData = { campaignIndex: 0 }
   private loadingContext: BattleLoadingContext = battleLoadingContext(0)
+  private loadingBackground: BattleLoadingBackground = battleLoadingBackground(0)
   private levelLabel = ''
   private progress = 0
   private statusFrames: readonly string[] = battleLoadingStatusFrames(false)
@@ -46,6 +50,7 @@ export class BattleLoadingScene extends Phaser.Scene {
   init(data?: BattleLoadingData): void {
     this.battleData = data?.battleData ?? { campaignIndex: 0 }
     this.loadingContext = battleLoadingContext(this.battleData.campaignIndex)
+    this.loadingBackground = battleLoadingBackground(this.battleData.campaignIndex)
     this.levelLabel = this.loadingContext.label
     this.progress = 0
     this.statusFrames = battleLoadingStatusFrames(Boolean(this.battleData.coopSession))
@@ -54,33 +59,40 @@ export class BattleLoadingScene extends Phaser.Scene {
   }
 
   create(): void {
-    drawInkBackdrop(this)
+    this.drawBackdrop()
     const fontFamily = activeArtFont().family
 
-    this.add.text(480, 172, this.levelLabel, { fontFamily, fontSize: '24px', color: '#d9b45a' }).setOrigin(0.5)
     this.add
-      .text(480, 226, '天庭推演中', {
+      .text(72, 82, this.levelLabel, {
         fontFamily,
-        fontSize: '42px',
-        color: '#f2eddf',
-        stroke: '#3a2814',
-        strokeThickness: 5,
+        fontSize: '18px',
+        color: '#ffbf4a',
       })
-      .setOrigin(0.5)
+      .setDepth(5)
     this.add
-      .text(480, 286, this.loadingContext.context, {
+      .text(68, 154, '天庭推演中', {
         fontFamily,
-        fontSize: '20px',
-        color: '#e3cf9a',
+        fontSize: '52px',
+        color: '#fff5e3',
+        stroke: '#2a1007',
+        strokeThickness: 3,
       })
-      .setOrigin(0.5)
+      .setDepth(5)
+    this.add
+      .text(72, 226, this.loadingContext.context, {
+        fontFamily,
+        fontSize: '24px',
+        color: '#ffd58a',
+      })
+      .setDepth(5)
     this.statusText = this.add
-      .text(480, 326, this.status, { fontFamily, fontSize: '18px', color: '#c8b88f' })
-      .setOrigin(0.5)
+      .text(72, 292, this.status, { fontFamily, fontSize: '18px', color: '#ead8bd' })
+      .setDepth(5)
     this.progressText = this.add
-      .text(480, 402, '0%', { fontFamily, fontSize: '16px', color: '#f2eddf' })
-      .setOrigin(0.5)
-    this.progressBar = this.add.graphics()
+      .text(480, 456, '0%', { fontFamily, fontSize: '18px', color: '#fff5e3' })
+      .setOrigin(1, 0.5)
+      .setDepth(5)
+    this.progressBar = this.add.graphics().setDepth(5)
     this.drawProgress()
 
     this.time.addEvent({
@@ -101,6 +113,27 @@ export class BattleLoadingScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown)
     this.scene.launch(SCENE.battle, this.battleData)
     this.scene.bringToTop(SCENE.battleLoading)
+  }
+
+  private drawBackdrop(): void {
+    const { key } = this.loadingBackground
+    if (this.textures.exists(key)) {
+      const bg = this.add.image(480, 270, key)
+      const fittedScale = Math.max(960 / bg.width, 540 / bg.height)
+      bg.setScale(fittedScale * 1.035)
+      this.tweens.add({ targets: bg, scale: fittedScale, duration: 5200, ease: 'Sine.easeOut' })
+    } else {
+      this.add.rectangle(480, 270, 960, 540, 0x140905, 1)
+    }
+
+    this.add.rectangle(245, 270, 490, 540, 0x090403, 0.58).setDepth(1)
+    const accents = this.add.graphics().setDepth(4)
+    accents.lineStyle(2, 0xffa31a, 0.95)
+    accents.lineBetween(58, 72, 58, 116)
+    accents.lineBetween(58, 72, 102, 72)
+    accents.lineStyle(1, 0xffd27a, 0.36)
+    accents.lineBetween(72, 340, 326, 340)
+    addEmbers(this, { w: 960, h: 540, count: 18, depth: 3 })
   }
 
   private readonly onLoadProgress = (value: number): void => {
@@ -126,8 +159,10 @@ export class BattleLoadingScene extends Phaser.Scene {
 
   private drawProgress(): void {
     this.progressBar?.clear()
-    this.progressBar?.fillStyle(0x3a2814, 0.9).fillRoundedRect(250, 366, 460, 12, 6)
-    this.progressBar?.fillStyle(0xd9b45a, 1).fillRoundedRect(250, 366, 460 * this.progress, 12, 6)
+    this.progressBar?.fillStyle(0xfff0d2, 0.22).fillRect(72, 486, 816, 2)
+    this.progressBar?.fillStyle(0xffa31a, 1).fillRect(72, 485, 816 * this.progress, 4)
+    const markerX = 72 + 816 * this.progress
+    this.progressBar?.fillStyle(0xffd27a, 1).fillTriangle(markerX, 480, markerX + 6, 487, markerX, 494)
     this.progressText?.setText(`${Math.round(this.progress * 100)}%`)
   }
 
@@ -138,6 +173,7 @@ export class BattleLoadingScene extends Phaser.Scene {
       label: this.levelLabel,
       progress: this.progress,
       status: this.status,
+      backgroundKey: this.loadingBackground.key,
     })
   }
 }

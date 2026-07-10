@@ -16,6 +16,7 @@ import {
 } from '../net/socialClient'
 import { SCENE } from './shellShared'
 import { configureLogicalCamera } from '../systems/renderScale'
+import { BATTLE_LOADING_BACKGROUNDS } from './battleLoadingContent'
 
 // 2026-07-09 视觉重做（用户打磨反馈：素面板 → 全游戏统一的水墨×暗金基调）。
 // 逻辑/协议/验收 hook 与重做前完全一致，只换了渲染层：地图暗化作底、双线金边
@@ -122,6 +123,9 @@ export class LobbyScene extends Phaser.Scene {
   preload(): void {
     // 世界地图原画作暗化底图（玩家从地图进大厅，视觉上是同一空间的延续）。
     if (!this.textures.exists(LOBBY_BG_TEX)) this.load.image(LOBBY_BG_TEX, 'assets/extracted/worldmap/map_bg.jpg')
+    for (const background of BATTLE_LOADING_BACKGROUNDS) {
+      if (!this.textures.exists(background.key)) this.load.image(background.key, background.url)
+    }
   }
 
   create(): void {

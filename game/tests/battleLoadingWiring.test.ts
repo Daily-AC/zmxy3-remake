@@ -14,6 +14,7 @@ describe('battle loading wiring', () => {
 
   it('routes solo campaign entry through loading with nested battleData', () => {
     const worldMap = read('../src/scenes/WorldMapScene.ts')
+    expect(worldMap).toMatch(/BATTLE_LOADING_BACKGROUNDS/)
     expect(worldMap).toMatch(
       /this\.scene\.start\(SCENE\.battleLoading, \{ battleData: \{ campaignIndex \} \}\)/,
     )
@@ -22,6 +23,7 @@ describe('battle loading wiring', () => {
 
   it('routes coop entry through loading without dropping campaign or session data', () => {
     const lobby = read('../src/scenes/LobbyScene.ts')
+    expect(lobby).toMatch(/BATTLE_LOADING_BACKGROUNDS/)
     expect(lobby).toMatch(
       /this\.scene\.start\(SCENE\.battleLoading, \{\s*battleData: \{ campaignIndex: levelIdToIndex\(levelId\), coopSession \},\s*\}\)/,
     )

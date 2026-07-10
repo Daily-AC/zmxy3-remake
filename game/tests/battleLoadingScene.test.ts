@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { battleLoadingContext, battleLoadingStatusFrames } from '../src/scenes/battleLoadingContent'
+import {
+  battleLoadingBackground,
+  battleLoadingContext,
+  battleLoadingStatusFrames,
+} from '../src/scenes/battleLoadingContent'
 
 const source = () => readFileSync(new URL('../src/scenes/BattleLoadingScene.ts', import.meta.url), 'utf8')
 
@@ -37,15 +41,29 @@ describe('BattleLoadingScene', () => {
     }
   })
 
-  it('renders a zero-asset ink loading screen with the requested title and campaign label', () => {
+  it('maps L1 and L2 to warm plush key art matching the home screen', () => {
+    expect(battleLoadingBackground(0)).toEqual({
+      key: 'loading_nine_heavens',
+      url: 'assets/generated/loading-nine-heavens.webp',
+    })
+    expect(battleLoadingBackground(1)).toEqual({
+      key: 'loading_heavenly_palace',
+      url: 'assets/generated/loading-heavenly-palace.webp',
+    })
+  })
+
+  it('renders a sharp full-bleed poster loading screen with the requested title and campaign label', () => {
     const loading = source()
-    expect(loading).toMatch(/drawInkBackdrop\(this\)/)
+    expect(loading).toMatch(/this\.add\.image\(480, 270, key\)/)
+    expect(loading).toMatch(/addEmbers\(this/)
     expect(loading).toMatch(/activeArtFont\(\)\.family/)
     expect(loading).toMatch(/天庭推演中/)
     expect(loading).toMatch(/this\.loadingContext\.context/)
     expect(loading).toMatch(/battleData\.campaignIndex/)
     expect(loading).not.toMatch(/preload\s*\(/)
     expect(loading).not.toMatch(/this\.load\./)
+    expect(loading).not.toMatch(/fillRoundedRect/)
+    expect(loading).not.toMatch(/drawInkBackdrop/)
   })
 
   it('clamps real BattleScene loader progress and publishes the acceptance hook', () => {
@@ -57,6 +75,7 @@ describe('BattleLoadingScene', () => {
     expect(loading).toMatch(/label: this\.levelLabel/)
     expect(loading).toMatch(/progress: this\.progress/)
     expect(loading).toMatch(/status: this\.status/)
+    expect(loading).toMatch(/backgroundKey: this\.loadingBackground\.key/)
   })
 
   it('launches battle with the original payload, stays above it, and stops only on ready', () => {
