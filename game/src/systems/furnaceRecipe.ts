@@ -144,11 +144,11 @@ function baseItemFromEquipment(source: OriginalEquipmentRecord): Item {
 
 function resolveRawStat(raw: RawStat, rng: () => number): number {
   if (typeof raw === 'number') return raw
-  const base = Math.floor(raw.base)
-  const rand = Math.max(0, Math.floor(raw.rand))
-  const max = base + rand
-  const rolled = base + Math.floor(rng() * (rand + 1))
-  return Math.max(base, Math.min(max, rolled))
+  const roll = Math.max(0, Math.min(1, rng()))
+  if (Number.isInteger(raw.base) && Number.isInteger(raw.rand)) {
+    return raw.base + Math.round(roll * raw.rand)
+  }
+  return raw.base + roll * raw.rand
 }
 
 function equipmentEffects(source: OriginalEquipmentRecord, rng: () => number): Effect[] {
