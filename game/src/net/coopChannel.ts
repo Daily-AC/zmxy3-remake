@@ -1,12 +1,14 @@
 import {
   decodeCoopMessage,
   encodeHeroState,
+  encodeHeroHit,
   encodeHitIntent,
   encodeHitSettlement,
   encodeMonsterState,
   type CoopInboundMessage,
   type CoopOutboundMessage,
   type HeroStateSnapshot,
+  type HeroHitPayload,
   type HitIntentPayload,
   type HitSettlementPayload,
   type MonsterStateSnapshot,
@@ -77,6 +79,10 @@ export class CoopChannel {
 
   sendHitSettlement(settlement: HitSettlementPayload): boolean {
     return this.send(encodeHitSettlement(settlement))
+  }
+
+  sendHeroHit(hit: HeroHitPayload): boolean {
+    return this.send(encodeHeroHit(hit))
   }
 
   subscribe(handler: (message: CoopInboundMessage) => void): () => void {

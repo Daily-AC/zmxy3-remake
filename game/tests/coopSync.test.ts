@@ -5,6 +5,7 @@ import {
   createCoopSyncState,
   decodeCoopMessage,
   encodeCoopMessage,
+  encodeHeroHit,
   encodeHeroState,
   encodeHitIntent,
   encodeHitSettlement,
@@ -64,6 +65,14 @@ describe('coopSync wire codec', () => {
         killed: false,
       }),
       encodeLevelEvent({ kind: 'boss_defeated' }),
+      encodeHeroHit({
+        targetUserId: 'u-peer',
+        sourceMonsterId: 'monster3-1',
+        attackId: 'monster3-1:7',
+        power: 14,
+        attackKind: 'physics',
+        knockbackX: -1,
+      }),
     ]
 
     for (const message of messages) {
@@ -88,6 +97,37 @@ describe('coopSync wire codec', () => {
       type: 'level_event_ignored',
       fromUserId: 'u-other',
       reason: 'non_host_sender',
+    })
+  })
+
+  it('accepts hero-hit events only from the host and only for the local hero', () => {
+    const peerState = createCoopSyncState({ localUserId: 'u-peer', hostUserId: 'u-host' })
+    const hit = encodeHeroHit({
+      targetUserId: 'u-peer',
+      sourceMonsterId: 'monster3-1',
+      attackId: 'monster3-1:7',
+      power: 14,
+      attackKind: 'physics',
+      knockbackX: -1,
+    })
+
+    const accepted = applyCoopMessage(peerState, { ...hit, fromUserId: 'u-host' })
+    const wrongSender = applyCoopMessage(peerState, { ...hit, fromUserId: 'u-other' })
+    const wrongTarget = applyCoopMessage(peerState, {
+      ...encodeHeroHit({ ...hit.payload, targetUserId: 'u-other' }),
+      fromUserId: 'u-host',
+    })
+
+    expect(accepted.effects).toContainEqual({ type: 'hero_hit_received', hit: hit.payload })
+    expect(wrongSender.effects).toContainEqual({
+      type: 'hero_hit_ignored',
+      fromUserId: 'u-other',
+      reason: 'non_host_sender',
+    })
+    expect(wrongTarget.effects).toContainEqual({
+      type: 'hero_hit_ignored',
+      fromUserId: 'u-host',
+      reason: 'wrong_target',
     })
   })
 })
