@@ -372,9 +372,9 @@ const HERO_TEX = 'role1_0'
 export const BATTLE_READY_EVENT = 'battle-ready'
 const COMBO_BANNER_TEX = 'combo_banner_generated'
 // Weapon overlays share the body's 200x200 frame grid and registration point.
-// The original client selects ROLE1_EQUIP_<MyEquipObj.showid>; only the two
-// Wukong weapons reachable in the MVP are preloaded here.
-const MVP_WEAPON_SHOW_IDS = [1, 2] as const
+// The original client selects ROLE1_EQUIP_<MyEquipObj.showid>; showid 0 is the
+// default staff shown before an inventory weapon is equipped.
+const MVP_WEAPON_SHOW_IDS = [0, 1, 2] as const
 const HERO_ID = 1 as const // 悟空 = kagami hero curve #1 (progression.ts)
 const HERO_START_X = 480
 const BURN_TICKS = 4
@@ -1063,9 +1063,9 @@ export class BattleScene extends Phaser.Scene {
     this.registerMonsterHit1Effects()
 
     this.hero = this.add.sprite(480, GROUND_Y, HERO_TEX).setScale(HERO_SCALE).setDepth(10)
-    // Weapon overlay: frame-perfect mirror of the hero, shown only when armed.
+    // Weapon overlay: frame-perfect mirror of the hero; equip0 is the default staff.
     this.weaponSprite = this.add
-      .sprite(480, GROUND_Y, 'role1_equip1')
+      .sprite(480, GROUND_Y, 'role1_equip0')
       .setScale(HERO_SCALE)
       .setDepth(11)
       .setVisible(false)
@@ -4059,9 +4059,9 @@ export class BattleScene extends Phaser.Scene {
     const px = this.heroState.x + off.x * HERO_SCALE
     const py = this.heroState.vertical.y + off.y * HERO_SCALE
     this.hero.setPosition(px, py)
-    const weaponShowId = this.equipment.weapon ? weaponShowIdForItem(this.equipment.weapon) : null
-    const weaponTexture = weaponShowId === null ? null : `role1_equip${weaponShowId}`
-    const weaponVisible = weaponTexture !== null && this.textures.exists(weaponTexture)
+    const weaponShowId = this.equipment.weapon ? weaponShowIdForItem(this.equipment.weapon) : 0
+    const weaponTexture = `role1_equip${weaponShowId ?? 0}`
+    const weaponVisible = this.textures.exists(weaponTexture)
     this.weaponSprite.setVisible(weaponVisible)
     if (weaponVisible && this.weaponSprite.texture.key !== weaponTexture) this.weaponSprite.setTexture(weaponTexture)
     this.weaponSprite.setFrame(this.hero.frame.name)
