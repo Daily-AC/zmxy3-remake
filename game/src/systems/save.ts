@@ -42,7 +42,7 @@ import type { HeroId, HeroProgressionState } from './progression'
 import { createProgression, ProgressionTuning } from './progression'
 import type { Item, Effect } from './items'
 import type { Equipment } from './equipment'
-import { createEquipment } from './equipment'
+import { createEquipment, sanitizeEquipmentForHero } from './equipment'
 import type { Inventory } from './inventory'
 import { createInventory, addItem } from './inventory'
 import type { SkillTreeState, SchoolState, LearnedSkillEntry, BindKey, Role1TreeSkillId } from './skillTree'
@@ -168,10 +168,14 @@ export function clearGameSave(storage: SaveStorage): void {
 
 /** Rebuild live game state from a parsed save, tolerating missing/invalid sub-fields. */
 export function restoreGameState(save: GameSave): LoadedGameState {
+  const progression = decodeProgression(save.progression)
+  const equipment = decodeEquipment(save.equipment)
+  const inventory = decodeInventory(save.inventory)
+  sanitizeEquipmentForHero(equipment, inventory, progression.heroId)
   return {
-    progression: decodeProgression(save.progression),
-    equipment: decodeEquipment(save.equipment),
-    inventory: decodeInventory(save.inventory),
+    progression,
+    equipment,
+    inventory,
     skillTree: decodeSkillTree(save.skills, save.skillTreeVersion),
     soul: nonNegativeNumber((save as unknown as Record<string, unknown>).soul),
   }
@@ -322,7 +326,11 @@ function decodeItem(value: unknown): Item | null {
   }
   if (typeof value.sourceFillName === 'string') item.sourceFillName = value.sourceFillName
   if (typeof value.sourceType === 'string') item.sourceType = value.sourceType
+  if (typeof value.sourceUser === 'string') item.sourceUser = value.sourceUser
   if (typeof value.sourceQuality === 'string') item.sourceQuality = value.sourceQuality
+  if (Number.isFinite(value.sourceSaleValue)) {
+    item.sourceSaleValue = Math.max(0, Math.floor(value.sourceSaleValue as number))
+  }
   if (typeof value.sourceArray === 'string') item.sourceArray = value.sourceArray
   const effects = decodeEffects(value.effects)
   if (effects.length > 0) item.effects = effects

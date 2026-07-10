@@ -1,6 +1,11 @@
 import Phaser from 'phaser'
 import type { Item } from '../../systems/items'
-import type { EquipSlot, Equipment } from '../../systems/equipment'
+import {
+  isSupportedEquipmentForHero,
+  SUPPORTED_EQUIP_SLOTS,
+  type EquipSlot,
+  type Equipment,
+} from '../../systems/equipment'
 import { HUD_COLORS, ICON_FALLBACK_KEY } from './hudTheme'
 import { rarityCss, rarityName } from './rarity'
 import { withinRect, type Rect } from '../screenHit'
@@ -86,6 +91,8 @@ export interface BackpackWindowOptions {
   onEquip?: (item: Item) => void
   /** Click a filled equip slot on the left panel. */
   onUnequip?: (slot: EquipSlot) => void
+  /** Choose 卖掉 from a bag equipment item's action menu. */
+  onSellItem?: (item: Item) => void
   /** Click 出售白装. */
   onSell?: () => void
 }
@@ -179,6 +186,7 @@ type HitResult =
   | { kind: 'sell' }
   | { kind: 'prev' }
   | { kind: 'next' }
+  | { kind: 'action'; action: 'equip' | 'sell'; item: Item; rect: Rect }
   | { kind: 'equip'; slot: EquipSlot; item: Item; rect: Rect }
   | { kind: 'grid'; stack: BackpackStack; rect: Rect }
 const EQUIP_SLOTS: Record<EquipSlot, SlotSpec> = {
@@ -187,6 +195,7 @@ const EQUIP_SLOTS: Record<EquipSlot, SlotSpec> = {
   armor: { x: 251.7, y: 188.4, w: 50, h: 50 }, // zbfj 防具
   talisman: { x: 322.7, y: 188.4, w: 50, h: 50 }, // zbfb 法宝
 }
+const ITEM_ACTION = { w: 58, h: 22, gap: 3 }
 // No system backs these (头衔/时装) -- greyed placeholders, non-interactive.
 const TITLE_PLACEHOLDER: SlotSpec = { x: 54.1, y: 191.6, w: 50, h: 50 } // zbtx
 const FASHION_PLACEHOLDER: SlotSpec = { x: 57.7, y: 113.4, w: 50, h: 50 } // zbsz
@@ -264,7 +273,7 @@ export class BackpackWindow {
   readonly container: Phaser.GameObjects.Container
   private readonly scene: Phaser.Scene
   private readonly opts: Required<Pick<BackpackWindowOptions, 'iconKeyFor'>> &
-    Pick<BackpackWindowOptions, 'onClose' | 'onEquip' | 'onUnequip' | 'onSell'>
+    Pick<BackpackWindowOptions, 'onClose' | 'onEquip' | 'onUnequip' | 'onSellItem' | 'onSell'>
 
   private readonly nameText: Phaser.GameObjects.Text
   private readonly zdlText: Phaser.GameObjects.Text
@@ -278,6 +287,7 @@ export class BackpackWindow {
   private readonly equipLayer: Phaser.GameObjects.Container
   private readonly tabHighlight: Phaser.GameObjects.Rectangle
   private readonly gridLayer: Phaser.GameObjects.Container
+  private readonly actionLayer: Phaser.GameObjects.Container
   private tooltip?: Phaser.GameObjects.Container
 
   private stats: BackpackHeroStats = DEFAULT_STATS
@@ -291,6 +301,7 @@ export class BackpackWindow {
   // scene-level hit-testing note above SlotSpec).
   private equipHits: { slot: EquipSlot; item: Item; rect: Rect }[] = []
   private gridHits: { stack: BackpackStack; rect: Rect }[] = []
+  private actionHits: { action: 'equip' | 'sell'; item: Item; rect: Rect }[] = []
   private hoveredItem: Item | null = null
 
   constructor(scene: Phaser.Scene, opts: BackpackWindowOptions = {}) {
@@ -300,6 +311,7 @@ export class BackpackWindow {
       onClose: opts.onClose,
       onEquip: opts.onEquip,
       onUnequip: opts.onUnequip,
+      onSellItem: opts.onSellItem,
       onSell: opts.onSell,
     }
     const children: Phaser.GameObjects.GameObject[] = []
@@ -379,6 +391,8 @@ export class BackpackWindow {
       : null
 
     this.equipLayer = add(scene.add.container(0, 0))
+    this.buildPlaceholderSlot(EQUIP_SLOTS.accessory, children)
+    this.buildPlaceholderSlot(EQUIP_SLOTS.talisman, children)
     this.buildPlaceholderSlot(TITLE_PLACEHOLDER, children)
     this.buildPlaceholderSlot(FASHION_PLACEHOLDER, children)
     this.buildPlaceholderSlot(FASHION_TOGGLE_PLACEHOLDER, children)
@@ -409,6 +423,7 @@ export class BackpackWindow {
     })
 
     this.gridLayer = add(scene.add.container(0, 0))
+    this.actionLayer = add(scene.add.container(0, 0))
 
     this.soulText = add(this.makeCenteredText(SOUL_VALUE.x, SOUL_VALUE.y, SOUL_VALUE.w))
     // Sell/prev/next hotspots: resolveHit() tests SELL_BTN/PREV_BTN/NEXT_BTN
@@ -439,6 +454,9 @@ export class BackpackWindow {
 
   private resolveHit(lx: number, ly: number): HitResult | null {
     if (within(lx, ly, CLOSE)) return { kind: 'close' }
+    for (const hit of this.actionHits) {
+      if (within(lx, ly, hit.rect)) return { kind: 'action', ...hit }
+    }
     for (let i = 0; i < TAB_ORDER.length; i++) {
       const tabId = TAB_ORDER[i]
       if (DISABLED_TABS.has(tabId)) continue
@@ -474,11 +492,16 @@ export class BackpackWindow {
       case 'next':
         this.setPage(this.page + 1)
         break
+      case 'action':
+        if (hit.action === 'equip') this.opts.onEquip?.(hit.item)
+        else this.opts.onSellItem?.(hit.item)
+        this.clearItemActions()
+        break
       case 'equip':
         this.opts.onUnequip?.(hit.slot)
         break
       case 'grid':
-        if (hit.stack.item.kind === 'equip') this.opts.onEquip?.(hit.stack.item)
+        if (hit.stack.item.kind === 'equip') this.openItemActions(hit.stack.item, hit.rect)
         break
     }
   }
@@ -506,6 +529,7 @@ export class BackpackWindow {
   }
 
   close(): this {
+    this.clearItemActions()
     this.hideTooltip()
     this.container.setVisible(false)
     this.scene.input.manager.canvas.style.cursor = ''
@@ -531,6 +555,7 @@ export class BackpackWindow {
    * (装备=kind 'equip', 道具=everything else -- this project's single
    * Inventory has no separate zblist/djlist arrays like AS3, see report). */
   setInventory(stacks: BackpackStack[]): void {
+    this.clearItemActions()
     this.allStacks = stacks
     this.page = Math.min(this.page, this.totalPages())
     if (this.page < 1) this.page = 1
@@ -578,7 +603,7 @@ export class BackpackWindow {
 
   private filteredStacks(): BackpackStack[] {
     return this.tab === 'equip'
-      ? this.allStacks.filter((s) => s.item.kind === 'equip')
+      ? this.allStacks.filter((s) => isSupportedEquipmentForHero(s.item, 1))
       : this.tab === 'item'
         ? this.allStacks.filter((s) => s.item.kind !== 'equip')
         : [] // fashion/script: no backing data
@@ -658,7 +683,7 @@ export class BackpackWindow {
     this.equipHits = []
     this.weaponOverlay?.setVisible(!!this.equipment?.weapon)
     if (!this.equipment) return
-    ;(Object.keys(EQUIP_SLOTS) as EquipSlot[]).forEach((slot) => {
+    ;(SUPPORTED_EQUIP_SLOTS as readonly EquipSlot[]).forEach((slot) => {
       const item = this.equipment![slot]
       if (!item) return
       const spec = EQUIP_SLOTS[slot]
@@ -676,6 +701,7 @@ export class BackpackWindow {
   }
 
   private redrawGrid(): void {
+    this.clearItemActions()
     this.gridLayer.removeAll(true)
     this.gridHits = []
     this.hideTooltip()
@@ -691,6 +717,40 @@ export class BackpackWindow {
     // No spaces around the slash: the 30px NOWPAGE box wraps "1 / 1" onto two
     // lines (fidelity-C follow-up verdict -- single line beats wrapped).
     this.nowpageText.setText(`${this.page}/${this.totalPages()}`)
+  }
+
+  private openItemActions(item: Item, cell: Rect): void {
+    this.clearItemActions()
+    this.hideTooltip()
+    const menuH = ITEM_ACTION.h * 2 + ITEM_ACTION.gap
+    const x = Math.min(cell.x + cell.w + 4, BG_W - ITEM_ACTION.w - 4)
+    const y = Math.min(cell.y, BG_H - menuH - 4)
+    const actions: { action: 'equip' | 'sell'; label: string }[] = [
+      { action: 'equip', label: '装备' },
+      { action: 'sell', label: '卖掉' },
+    ]
+    actions.forEach(({ action, label }, index) => {
+      const rect = { x, y: y + index * (ITEM_ACTION.h + ITEM_ACTION.gap), w: ITEM_ACTION.w, h: ITEM_ACTION.h }
+      const bg = this.scene.add
+        .rectangle(rect.x, rect.y, rect.w, rect.h, HUD_COLORS.ink, 0.98)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, HUD_COLORS.gold, 0.9)
+      const text = this.scene.add
+        .text(rect.x + rect.w / 2, rect.y + rect.h / 2, label, {
+          fontSize: '13px',
+          fontStyle: 'bold',
+          color: action === 'equip' ? '#f2d48a' : '#e9b0a0',
+        })
+        .setOrigin(0.5, 0.5)
+      this.actionLayer.add(bg)
+      this.actionLayer.add(text)
+      this.actionHits.push({ action, item, rect })
+    })
+  }
+
+  private clearItemActions(): void {
+    this.actionLayer?.removeAll(true)
+    this.actionHits = []
   }
 
   private buildCell(x: number, y: number, stack: BackpackStack | undefined): void {

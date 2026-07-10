@@ -5,15 +5,39 @@
 import type { Item } from './items'
 import { Inventory, addItem, removeItem } from './inventory'
 import { applyEquipStats, BaseStats } from './effects'
+import type { HeroId } from './progression'
+import originalEquipment from '../data/original/equipment.json'
 
 export type EquipSlot = 'weapon' | 'armor' | 'accessory' | 'talisman'
 
-const SLOT_BY_SOURCE_TYPE: Record<string, EquipSlot> = {
+const SUPPORTED_SLOT_BY_SOURCE_TYPE: Record<string, EquipSlot> = {
   zbwq: 'weapon',
   zbfj: 'armor',
-  zbsp: 'accessory',
-  zbfb: 'talisman',
 }
+
+export const SUPPORTED_EQUIP_SLOTS = ['weapon', 'armor'] as const
+export type SupportedEquipSlot = (typeof SUPPORTED_EQUIP_SLOTS)[number]
+
+interface EquipmentCatalogMeta {
+  fillName: string
+  type: string
+  user: string
+}
+
+const equipmentCatalog = new Map(
+  (originalEquipment as { items: EquipmentCatalogMeta[] }).items.map((item) => [item.fillName, item]),
+)
+
+const ROLE_NAME_BY_HERO_ID: Partial<Record<HeroId, string>> = {
+  1: '悟空',
+}
+
+export type EquipEligibility =
+  | 'ok'
+  | 'not_equipment'
+  | 'missing_type'
+  | 'unsupported_slot'
+  | 'wrong_role'
 
 export interface Equipment {
   weapon: Item | null
@@ -28,12 +52,31 @@ export function createEquipment(): Equipment {
 
 export function slotForItem(item: Item): EquipSlot | null {
   if (item.kind !== 'equip') return null
-  if (!item.sourceType) return 'weapon'
-  return SLOT_BY_SOURCE_TYPE[item.sourceType] ?? null
+  const sourceType = item.sourceType ?? equipmentCatalog.get(item.sourceFillName ?? item.id)?.type
+  if (!sourceType) return null
+  return SUPPORTED_SLOT_BY_SOURCE_TYPE[sourceType] ?? null
+}
+
+export function equipEligibility(item: Item, heroId: HeroId): EquipEligibility {
+  if (item.kind !== 'equip') return 'not_equipment'
+  const catalog = equipmentCatalog.get(item.sourceFillName ?? item.id)
+  const sourceType = item.sourceType ?? catalog?.type
+  if (!sourceType) return 'missing_type'
+  if (!SUPPORTED_SLOT_BY_SOURCE_TYPE[sourceType]) return 'unsupported_slot'
+
+  const roleName = ROLE_NAME_BY_HERO_ID[heroId]
+  const sourceUser = item.sourceUser ?? catalog?.user
+  if (!roleName || sourceUser === undefined) return 'wrong_role'
+  if (sourceUser !== '' && sourceUser !== roleName) return 'wrong_role'
+  return 'ok'
+}
+
+export function isSupportedEquipmentForHero(item: Item, heroId: HeroId): boolean {
+  return equipEligibility(item, heroId) === 'ok'
 }
 
 export function equippedList(eq: Equipment): Item[] {
-  return [eq.weapon, eq.armor, eq.accessory, eq.talisman].filter((i): i is Item => i !== null)
+  return [eq.weapon, eq.armor].filter((i): i is Item => i !== null)
 }
 
 /**
@@ -43,7 +86,8 @@ export function equippedList(eq: Equipment): Item[] {
  * worn item back (rejected rather than deleting it -- see the capacity check
  * below).
  */
-export function equip(eq: Equipment, inv: Inventory, item: Item): boolean {
+export function equip(eq: Equipment, inv: Inventory, item: Item, heroId: HeroId): boolean {
+  if (equipEligibility(item, heroId) !== 'ok') return false
   const slot = slotForItem(item)
   if (!slot) return false
   if (!removeItem(inv, item.id, 1)) return false
@@ -70,11 +114,60 @@ export function equip(eq: Equipment, inv: Inventory, item: Item): boolean {
 
 /** Take the item off `slot` and return it to the inventory. */
 export function unequip(eq: Equipment, inv: Inventory, slot: EquipSlot): boolean {
+  if (!SUPPORTED_EQUIP_SLOTS.includes(slot as SupportedEquipSlot)) return false
   const cur = eq[slot]
   if (!cur) return false
   if (!addItem(inv, cur, 1).ok) return false
   eq[slot] = null
   return true
+}
+
+/**
+ * One-time save migration for the old permissive equipment model. Supported
+ * Wukong weapon/armor are moved to their source-defined slots; other-role,
+ * accessory, talisman, and source-less equipment is removed from both the
+ * loadout and bag so unfinished content cannot leak into the current game.
+ */
+export function sanitizeEquipmentForHero(
+  eq: Equipment,
+  inv: Inventory,
+  heroId: HeroId,
+): { migratedCount: number; removedCount: number } {
+  const rebuilt = createEquipment()
+  let migratedCount = 0
+  let removedCount = 0
+
+  for (const oldSlot of Object.keys(eq) as EquipSlot[]) {
+    const item = eq[oldSlot]
+    if (!item) continue
+    if (equipEligibility(item, heroId) !== 'ok') {
+      removedCount += 1
+      continue
+    }
+    const correctSlot = slotForItem(item) as SupportedEquipSlot
+    if (!rebuilt[correctSlot]) {
+      rebuilt[correctSlot] = item
+      if (correctSlot !== oldSlot) migratedCount += 1
+      continue
+    }
+    if (addItem(inv, item, 1).ok) migratedCount += 1
+    else removedCount += 1
+  }
+
+  eq.weapon = rebuilt.weapon
+  eq.armor = rebuilt.armor
+  eq.accessory = null
+  eq.talisman = null
+
+  for (let index = inv.stacks.length - 1; index >= 0; index -= 1) {
+    const stack = inv.stacks[index]
+    if (stack.item.kind !== 'equip') continue
+    if (equipEligibility(stack.item, heroId) === 'ok') continue
+    removedCount += stack.qty
+    inv.stacks.splice(index, 1)
+  }
+
+  return { migratedCount, removedCount }
 }
 
 /** Hero attack = a base value plus every equipped item's `atk` stat effects. */

@@ -319,10 +319,11 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   private buildFurnaceRecipeView(): void {
-    // 2026-07-09 用户拍板：赛内只做悟空一个角色，配方列表只展示悟空专属件 +
-    // 无角色限定件（饰品类），其余角色的配方数据保留在 furnaceRecipe 表里不动。
+    // Hackathon cut: only expose the no-book starter weapon recipe. The full
+    // recovered table remains available to data/tests, but unsupported gear,
+    // accessories and book/material loops must not leak into the live UI.
     this.furnaceRecipeView = new FurnaceRecipeView(this, {
-      recipes: listFurnaceRecipes().filter((r) => !r.role || r.role.replace(/\s/g, '') === '悟空'),
+      recipes: listFurnaceRecipes().filter((recipe) => recipe.bookFillName === 'starter_whg'),
       checkFor: (bookFillName) => canCraftRecipe(this.loaded.inventory, this.loaded.soul, bookFillName),
       onCraftSubmit: (bookFillName) => this.submitRecipeCraft(bookFillName),
       onChatSubmit: (text) => this.submitRecipeChat(text),

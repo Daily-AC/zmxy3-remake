@@ -40,6 +40,19 @@ import { removeItem } from './inventory'
  * once per sold item. */
 export const SELL_COMMON_EQUIP_SOUL_VALUE = 20
 
+const EQUIPMENT_SALE_VALUE_BY_QUALITY: Record<string, number> = {
+  '粗 糙': 10,
+  '普 通': 20,
+  '优 秀': 40,
+  '精 良': 80,
+  '史 诗': 160,
+  '传 说': 320,
+  '邪 灵': 640,
+  '渊 邪': 640,
+  '魂 器': 1280,
+  '神 器': 2560,
+}
+
 export interface SoulPurse {
   value: number
 }
@@ -83,4 +96,24 @@ export function sellCommonEquipment(inv: Inventory, purse: SoulPurse): SellCommo
   const soulGained = soldCount * SELL_COMMON_EQUIP_SOUL_VALUE
   if (soulGained > 0) addSoul(purse, soulGained)
   return { soldCount, soulGained }
+}
+
+/** Sell one selected bag equipment item, mirroring PackThings.as mdClick. */
+export function sellEquipmentItem(
+  inv: Inventory,
+  purse: SoulPurse,
+  itemId: string,
+): { sold: boolean; soulGained: number } {
+  const stack = inv.stacks.find((entry) => entry.item.id === itemId)
+  if (!stack || stack.item.kind !== 'equip') return { sold: false, soulGained: 0 }
+  const soulGained = Math.max(
+    0,
+    Math.floor(
+      stack.item.sourceSaleValue ??
+        (stack.item.sourceQuality ? EQUIPMENT_SALE_VALUE_BY_QUALITY[stack.item.sourceQuality] ?? 0 : 0),
+    ),
+  )
+  if (!removeItem(inv, itemId, 1)) return { sold: false, soulGained: 0 }
+  addSoul(purse, soulGained)
+  return { sold: true, soulGained }
 }

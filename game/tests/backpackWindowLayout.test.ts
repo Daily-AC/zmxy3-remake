@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { BackpackHeroStats, BackpackWindow as BackpackWindowType } from '../src/ui/hud/BackpackWindow'
+import type {
+  BackpackHeroStats,
+  BackpackWindow as BackpackWindowType,
+  BackpackWindowOptions,
+} from '../src/ui/hud/BackpackWindow'
 import { createEquipment } from '../src/systems/equipment'
 import type { Item } from '../src/systems/items'
 
@@ -180,9 +184,9 @@ function makeScene() {
   }
 }
 
-async function makeBackpack(): Promise<BackpackWindowType> {
+async function makeBackpack(opts: BackpackWindowOptions = {}): Promise<BackpackWindowType> {
   const { BackpackWindow } = await import('../src/ui/hud/BackpackWindow')
-  return new BackpackWindow(makeScene() as never)
+  return new BackpackWindow(makeScene() as never, opts)
 }
 
 const BASE_STATS: BackpackHeroStats = {
@@ -215,7 +219,32 @@ function mockWeaponItem(): Item {
   // 'ptdxzg' (普通的行者棍) is one of the 31 zbwq ids in BackpackWindow's
   // WEAPON_ITEM_IDS -- see equipment.json / furnaceRecipe.ts's `id: source.
   // fillName`.
-  return { id: 'ptdxzg', name: '普通的行者棍', kind: 'equip', rarity: 1 }
+  return {
+    id: 'ptdxzg',
+    name: '普通的行者棍',
+    kind: 'equip',
+    rarity: 1,
+    sourceType: 'zbwq',
+    sourceUser: '悟空',
+  }
+}
+
+const SHA_SENG_WEAPON: Item = {
+  id: 'ptdyyc',
+  name: '普通的月牙铲',
+  kind: 'equip',
+  rarity: 1,
+  sourceType: 'zbwq',
+  sourceUser: '沙僧',
+}
+
+const ACCESSORY: Item = {
+  id: 'xhz',
+  name: '宣花坠',
+  kind: 'equip',
+  rarity: 2,
+  sourceType: 'zbsp',
+  sourceUser: '',
 }
 
 describe('BackpackWindow layout invariants', () => {
@@ -315,6 +344,55 @@ describe('BackpackWindow layout invariants', () => {
     const equipLayer = (backpack as unknown as { equipLayer: FakeContainer }).equipLayer
     const icon = equipLayer.children.find((c): c is FakeImage => c instanceof FakeImage)
     expect(icon?.key).toBe('icon_ptdxzg')
+  })
+
+  it('does not expose unsupported-role, accessory, or talisman equipment in the grid', async () => {
+    const backpack = await makeBackpack()
+    backpack.setInventory([
+      { item: mockWeaponItem(), qty: 1 },
+      { item: SHA_SENG_WEAPON, qty: 1 },
+      { item: ACCESSORY, qty: 1 },
+    ])
+
+    const filtered = (backpack as unknown as { filteredStacks: () => { item: Item; qty: number }[] }).filteredStacks()
+    expect(filtered.map((stack) => stack.item.id)).toEqual(['ptdxzg'])
+  })
+
+  it('renders and enables only weapon and armor equipped slots', async () => {
+    const backpack = await makeBackpack()
+    const eq = createEquipment()
+    eq.weapon = mockWeaponItem()
+    eq.accessory = ACCESSORY
+    backpack.setEquipment(eq)
+
+    const hits = (backpack as unknown as { equipHits: { slot: string }[] }).equipHits
+    expect(hits.map((hit) => hit.slot)).toEqual(['weapon'])
+  })
+
+  it('opens item actions before equipping and invokes single-item sell explicitly', async () => {
+    const onEquip = vi.fn()
+    const onSellItem = vi.fn()
+    const backpack = await makeBackpack({ onEquip, onSellItem })
+    backpack.setInventory([{ item: mockWeaponItem(), qty: 1 }])
+    backpack.open()
+
+    const pointerDown = (backpack as unknown as { onPointerDown: (pointer: { x: number; y: number }) => void }).onPointerDown
+    pointerDown({ x: 102.5 + 405.9 + 25, y: 21.5 + 99.1 + 25 })
+
+    expect(onEquip).not.toHaveBeenCalled()
+    expect(onSellItem).not.toHaveBeenCalled()
+    const actionHits = (backpack as unknown as {
+      actionHits: { action: 'equip' | 'sell'; rect: { x: number; y: number; w: number; h: number } }[]
+    }).actionHits
+    expect(actionHits.map((hit) => hit.action)).toEqual(['equip', 'sell'])
+
+    const sell = actionHits.find((hit) => hit.action === 'sell')!
+    pointerDown({
+      x: 102.5 + sell.rect.x + sell.rect.w / 2,
+      y: 21.5 + sell.rect.y + sell.rect.h / 2,
+    })
+    expect(onSellItem).toHaveBeenCalledWith(mockWeaponItem())
+    expect(onEquip).not.toHaveBeenCalled()
   })
 
   it('shows the logged-in social username instead of the hero name, falling back when logged out', async () => {

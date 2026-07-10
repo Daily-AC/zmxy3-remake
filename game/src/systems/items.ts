@@ -12,7 +12,11 @@ export interface Item {
   rarity: 1 | 2 | 3
   sourceFillName?: string
   sourceType?: string
+  /** Original MyEquipObj.user. Empty means the item is usable by every role. */
+  sourceUser?: string
   sourceQuality?: string
+  /** Original MyEquipObj.getValue()/transValue() soul sale value. */
+  sourceSaleValue?: number
   sourceArray?: string
   effects?: Effect[]
 }
