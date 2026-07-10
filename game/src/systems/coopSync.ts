@@ -1,3 +1,5 @@
+import type { AttackKind } from './heroScale'
+
 export type CoopRole = 'host' | 'peer'
 export type Facing = -1 | 1
 
@@ -85,12 +87,23 @@ export interface LevelEventPayload {
   kind: 'boss_defeated'
 }
 
-export type CoopEventName = 'hit_intent' | 'hit_settlement' | 'level_event'
+export interface HeroHitPayload {
+  targetUserId: string
+  sourceMonsterId: string
+  attackId: string
+  /** Raw AS3 power. The target applies its own equipment defense locally. */
+  power: number
+  attackKind: AttackKind
+  knockbackX: Facing
+}
+
+export type CoopEventName = 'hit_intent' | 'hit_settlement' | 'level_event' | 'hero_hit'
 
 export type CoopEventMessage =
   | { type: 'event'; name: 'hit_intent'; payload: HitIntentPayload; fromUserId?: string }
   | { type: 'event'; name: 'hit_settlement'; payload: HitSettlementPayload; fromUserId?: string }
   | { type: 'event'; name: 'level_event'; payload: LevelEventPayload; fromUserId?: string }
+  | { type: 'event'; name: 'hero_hit'; payload: HeroHitPayload; fromUserId?: string }
 
 export type CoopOutboundMessage = CoopStateMessage | CoopEventMessage
 export type CoopInboundMessage = CoopOutboundMessage
@@ -124,6 +137,8 @@ export type CoopSyncEffect =
   | { type: 'hit_settlement_ignored'; fromUserId: string; reason: 'non_host_sender' }
   | { type: 'level_event_received'; kind: LevelEventPayload['kind'] }
   | { type: 'level_event_ignored'; fromUserId: string; reason: 'non_host_sender' }
+  | { type: 'hero_hit_received'; hit: HeroHitPayload }
+  | { type: 'hero_hit_ignored'; fromUserId: string; reason: 'non_host_sender' | 'wrong_target' }
   | {
       type: 'hit_settlement_created'
       targetMonsterId: string
@@ -207,6 +222,14 @@ export function encodeLevelEvent(payload: LevelEventPayload): CoopEventMessage {
   }
 }
 
+export function encodeHeroHit(payload: HeroHitPayload): CoopEventMessage {
+  return {
+    type: 'event',
+    name: 'hero_hit',
+    payload: { ...payload },
+  }
+}
+
 export function encodeCoopMessage(message: CoopOutboundMessage): string {
   return JSON.stringify(message)
 }
@@ -255,6 +278,16 @@ export function decodeCoopMessage(raw: unknown): CoopInboundMessage | null {
       return {
         type: 'event',
         name: 'level_event',
+        payload,
+        ...(typeof obj.fromUserId === 'string' ? { fromUserId: obj.fromUserId } : {}),
+      }
+    }
+    if (obj.name === 'hero_hit') {
+      const payload = decodeHeroHit(obj.payload)
+      if (!payload) return null
+      return {
+        type: 'event',
+        name: 'hero_hit',
         payload,
         ...(typeof obj.fromUserId === 'string' ? { fromUserId: obj.fromUserId } : {}),
       }
@@ -317,6 +350,7 @@ export function applyCoopMessage(
   if (message.type === 'state') return applyStateMessage(state, message)
   if (message.name === 'hit_intent') return applyHitIntent(state, message.payload, options)
   if (message.name === 'level_event') return applyLevelEvent(state, message)
+  if (message.name === 'hero_hit') return applyHeroHit(state, message)
   return applyHitSettlement(state, message)
 }
 
@@ -543,6 +577,29 @@ function applyLevelEvent(state: CoopSyncState, message: Extract<CoopEventMessage
   }
 }
 
+function applyHeroHit(state: CoopSyncState, message: Extract<CoopEventMessage, { name: 'hero_hit' }>): CoopApplyResult {
+  const fromUserId = message.fromUserId ?? state.hostUserId
+  if (fromUserId !== state.hostUserId) {
+    return {
+      state,
+      effects: [{ type: 'hero_hit_ignored', fromUserId, reason: 'non_host_sender' }],
+      outgoing: [],
+    }
+  }
+  if (message.payload.targetUserId !== state.localUserId) {
+    return {
+      state,
+      effects: [{ type: 'hero_hit_ignored', fromUserId, reason: 'wrong_target' }],
+      outgoing: [],
+    }
+  }
+  return {
+    state,
+    effects: [{ type: 'hero_hit_received', hit: { ...message.payload } }],
+    outgoing: [],
+  }
+}
+
 function stateSender(message: CoopStateMessage, state: CoopSyncState): string {
   if (message.fromUserId) return message.fromUserId
   if (message.payload.coopType === 'hero_state') return message.payload.hero.userId
@@ -621,6 +678,28 @@ function decodeHitSettlement(value: unknown): HitSettlementPayload | null {
 function decodeLevelEvent(value: unknown): LevelEventPayload | null {
   if (!isRecord(value) || value.kind !== 'boss_defeated') return null
   return { kind: 'boss_defeated' }
+}
+
+function decodeHeroHit(value: unknown): HeroHitPayload | null {
+  if (!isRecord(value)) return null
+  if (
+    typeof value.targetUserId !== 'string' ||
+    typeof value.sourceMonsterId !== 'string' ||
+    typeof value.attackId !== 'string' ||
+    !isFiniteNumber(value.power) ||
+    (value.attackKind !== 'physics' && value.attackKind !== 'magic') ||
+    !isFacing(value.knockbackX)
+  ) {
+    return null
+  }
+  return {
+    targetUserId: value.targetUserId,
+    sourceMonsterId: value.sourceMonsterId,
+    attackId: value.attackId,
+    power: value.power,
+    attackKind: value.attackKind,
+    knockbackX: value.knockbackX,
+  }
 }
 
 function isHeroStateSnapshot(value: unknown): value is HeroStateSnapshot {

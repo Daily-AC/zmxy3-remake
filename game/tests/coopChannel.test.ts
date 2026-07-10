@@ -8,6 +8,7 @@ import {
 import type { ServerMessage, SocialRoomConnection } from '../src/net/socialClient'
 import {
   encodeHeroState,
+  encodeHeroHit,
   encodeHitIntent,
   encodeMonsterState,
   type CoopInboundMessage,
@@ -81,6 +82,16 @@ describe('CoopChannel', () => {
         clientTimeMs: 1_125,
       }),
     ).toBe(true)
+    expect(
+      channel.sendHeroHit({
+        targetUserId: 'u-peer',
+        sourceMonsterId: 'monster3-1',
+        attackId: 'monster3-1:7',
+        power: 14,
+        attackKind: 'physics',
+        knockbackX: -1,
+      }),
+    ).toBe(true)
 
     expect(transport.sent).toEqual([
       encodeHeroState(hero, 1, 1_000),
@@ -92,6 +103,14 @@ describe('CoopChannel', () => {
         damage: 35,
         skillId: 'hit3',
         clientTimeMs: 1_125,
+      }),
+      encodeHeroHit({
+        targetUserId: 'u-peer',
+        sourceMonsterId: 'monster3-1',
+        attackId: 'monster3-1:7',
+        power: 14,
+        attackKind: 'physics',
+        knockbackX: -1,
       }),
     ])
   })
