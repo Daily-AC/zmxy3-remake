@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   NORMAL_ATTACK_COEFFICIENT,
   NORMAL_ATTACK_COMBO_HITS,
-  NORMAL_ATTACK_HIT_DURATION_MS,
+  NORMAL_ATTACK_DURATION_MS,
   calculateHurt,
   calculateNormalAttackPower,
   applyPhysicsDefense,
@@ -22,11 +22,11 @@ import {
 // and line numbers. These are NOT kagami's TS values (kagami's own
 // HeroNormalAttackSystem.ts hardcodes flat 30-34 unrelated to atk).
 const REAL_COEFFICIENT: Record<NormalAttackHit, number> = {
-  hit1: 0.707,
-  hit2: 0.707,
-  hit3: 0.707,
-  hit4: 1.183,
-  hit5: 1.304,
+  hit1: 1,
+  hit2: 1,
+  hit3: 1,
+  hit4: 1,
+  hit5: 1,
 }
 
 describe('normal-attack formula vs. decompiled export.hero.Role1.as getRealPower2()', () => {
@@ -95,7 +95,10 @@ describe('defense mitigation, both directions (base.BaseMonster.as getRealHurt()
 describe('DPS / kill-time viability model (self-consistent, recomputable)', () => {
   it('simulateComboDps: dps is exactly damagePerCombo / comboDurationSeconds', () => {
     const result = simulateComboDps(200, 30)
-    expect(result.comboDurationMs).toBe(NORMAL_ATTACK_HIT_DURATION_MS * 5)
+    expect(result.comboDurationMs).toBeCloseTo(
+      NORMAL_ATTACK_COMBO_HITS.reduce((sum, hit) => sum + NORMAL_ATTACK_DURATION_MS[hit], 0),
+      6,
+    )
     expect(result.dps).toBeCloseTo(result.damagePerCombo / (result.comboDurationMs / 1000), 9)
   })
 

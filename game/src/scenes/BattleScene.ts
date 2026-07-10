@@ -60,6 +60,7 @@ import {
   equippedList,
   isSupportedEquipmentForHero,
   slotForItem,
+  weaponShowIdForItem,
 } from '../systems/equipment'
 import {
   HeroIdentityState,
@@ -114,6 +115,7 @@ import {
   currentSubStage,
   currentSubStageDoor,
   horizontalProgressMaxX,
+  horizontalHeroMaxX,
   updateLevelSpawn,
   updateContinuousSpawner,
   getActiveWaveRoster,
@@ -217,6 +219,7 @@ import { DialogueBox } from '../ui/DialogueBox'
 import {
   HUD_TEXTURES,
   HUD_ICONS,
+  WORLD_DROP_ICONS,
   ONLINE_TEXTURES,
   ICON_FALLBACK_KEY,
   FloatKind,
@@ -229,6 +232,7 @@ import {
   role1EffectForAction,
   role1EffectFrameKey,
   role1EffectFrameUrl,
+  resolveRole1EffectPlacement,
   type Role1EffectAction,
 } from '../data/role1Effects'
 import {
@@ -367,16 +371,17 @@ const HERO_HURTBOX_H = 150
 const HERO_TEX = 'role1_0'
 export const BATTLE_READY_EVENT = 'battle-ready'
 const COMBO_BANNER_TEX = 'combo_banner_generated'
-// Weapon overlay sheet: same 200×200 grid + same action frames as role1_0, with
-// ZERO offset (art-verified: the grip lands in the fist). Only 8 weapon skins
-// exist (EQUIP_6/7 are absent in every pack); Stage A uses the default EQUIP_0.
-const WEAPON_TEX = 'role1_equip0'
+// Weapon overlays share the body's 200x200 frame grid and registration point.
+// The original client selects ROLE1_EQUIP_<MyEquipObj.showid>; only the two
+// Wukong weapons reachable in the MVP are preloaded here.
+const MVP_WEAPON_SHOW_IDS = [1, 2] as const
 const HERO_ID = 1 as const // 悟空 = kagami hero curve #1 (progression.ts)
 const HERO_START_X = 480
 const BURN_TICKS = 4
 const BURN_INTERVAL_MS = 260
 const FREEZE_MS = 1200
 const NPC_TEX = 'laojun'
+const BATTLE_NPC_ENABLED = false
 const HERO_SCALE = 1.5
 const NPC_SCALE = 1.0
 // 太上老君 sheet: 1800×2100, 6 cols × 7 rows of 300px (12.swf Monster65 boss).
@@ -395,6 +400,9 @@ const FLOOR_TOP_Y = 356
 const MIN_X = 90
 const MAX_X = 1460
 const WORLD_W = 1560
+const VIEWPORT_W = 960
+const VIEWPORT_H = 540
+const HORIZONTAL_HERO_RIGHT_INSET = 40
 const BG11_AS3_X_OFFSET = -20
 const BG11_SYMBOL_BOUNDS = { left: -59, top: -2370, right: 1073, bottom: 681 } as const
 const LEVEL1_CLOUD_PLATFORM_TOP_Y = -1800
@@ -609,6 +617,7 @@ export function role1AttackEffectForSwing(
   comboStage: number,
 ): Role1EffectAction | null {
   if (currentAttackId === previousAttackId) return null
+  if (comboStage === 0) return 'hit3' // official Wukong air attack uses hit3/Role1Bullet3
   const action = COMBO_STAGE_HIT[comboStage]
   if (!action) return null
   return action === 'hit2' ? 'hit1' : action
@@ -827,6 +836,7 @@ export class BattleScene extends Phaser.Scene {
   private playedHitIds = new Set<number>()
   private readonly floatingTextLanes = new FloatingTextLaneAllocator()
   private bgmStarted = false
+  private bgmUnlockQueued = false
   private injected: HeroEdges = { ...NO_EDGES }
 
   // NPC / dialogue
@@ -898,6 +908,7 @@ export class BattleScene extends Phaser.Scene {
   // Equipment / hero combat state
   private equipment: Equipment = createEquipment()
   private weaponSprite!: Phaser.GameObjects.Sprite
+  private attachedRole1Effects = new Map<Phaser.GameObjects.Sprite, { action: Role1EffectAction; facing: -1 | 1 }>()
   // Unified hero identity: level/exp (progression) + live hp/death (heroCombat),
   // with equipment layering atk/def on top. Created in create().
   private identity!: HeroIdentityState
@@ -926,10 +937,12 @@ export class BattleScene extends Phaser.Scene {
       frameWidth: roleData.sheet.cellW,
       frameHeight: roleData.sheet.cellH,
     })
-    this.load.spritesheet(WEAPON_TEX, 'assets/extracted/role1_equip0.png', {
-      frameWidth: roleData.sheet.cellW,
-      frameHeight: roleData.sheet.cellH,
-    })
+    for (const showId of MVP_WEAPON_SHOW_IDS) {
+      this.load.spritesheet(`role1_equip${showId}`, `assets/extracted/role1_equip${showId}.png`, {
+        frameWidth: roleData.sheet.cellW,
+        frameHeight: roleData.sheet.cellH,
+      })
+    }
     this.load.spritesheet(NPC_TEX, 'assets/extracted/npc/laojun_sheet.png', {
       frameWidth: NPC_CELL,
       frameHeight: NPC_CELL,
@@ -996,7 +1009,7 @@ export class BattleScene extends Phaser.Scene {
     }
     // Real battle-HUD art: RoleInfo avatar, boss bar, backpack window/cell,
     // item icons, and Online-sourced skill icons.
-    for (const { key, url } of [...HUD_TEXTURES, ...HUD_ICONS, ...ONLINE_TEXTURES]) {
+    for (const { key, url } of [...HUD_TEXTURES, ...HUD_ICONS, ...WORLD_DROP_ICONS, ...ONLINE_TEXTURES]) {
       this.load.image(key, url)
     }
     const audio: Record<string, string> = {
@@ -1033,7 +1046,7 @@ export class BattleScene extends Phaser.Scene {
     this.hero = this.add.sprite(480, GROUND_Y, HERO_TEX).setScale(HERO_SCALE).setDepth(10)
     // Weapon overlay: frame-perfect mirror of the hero, shown only when armed.
     this.weaponSprite = this.add
-      .sprite(480, GROUND_Y, WEAPON_TEX)
+      .sprite(480, GROUND_Y, 'role1_equip1')
       .setScale(HERO_SCALE)
       .setDepth(11)
       .setVisible(false)
@@ -1041,6 +1054,7 @@ export class BattleScene extends Phaser.Scene {
       .sprite(NPC_X + NPC_OFFSET.x * NPC_SCALE, GROUND_Y + NPC_OFFSET.y * NPC_SCALE, NPC_TEX)
       .setScale(NPC_SCALE)
       .setDepth(9)
+      .setVisible(BATTLE_NPC_ENABLED)
     this.npc.play(NPC_ANIM_PREFIX + 'wait')
 
     this.cameras.main.setBounds(0, 0, WORLD_W, 540)
@@ -1752,7 +1766,12 @@ export class BattleScene extends Phaser.Scene {
     if (this.level1Chain) {
       const stage = currentSubStage(this.level1Chain)
       const authorityMaxX = stage.mode === 'horizontal'
-        ? horizontalProgressMaxX(this.levelState, stage.bounds.right)
+        ? horizontalHeroMaxX(
+            this.levelState,
+            stage.bounds.right,
+            VIEWPORT_W,
+            HORIZONTAL_HERO_RIGHT_INSET,
+          )
         : stage.bounds.right
       const maxX = stage.mode === 'horizontal' && this.coopSession && !this.coopSession.isHost
         ? Math.min(stage.bounds.right, this.coopSyncState?.hostProgressMaxX ?? stage.heroStart.x)
@@ -1855,16 +1874,21 @@ export class BattleScene extends Phaser.Scene {
       stage.mode === 'climb'
         ? computeBg11ClimbPlacement()
         : { x: stage.bounds.left, y: stage.bounds.top, scrollFactorX: 0.35, scrollFactorY: 0 }
-    const cameraBounds = stage.mode === 'climb' ? computeLevel1ClimbCameraBounds(stage.bounds) : stage.bounds
+    const isClimb = stage.mode === 'climb'
+    const cameraBounds = isClimb ? computeLevel1ClimbCameraBounds(stage.bounds) : stage.bounds
     this.cameras.main.setBounds(
       cameraBounds.left,
       cameraBounds.top,
       cameraBounds.right - cameraBounds.left,
       cameraBounds.bottom - cameraBounds.top,
     )
+    this.cameras.main.startFollow(this.hero, true, 0.1, isClimb ? 0.1 : 0)
+    if (!isClimb) {
+      this.updateHorizontalCameraLock()
+      this.cameras.main.setScroll(this.cameras.main.scrollX, 0)
+    }
     // 爬塔段背景 = 生图柱墙 tileSprite（2026-07-10 换装，替代 bg11 云海——
     // 原版此段是云纹雕柱塔身）；bg11 仍是 sl12/13 与其他关卡的 bgBase 底。
-    const isClimb = stage.mode === 'climb'
     if (isClimb) {
       const background = climbBackgroundVisibility(this.textures.exists('pillar_wall'))
       if (!this.pillarBg && background.pillar) {
@@ -2183,7 +2207,7 @@ export class BattleScene extends Phaser.Scene {
     const ready = advanceWaveSpawnQueue(this.pendingWaveSpawns, delta, availableSlots)
     ready.forEach((spec: MonsterSpawnSpec, index) => {
       const x = spec.x ?? Math.min(bounds.right - 120, Math.max(bounds.left + 120, 720 + index * 190))
-      const entity = this.spawnEntity(spec.species, spec.stats, x, false)
+      const entity = this.spawnEntity(spec.species, spec.stats, x, false, spec.y)
       if (MINIBOSS_SPECIES.has(spec.species)) {
         this.activeMiniBoss = entity
         this.showToast(`BOSS · ${MONSTER_NAMES[spec.species] ?? spec.species}`, '#ff9a5a')
@@ -2242,8 +2266,26 @@ export class BattleScene extends Phaser.Scene {
       // placeholder occupied (~150px tall).
       const swirl = this.add.sprite(0, -10, 'transferwind_1').setScale(1.4)
       swirl.play('transferwind')
-      const label = this.add.text(0, -95, '↑ 传送', { fontSize: '16px', color: '#dff0ff', fontStyle: 'bold' }).setOrigin(0.5)
-      this.portal = this.add.container(cx, cy, [swirl, label]).setDepth(7)
+      const arrow = this.add
+        .text(0, -112, '↑', {
+          fontSize: '42px',
+          color: '#ffffff',
+          fontStyle: 'bold',
+          stroke: '#1768a8',
+          strokeThickness: 8,
+        })
+        .setOrigin(0.5)
+      const label = this.add
+        .text(0, -82, '传送', {
+          fontSize: '18px',
+          color: '#ffffff',
+          fontStyle: 'bold',
+          stroke: '#16466b',
+          strokeThickness: 5,
+        })
+        .setOrigin(0.5)
+      this.portal = this.add.container(cx, cy, [swirl, arrow, label]).setDepth(7)
+      this.tweens.add({ targets: arrow, y: -122, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
     }
     this.portal.setPosition(cx, cy).setVisible(true)
     // "进入下一关" is wrong wording once this is the last ACTIVE campaign
@@ -2374,6 +2416,7 @@ export class BattleScene extends Phaser.Scene {
       .text(NPC_X, GROUND_Y - 150, NPC_NAME, { fontSize: '16px', color: '#d9c07a' })
       .setOrigin(0.5)
       .setDepth(20)
+      .setVisible(BATTLE_NPC_ENABLED)
     this.promptText = this.add
       .text(NPC_X, GROUND_Y - 125, '↑ 对话', { fontSize: '14px', color: '#ffffff' })
       .setOrigin(0.5)
@@ -2747,10 +2790,12 @@ export class BattleScene extends Phaser.Scene {
     this.syncMpMax()
     const edges = this.collectEdges()
     const jumped = edges.pressJump && this.heroState.vertical.grounded
+    this.updateHorizontalCameraLock()
     this.heroConfig.maxX = this.currentHeroBounds().maxX
     advanceHero(this.heroState, edges, delta, this.heroConfig)
     if (jumped) this.playSfx('heroJump', 0.4)
     this.spawnHeroSwingEffect()
+    this.updateAttachedRole1Effects()
 
     // Hero melee: push combo damage into every monster the swing overlaps.
     this.resolveHeroHits()
@@ -2994,7 +3039,6 @@ export class BattleScene extends Phaser.Scene {
     }
     if (firstHit && !this.playedHitIds.has(s.attackId)) {
       this.playedHitIds.add(s.attackId)
-      this.playSfx(this.hitSfxKey(s.combo.stage), 0.5)
       this.rollHitProcs(firstHit)
       this.onLocalHitFx()
     }
@@ -3024,15 +3068,14 @@ export class BattleScene extends Phaser.Scene {
     )
     if (!action) return
     this.lastAttackEffectId = this.heroState.attackId
-    const center = this.heroVisualCenter()
-    const forward = action === 'hit3' ? 54 : 72
-    this.spawnRole1Effect(
+    this.playSfx(this.hitSfxKey(this.heroState.combo.stage), 0.5)
+    const facing = this.heroState.facing as -1 | 1
+    const placement = resolveRole1EffectPlacement(
       action,
-      center.x + this.heroState.facing * forward,
-      center.y - 10,
-      this.heroState.facing,
-      false,
+      { x: this.heroState.x, y: this.heroState.vertical.y },
+      facing,
     )
+    this.spawnRole1Effect(action, placement.x, placement.y, facing, false, placement)
   }
 
   /** 连击横幅 v2（2026-07-10 用户打回"人机"版重做，酷优先）：斜切墨条 +
@@ -3119,21 +3162,74 @@ export class BattleScene extends Phaser.Scene {
     })
   }
 
-  private spawnRole1Effect(action: string, x: number, y: number, facing: number, shake = true): void {
+  private spawnRole1Effect(
+    action: string,
+    x: number,
+    y: number,
+    facing: number,
+    shake = true,
+    placement?: { originX: number; originY: number; flipX: boolean },
+  ): void {
     const spec = role1EffectForAction(action)
     if (!spec) return
     const effectAction = action as Role1EffectAction
     const sprite = this.add
       .sprite(x, y, role1EffectFrameKey(effectAction, 1))
       .setDepth(15)
-      .setScale((facing >= 0 ? 1 : -1) * spec.scale, spec.scale)
+      .setScale(spec.scale)
+      .setFlipX(placement?.flipX ?? facing >= 0)
+    if (placement) sprite.setDisplayOrigin(placement.originX, placement.originY)
+    if (placement && spec.followAnchor) {
+      this.attachedRole1Effects.set(sprite, { action: effectAction, facing: facing as -1 | 1 })
+    }
     const animKey = `role1_fx_anim_${effectAction}`
     sprite.play(animKey)
-    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.destroy())
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      this.attachedRole1Effects.delete(sprite)
+      sprite.destroy()
+    })
     this.time.delayedCall(Math.ceil((spec.frames / spec.fps) * 1000) + 200, () => {
-      if (sprite.active) sprite.destroy()
+      if (sprite.active) {
+        this.attachedRole1Effects.delete(sprite)
+        sprite.destroy()
+      }
     })
     if (shake) this.cameras.main.shake(70, 0.0022)
+  }
+
+  private updateAttachedRole1Effects(): void {
+    for (const [sprite, attached] of this.attachedRole1Effects) {
+      if (!sprite.active) {
+        this.attachedRole1Effects.delete(sprite)
+        continue
+      }
+      const placement = resolveRole1EffectPlacement(
+        attached.action,
+        { x: this.heroState.x, y: this.heroState.vertical.y },
+        attached.facing,
+      )
+      sprite
+        .setPosition(placement.x, placement.y)
+        .setDisplayOrigin(placement.originX, placement.originY)
+        .setFlipX(placement.flipX)
+    }
+  }
+
+  private updateHorizontalCameraLock(): void {
+    if (!this.level1Chain) return
+    const stage = currentSubStage(this.level1Chain)
+    if (stage.mode !== 'horizontal') return
+    const localCenterMax = horizontalProgressMaxX(this.levelState, stage.bounds.right)
+    const peerHeroMax = this.coopSession && !this.coopSession.isHost
+      ? this.coopSyncState?.hostProgressMaxX
+      : undefined
+    const cameraCenterMax = peerHeroMax === undefined
+      ? localCenterMax
+      : Math.min(stage.bounds.right, peerHeroMax - VIEWPORT_W / 2 + HORIZONTAL_HERO_RIGHT_INSET)
+    const right = Math.min(stage.bounds.right, Math.max(stage.heroStart.x, cameraCenterMax)) + VIEWPORT_W / 2
+    const width = Math.max(VIEWPORT_W, right - stage.bounds.left)
+    this.cameras.main.setBounds(stage.bounds.left, 0, width, VIEWPORT_H)
+    this.cameras.main.setScroll(this.cameras.main.scrollX, 0)
   }
 
   private rollHitProcs(target: MonsterEntity): void {
@@ -3786,7 +3882,12 @@ export class BattleScene extends Phaser.Scene {
       return this.add.container(drop.x, drop.y, [icon]).setDepth(8)
     }
     const visual = dropItemVisualSpec(drop.item.rarity)
-    const iconKey = this.textures.exists('icon_' + drop.item.id) ? 'icon_' + drop.item.id : ICON_FALLBACK_KEY
+    const dropIconKey = 'drop_icon_' + drop.item.id
+    const iconKey = this.textures.exists(dropIconKey)
+      ? dropIconKey
+      : this.textures.exists('icon_' + drop.item.id)
+        ? 'icon_' + drop.item.id
+        : ICON_FALLBACK_KEY
     const icon = this.add.image(0, 0, iconKey)
     icon.setScale(Math.min(1, visual.iconMaxSize / Math.max(icon.width, icon.height)))
     return this.add.container(drop.x, drop.y, [icon]).setDepth(8)
@@ -3916,10 +4017,11 @@ export class BattleScene extends Phaser.Scene {
     const px = this.heroState.x + off.x * HERO_SCALE
     const py = this.heroState.vertical.y + off.y * HERO_SCALE
     this.hero.setPosition(px, py)
-    // The shipped milestone has one Wukong weapon overlay skin, so every
-    // supported weapon currently shares that appearance. Visibility still
-    // follows the real weapon slot: bare-handed means no overlay.
-    this.weaponSprite.setVisible(Boolean(this.equipment.weapon))
+    const weaponShowId = this.equipment.weapon ? weaponShowIdForItem(this.equipment.weapon) : null
+    const weaponTexture = weaponShowId === null ? null : `role1_equip${weaponShowId}`
+    const weaponVisible = weaponTexture !== null && this.textures.exists(weaponTexture)
+    this.weaponSprite.setVisible(weaponVisible)
+    if (weaponVisible && this.weaponSprite.texture.key !== weaponTexture) this.weaponSprite.setTexture(weaponTexture)
     this.weaponSprite.setFrame(this.hero.frame.name)
     this.weaponSprite.setFlipX(this.heroState.facing === 1)
     this.weaponSprite.setAngle(this.hero.angle)
@@ -4152,6 +4254,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private updateNpcUi(): void {
+    if (!BATTLE_NPC_ENABLED) return
     const online = this.npcClient.isOpen()
     this.npcTag.setText(online ? NPC_NAME : `${NPC_NAME}（闭关中）`)
     this.npcTag.setColor(online ? '#d9c07a' : '#7a7f95')
@@ -4162,6 +4265,7 @@ export class BattleScene extends Phaser.Scene {
   // ---------- dialogue ----------
 
   private tryOpenDialogue(): void {
+    if (!BATTLE_NPC_ENABLED) return
     if (this.dialogue.isOpen) return
     if (Math.abs(this.heroState.x - NPC_X) >= DIALOGUE_RANGE) return
     if (!this.npcClient.isOpen()) {
@@ -4182,16 +4286,29 @@ export class BattleScene extends Phaser.Scene {
 
   private startAudioOnFirstInput(): void {
     const start = (): void => {
-      if (this.bgmStarted) return
-      this.bgmStarted = true
-      this.sound.add('bgm', { loop: true, volume: 0.35 }).play()
+      if (this.bgmStarted || this.bgmUnlockQueued) return
+      const play = (): void => {
+        this.bgmUnlockQueued = false
+        if (this.bgmStarted) return
+        this.bgmStarted = true
+        this.sound.add('bgm', { loop: true, volume: 0.35 }).play()
+      }
+      if (this.sound.locked) {
+        this.bgmUnlockQueued = true
+        this.sound.once(Phaser.Sound.Events.UNLOCKED, play)
+        return
+      }
+      play()
     }
     this.input.keyboard?.once('keydown', start)
     this.input.once('pointerdown', start)
   }
 
   private playSfx(key: string, volume: number): void {
-    if (this.sound.locked) return
+    if (this.sound.locked) {
+      this.sound.once(Phaser.Sound.Events.UNLOCKED, () => this.sound.play(key, { volume }))
+      return
+    }
     this.sound.play(key, { volume })
   }
 

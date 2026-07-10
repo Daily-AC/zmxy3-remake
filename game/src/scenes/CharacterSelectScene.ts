@@ -7,6 +7,7 @@ import { createEquipment } from '../systems/equipment'
 import { createInventory } from '../systems/inventory'
 import { activeArtFont } from '../systems/artFont'
 import { configureLogicalCamera } from '../systems/renderScale'
+import { roomIdFromInvite } from '../systems/roomInvite'
 
 // SelectRole, redone against the original AS3 (`打开我开始玩.swf` ->
 // `export.SelectRole`, tasks/decompile-as3-ui-report-codex.md) + real per-panel
@@ -344,7 +345,7 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.registry.set(REG.origin, 'new')
     // S1: selecting a hero lands on the world-map hub, not straight into
     // battle (screen-fidelity-spec.md S1 -- 选人确认→WorldMapScene).
-    this.scene.start(SCENE.worldMap)
+    this.scene.start(roomIdFromInvite(window.location.search) ? SCENE.coopLobby : SCENE.worldMap)
   }
 
   private exposeHooks(): void {

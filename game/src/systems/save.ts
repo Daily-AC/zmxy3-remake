@@ -331,6 +331,9 @@ function decodeItem(value: unknown): Item | null {
   if (Number.isFinite(value.sourceSaleValue)) {
     item.sourceSaleValue = Math.max(0, Math.floor(value.sourceSaleValue as number))
   }
+  if (Number.isFinite(value.sourceShowId)) {
+    item.sourceShowId = Math.max(0, Math.floor(value.sourceShowId as number))
+  }
   if (typeof value.sourceArray === 'string') item.sourceArray = value.sourceArray
   const effects = decodeEffects(value.effects)
   if (effects.length > 0) item.effects = effects

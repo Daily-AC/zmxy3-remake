@@ -38,6 +38,8 @@ import { FurnaceRecipeView } from '../ui/hud/FurnaceRecipeView'
 import { HUD_TEXTURES, HUD_ICONS, ICON_FALLBACK_KEY } from '../ui/hud/hudTheme'
 import { Toast } from '../ui/hud/Toast'
 import { BATTLE_LOADING_BACKGROUNDS } from './battleLoadingContent'
+import { LAOJUN_PORTRAIT_TEX } from '../ui/hud/furnaceRecipeLayout'
+import { resolveLaojunGift } from '../systems/npcGift'
 
 // S1 世界地图 hub. Everything below the map art (nodes/decorations/buttons +
 // coordinates) is data-driven from data/worldmapNodes.ts, which is
@@ -70,6 +72,8 @@ const FURNACE_TEX_KEYS = new Set(['furnace_frame', 'furnace_making'])
 // every non-interactive node/button here rather than invented per-element.
 const GREY_TINT = 0x8a8a8a
 const NPC_ID = 'laojun'
+const LIVE_RECIPE_ID = 'starter_whg'
+const LAOJUN_CELL = 300
 
 // A symbol's PlaceObject Matrix tx/ty maps its LOCAL (0,0), which is NOT
 // necessarily its artwork's top-left corner: buttons are authored
@@ -140,6 +144,7 @@ export class WorldMapScene extends Phaser.Scene {
     timer: Phaser.Time.TimerEvent
   } | null = null
   private craftSeq = 0
+  private laojunGiftAttempted = false
 
   constructor() {
     super(SCENE.worldMap)
@@ -169,6 +174,12 @@ export class WorldMapScene extends Phaser.Scene {
     }
     for (const t of HUD_ICONS) {
       if (!this.textures.exists(t.key)) this.load.image(t.key, t.url)
+    }
+    if (!this.textures.exists(LAOJUN_PORTRAIT_TEX)) {
+      this.load.spritesheet(LAOJUN_PORTRAIT_TEX, 'assets/extracted/npc/laojun_sheet.png', {
+        frameWidth: LAOJUN_CELL,
+        frameHeight: LAOJUN_CELL,
+      })
     }
   }
 
@@ -327,7 +338,7 @@ export class WorldMapScene extends Phaser.Scene {
     // recovered table remains available to data/tests, but unsupported gear,
     // accessories and book/material loops must not leak into the live UI.
     this.furnaceRecipeView = new FurnaceRecipeView(this, {
-      recipes: listFurnaceRecipes().filter((recipe) => recipe.bookFillName === 'starter_whg'),
+      recipes: listFurnaceRecipes().filter((recipe) => recipe.bookFillName === LIVE_RECIPE_ID),
       checkFor: (bookFillName) => canCraftRecipe(this.loaded.inventory, this.loaded.soul, bookFillName),
       onCraftSubmit: (bookFillName) => this.submitRecipeCraft(bookFillName),
       onChatSubmit: (text) => this.submitRecipeChat(text),
@@ -362,6 +373,11 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   private submitRecipeCraft(bookFillName: string): void {
+    if (bookFillName !== LIVE_RECIPE_ID) {
+      this.toastUi.show('当前版本未开放这张配方', '#e0b060')
+      this.furnaceRecipeView.refresh()
+      return
+    }
     const result = craftRecipe(this.loaded.inventory, this.loaded.soul, bookFillName)
     if (result.ok) {
       this.loaded.soul = result.newSoul
@@ -484,6 +500,21 @@ export class WorldMapScene extends Phaser.Scene {
       this.furnaceRecipeView.appendNpcLine(m.flavor)
       this.submitRecipeCraft(m.recipeId)
       this.furnaceRecipeView.setCraftLocked(false)
+    } else if (m.type === 'give_item') {
+      const result = resolveLaojunGift(m.item.id, this.laojunGiftAttempted)
+      this.laojunGiftAttempted = result.attempted
+      if (result.status === 'awarded') {
+        const added = addItem(this.loaded.inventory, result.item, 1)
+        if (added.ok) {
+          this.toastUi.show('老君赠你【普通的行者棍】', '#ffd873')
+          this.persistSlot()
+          this.furnaceRecipeView.refresh()
+        } else {
+          this.toastUi.show('背包已满，老君收回了礼物', '#e0b060')
+        }
+      } else if (result.status === 'missed') {
+        this.toastUi.show('老君捻须一笑，这回没有出手', '#b8aa8a')
+      }
     } else if (m.type === 'craft_result') this.onCraftResult(m.item, m.flavor, m.requestId)
     else if (m.type === 'craft_reject') this.onCraftReject(m.reason, m.requestId)
   }

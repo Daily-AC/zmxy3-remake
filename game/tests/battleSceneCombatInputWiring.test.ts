@@ -13,4 +13,10 @@ describe('BattleScene combat input wiring', () => {
   it('clears all hero input after a skill cast succeeds', () => {
     expect(source()).toMatch(/clearHeroInputForLock\(this\.heroState\)/)
   })
+
+  it('queues the first swing sound until WebAudio finishes unlocking', () => {
+    expect(source()).toMatch(
+      /if \(this\.sound\.locked\) \{\s*this\.sound\.once\(Phaser\.Sound\.Events\.UNLOCKED, \(\) => this\.sound\.play\(key, \{ volume \}\)\)/,
+    )
+  })
 })

@@ -103,6 +103,7 @@ describe('BattleScene visual regression helpers', () => {
     expect(mod.role1AttackEffectForSwing!(0, 1, 1)).toBe('hit1')
     expect(mod.role1AttackEffectForSwing!(1, 2, 2)).toBe('hit1')
     expect(mod.role1AttackEffectForSwing!(2, 3, 3)).toBe('hit3')
+    expect(mod.role1AttackEffectForSwing!(3, 4, 0)).toBe('hit3')
     expect(mod.role1AttackEffectForSwing!(3, 3, 3)).toBeNull()
   })
 

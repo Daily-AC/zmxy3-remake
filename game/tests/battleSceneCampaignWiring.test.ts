@@ -9,6 +9,12 @@ describe('BattleScene stage-one campaign wiring', () => {
     expect(source).not.toMatch(/const CAMPAIGN: CampaignEntry\[\] = \[LEVEL_1_WUYING, LEVEL_2_TIANWANG,/)
   })
 
+  it('keeps the map-only LaoJun NPC out of native L1/L2 battle scenes', () => {
+    expect(source).toMatch(/const BATTLE_NPC_ENABLED = false/)
+    expect(source).toMatch(/\.setVisible\(BATTLE_NPC_ENABLED\)/)
+    expect(source).toMatch(/private tryOpenDialogue\(\): void \{\s*if \(!BATTLE_NPC_ENABLED\) return/)
+  })
+
   it('shows challenge success for the final stage in any chain without hardcoding sl13', () => {
     expect(source).toMatch(/const isFinalSubStage = this\.level1Chain\.currentIndex === this\.level1Chain\.def\.subStages\.length - 1/)
     expect(source).toMatch(/if \(isFinalSubStage\) this\.showResultBanner\(\)/)
@@ -36,6 +42,7 @@ describe('BattleScene stage-one campaign wiring', () => {
   it('queues official MonsterAppearPoint quantities and drains them under the live cap', () => {
     expect(source).toMatch(/createWaveSpawnQueue\(getActiveWaveRoster\(this\.levelState\)\)/)
     expect(source).toMatch(/const x = spec\.x \?\? /)
+    expect(source).toMatch(/this\.spawnEntity\(spec\.species, spec\.stats, x, false, spec\.y\)/)
     expect(source).toMatch(/advanceWaveSpawnQueue\(/)
     expect(source).toMatch(/waveMonsterCapacity\(Boolean\(this\.coopSession\)\)/)
     expect(source).toMatch(/this\.aliveGruntCount\(\) \+ this\.pendingWaveSpawns\.length/)

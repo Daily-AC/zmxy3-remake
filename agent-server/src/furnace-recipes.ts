@@ -7,11 +7,13 @@ export interface RecipeSummary {
   quality: string;
   materials: { fillName: string; name: string; qty: number }[];
   soulCost: number;
+  requiresBook?: boolean;
 }
 
 // Hand-mirrored from game/src/systems/furnaceRecipe.ts. The agent-server does
 // not import game code; it only advises the NPC. The game remains authoritative.
 const RECIPES: RecipeSummary[] = [
+  {"bookFillName":"starter_whg","bookName":"新手锻造：尾火棍","productFillName":"whg","productName":"尾火棍","role":"悟空","quality":"优 秀","materials":[{"fillName":"wptm","name":"檀木","qty":3}],"soulCost":20,"requiresBook":false},
   {"bookFillName":"whgzzs","bookName":"尾火棍制作书","productFillName":"whg","productName":"尾火棍","role":"悟空","quality":"优 秀","materials":[{"fillName":"wptm","name":"檀木","qty":20}],"soulCost":200},
   {"bookFillName":"jmczzs","bookName":"角木铲制作书","productFillName":"jmc","productName":"角木铲","role":"沙僧","quality":"优 秀","materials":[{"fillName":"wptm","name":"檀木","qty":10},{"fillName":"wpxt","name":"玄铁","qty":10}],"soulCost":200},
   {"bookFillName":"bspzzs","bookName":"壁水袍制作书","productFillName":"bsp","productName":"壁水袍","role":"唐僧","quality":"优 秀","materials":[{"fillName":"wpsc","name":"丝绸","qty":20}],"soulCost":200},
@@ -53,6 +55,8 @@ const RECIPES: RecipeSummary[] = [
   {"bookFillName":"jlgzzs","bookName":"蛟龙弓制作书","productFillName":"jlg","productName":"蛟龙弓","role":"沙僧","quality":"魂 器","materials":[{"fillName":"yhs","name":"玉衡石","qty":3},{"fillName":"wpxt","name":"玄铁","qty":300}],"soulCost":1600},
 ];
 
+const PLAYABLE_RECIPE_IDS = new Set(["starter_whg"]);
+
 function copyRecipe(recipe: RecipeSummary): RecipeSummary {
   return { ...recipe, materials: recipe.materials.map((material) => ({ ...material })) };
 }
@@ -63,6 +67,17 @@ export function listRecipes(): RecipeSummary[] {
 
 export function findRecipe(bookFillName: string): RecipeSummary | undefined {
   const recipe = RECIPES.find((entry) => entry.bookFillName === bookFillName);
+  return recipe ? copyRecipe(recipe) : undefined;
+}
+
+export function listPlayableRecipes(): RecipeSummary[] {
+  return RECIPES.filter((recipe) => PLAYABLE_RECIPE_IDS.has(recipe.bookFillName)).map(copyRecipe);
+}
+
+export function findPlayableRecipe(bookFillName: string): RecipeSummary | undefined {
+  const recipe = RECIPES.find(
+    (entry) => entry.bookFillName === bookFillName && PLAYABLE_RECIPE_IDS.has(entry.bookFillName),
+  );
   return recipe ? copyRecipe(recipe) : undefined;
 }
 

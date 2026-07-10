@@ -100,6 +100,13 @@ export const HUD_ICONS: TextureRef[] = [...HUD_ICON_IDS, ...HUD_WEAPON_ICON_IDS,
   url: `${ICON}${id}.png`,
 }))
 
+/** EIcon1's separate transparent `fall_*` bitmaps for equipment on the ground. */
+export const WORLD_DROP_ICON_IDS = ['ptdxzg', 'whg', 'ptdxzf', 'kys'] as const
+export const WORLD_DROP_ICONS: TextureRef[] = WORLD_DROP_ICON_IDS.map((id) => ({
+  key: `drop_icon_${id}`,
+  url: `assets/extracted/drop-icons/${id}.png`,
+}))
+
 export const ICON_FALLBACK_KEY = 'icon_fallback'
 
 // ---- Online-sourced textures (系列后作素材) ----

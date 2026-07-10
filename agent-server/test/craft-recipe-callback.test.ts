@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { dispatchCraftRecipeIntent, type NpcBrainCallbacks } from "../src/brain.js";
 
-test("recipe craft callback is a safe pass-through even for bogus recipe ids", () => {
+test("recipe craft callback only forwards recipes implemented in the live game", () => {
   let seenRecipeId = "";
   const callbacks: NpcBrainCallbacks = {
     onSay: () => {},
@@ -14,6 +14,10 @@ test("recipe craft callback is a safe pass-through even for bogus recipe ids", (
     },
   };
 
-  assert.doesNotThrow(() => dispatchCraftRecipeIntent("not-a-real-recipe", callbacks));
-  assert.equal(seenRecipeId, "not-a-real-recipe");
+  assert.equal(dispatchCraftRecipeIntent("not-a-real-recipe", callbacks), false);
+  assert.equal(seenRecipeId, "");
+  assert.equal(dispatchCraftRecipeIntent("jmczzs", callbacks), false);
+  assert.equal(seenRecipeId, "");
+  assert.equal(dispatchCraftRecipeIntent("starter_whg", callbacks), true);
+  assert.equal(seenRecipeId, "starter_whg");
 });
