@@ -1,92 +1,82 @@
-# 《再续西游》Hackathon Demo Storyboard
+# 《再续西游》Hackathon Demo V2 Storyboard
 
 ## Delivery
 
 - Resolution: 1920x1080
 - Frame rate: 60 fps
 - Duration: 60 seconds
-- Spoken language: Mandarin Chinese
-- Visual rule: real gameplay is the proof; generated menu/loading art only frames the opening, chapter changes, and close.
+- Spoken language: standard Mandarin Chinese
+- Visual rule: every feature claim must be backed by live gameplay in the same beat.
 
 ## Asset Audit
 
 | Asset | Role | Status |
 | --- | --- | --- |
-| `media/stills/menu-keyart.jpg` | Opening and closing hero image | Approved |
+| `media/stills/menu-keyart.jpg` | Opening and closing identity | Approved |
 | `media/stills/login.png` | Browser login proof | Approved |
-| `media/stills/character-select.png` | Original character-selection proof | Approved |
+| `media/stills/character-select.png` | Character identity | Approved |
 | `media/gameplay/world-map.mp4` | Playable world map | Approved, 1080p60 |
-| `media/gameplay/nine-heavens-combat.mp4` | L1 weapon, damage and combo proof | Approved, trim to the attack window |
-| `media/gameplay/tiangongdao-combat.mp4` | L2 monsters, pursuit and attack proof | Approved |
-| `media/gameplay/backpack-equipment.mp4` | Stats and equipment UI | Approved |
-| `media/gameplay/furnace.mp4` | Recipe and forging UI | Approved |
-| `media/gameplay/coop-room.mp4` | Room creation, ready state and share entry | Approved |
-| `media/stills/loading-nine-heavens.webp` | Chapter divider / L1 identity | Approved |
-| `media/stills/loading-heavenly-palace.webp` | Chapter divider / L2 identity | Approved |
-| `narration.wav` | Narration master | Approved, 54.590542s |
-| `media/audio/bg1.mp3` | Music bed | Approved, 60.551875s |
-| `media/audio/Role1_hit1AndHit2.mp3` | Combat accents | Approved |
-| `media/audio/Role1_hit5.mp3` | Heavy combat accent | Approved |
-| `media/audio/pickup.mp3` | Progression accent | Approved |
-| `media/audio/Game_Victory.mp3` | Closing sting | Approved |
+| `media/gameplay/nine-heavens-combat.mp4` | L1 normal combat | Approved, 1080p60 |
+| `media/gameplay/skill-combat.mp4` | Bound active skills, MP and hit effects | Approved, 1080p60 |
+| `media/gameplay/tiangongdao-combat.mp4` | L2 combat proof | Approved, 1080p60 |
+| `media/gameplay/backpack-equipment.mp4` | Equipment and numeric stats | Approved, 1080p60 |
+| `media/gameplay/laojun-forge.mp4` | Laojun request, reply and forge toast | Approved, 1080p60 |
+| `media/gameplay/forge-result-backpack.mp4` | Crafted weapon in inventory | Approved, 1080p60 |
+| `media/gameplay/coop-room.mp4` | Create, share and second account join | Approved, 1080p60 |
+| `media/gameplay/coop-battle.mp4` | Two named player instances in one battle | Approved, 1080p60 |
+| `narration.wav` | Qwen3-TTS Serena Mandarin master | Approved, 54.678708s, 48kHz stereo PCM |
+| `media/audio/bg1.mp3` | Music bed | Approved |
+| Game hit/pickup/victory SFX | Action accents | Approved |
 
 ## Beats
 
-### 0.00-5.96 - Hook: Memory Reignited
+### 0.00-3.87 - Hook
 
-- Full-bleed menu key art with a slow 103% camera push.
-- Project title lands in brush type; ember streaks and a small vermilion seal establish the homepage identity.
+- Full-bleed menu key art with a warm camera push.
+- Brush title, ember field and vermilion seal.
 - On-screen line: `童年的页游，重新活过来。`
-- Transition out: fast warm overexposure followed by a vertical vermilion ink wipe.
 
-### 5.96-15.37 - Revival: Old Logic, Modern Browser
+### 3.87-11.90 - Browser Revival
 
-- 5.96-8.80: login scroll, cropped close enough to show that the project is an actual browser experience.
-- 8.80-11.60: Wukong character selection, with locked companions still visible.
-- 11.60-15.37: moving world-map capture.
-- Proof rail: `旧资源 × 原始逻辑 × 现代浏览器`.
-- Transition out: gold edge flash timed to narration emphasis on “战斗”.
+- Login, Wukong selection and moving world map.
+- Proof rail: `旧资源 × 原始关卡 × 现代浏览器`.
 
-### 15.37-23.65 - Combat: Every Hit Has Rhythm
+### 11.90-20.49 - Combat And Skills
 
-- 15.37-18.20: Nine Heavens attack window, trimmed from 0.65s. Show weapon overlay, damage numbers, level-up and combo feedback.
-- 18.20-23.65: Heavenly Palace combat. Keep Wukong and the three turtle soldiers visible together.
-- Feature stamps: `伤害` / `追击` / `反击`.
-- SFX: two light hit accents and one heavy hit accent under narration.
-- Transition out: horizontal brush stroke wiping from weapon motion.
+- Short L1 normal attack window.
+- Full `skill-combat.mp4` proof with learned slots, MP change, hit effects and damage.
+- Fast L2 glimpse closes the combat paragraph.
+- Labels: `法力`, `伤害`, `冷却`.
 
-### 23.65-30.57 - Progression: Gear Changes the Run
+### 20.49-33.36 - Equipment And Laojun
 
-- 23.65-26.85: backpack and numerical stats, with a small weapon material icon rail.
-- 26.85-30.57: furnace recipe UI; material icons converge toward the recipe row.
-- Proof rail: `装备影响属性 · 材料真实扣除 · 产物回到背包`.
-- SFX: pickup accent at the cut into the forge.
+- Equipment stats in backpack.
+- Real Laojun drawer with player request and server response.
+- Hold the visible `炼成【尾火棍】` result.
+- Cut to backpack with the crafted weapon equipped.
+- Proof rail: `檀木 -3 · 灵魂 -20 · 武器属性立即生效`.
 
-### 30.57-44.50 - Co-op and AI: Share, Join, Forge
+### 33.36-45.49 - Share And Fight Together
 
-- 30.57-36.67: actual co-op room capture from selector to created room, ready state, and share entry.
-- 36.67-44.50: furnace visual becomes the stage for three short AI proof statements: `理解材料`, `判断配方`, `返回炼制结果`.
-- Primary callout: `链接直达房间`.
-- Supporting callout: `AI 太上老君`.
-- Transition out: red seal expands to cover frame, then reveals both chapter key arts.
+- Host creates L1 room and copies the invite.
+- A second authenticated account appears in the member list.
+- Cut to one live battle canvas containing two Wukong instances, distinct username nameplates, monsters and attack animations.
+- Labels: `房主`, `队友`, `同步`.
 
-### 44.50-54.59 - Close: A Complete Playable Loop
+### 45.49-50.16 - Complete Loop
 
-- Split chapter art for Nine Heavens and Heavenly Palace.
-- Three factual counters arrive one by one: `2 个关卡`, `1 套成长循环`, `分享即联机`.
-- Menu key art returns by 49.50s; narration closes over the playable build.
+- Nine Heavens and Tiangongdao chapter art side by side.
+- Counters: `2 原生关卡`, `1 完整成长循环`, `LINK 分享即联机`.
 
-### 54.59-60.00 - Final Portal
+### 50.16-60.00 - Public Portal
 
-- No narration. Music and victory sting carry the final title.
-- Project name and the two public URLs stay fully legible for at least four seconds.
-- Final text: `现在就能玩的西游`.
-- Fade to shell black during the final 0.45s.
+- Final key art, project title, play URL and GitHub URL.
+- Narration ends at 54.68 seconds; music and victory sting carry the remaining link hold.
 
 ## Audio Mix
 
-- Narration: 0 dB reference, centered.
-- Music bed: 14% element volume, ducked visually rather than dynamically.
-- Hit SFX: 35-45% element volume.
-- Pickup SFX: 42% element volume.
-- Victory sting: 55% element volume at 54.8s.
+- Narration: loudness normalized, centered, no regional-accent system voice.
+- Music bed: 14 percent element volume.
+- Hit SFX: 36-44 percent element volume.
+- Pickup SFX: 42 percent element volume.
+- Victory sting: 55 percent element volume.

@@ -35,6 +35,27 @@ async function waitScene(page, expected, timeoutMs = 30000) {
   return waitFor(page, () => window.__shellScene?.() === expected, timeoutMs)
 }
 
+async function gotoWithRetry(page, url, attempts = 5) {
+  let lastError
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+      return
+    } catch (error) {
+      lastError = error
+      console.warn(`navigation attempt ${attempt}/${attempts} failed: ${error.message}`)
+      await sleep(800 * attempt)
+    }
+  }
+  throw lastError
+}
+
+async function clickLogical(page, x, y) {
+  const rect = await page.locator('canvas').boundingBox()
+  if (!rect) throw new Error('canvas bounds unavailable')
+  await page.mouse.click(rect.x + (x / 960) * rect.width, rect.y + (y / 540) * rect.height)
+}
+
 async function ensureWorldMap(page) {
   for (let attempts = 0; attempts < 20; attempts += 1) {
     const loginInputs = page.locator('input.wendie-input')
@@ -160,7 +181,7 @@ const context = await chromium.launchPersistentContext(PROFILE, {
 const page = context.pages()[0] || (await context.newPage())
 
 try {
-  await page.goto(SITE, { waitUntil: 'domcontentloaded' })
+  await gotoWithRetry(page, SITE)
   await page.waitForSelector('canvas', { timeout: 30000 })
   await sleep(1800)
   await ensureWorldMap(page)
@@ -173,16 +194,40 @@ try {
   })
 
   await page.evaluate(() => {
-    window.__giveMaterials?.('wptm', 12)
-    window.__giveMaterials?.('ptdxzg', 1)
-    window.__giveMaterials?.('whg', 1)
-    window.__giveSoul?.(999)
+    for (const key of Object.keys(window.localStorage)) {
+      if (key.startsWith('zmxy.laojun.chat.')) window.localStorage.removeItem(key)
+    }
+    window.__giveMaterials?.('wptm', 3)
+    window.__giveSoul?.(20)
     window.__shellMapAction?.('furnace')
+    const state = window.__shellMapRecipeState?.()
+    window.__forgeTargetSoul = Math.max(0, Number(state?.soul ?? 20) - 20)
   })
-  await sleep(700)
-  await record(page, 'furnace', async () => {
-    await page.mouse.move(1240, 520, { steps: 20 })
-    await sleep(5200)
+  await waitFor(page, () => {
+    const state = window.__shellMapRecipeState?.()
+    return state?.isOpen && state?.npcOnline && state.rows?.[0]?.canCraftNow ? state : null
+  }, 30000)
+  await record(page, 'laojun-forge', async () => {
+    await sleep(700)
+    await clickLogical(page, 706, 92)
+    await waitFor(page, () => window.__shellMapRecipeState?.().drawerOpen)
+    const input = page.locator('input[placeholder="和老君说句话"]')
+    await input.fill('老君，檀木和灵魂都备齐了，按新手锻造配方现在帮我炼成尾火棍。')
+    await input.press('Enter')
+    const craftedByReply = await waitFor(page, () => {
+      const state = window.__shellMapRecipeState?.()
+      return state && state.soul <= Number(window.__forgeTargetSoul) ? state : null
+    }, 12000).catch(() => null)
+    if (!craftedByReply) {
+      await clickLogical(page, 852, 136)
+      const row = await waitFor(page, () => window.__shellMapRecipeState?.().rows?.[0])
+      await clickLogical(page, row.screenX, row.screenY)
+      await waitFor(page, () => {
+        const state = window.__shellMapRecipeState?.()
+        return state && state.soul <= Number(window.__forgeTargetSoul) ? state : null
+      }, 10000)
+    }
+    await sleep(2600)
   })
 
   // The furnace is a full modal surface. Reloading returns to the persisted
@@ -194,8 +239,35 @@ try {
 
   await enterLevel(page, 0)
   await waitFor(page, () => window.__worldState?.().aliveMonsters > 0, 30000)
+  await page.evaluate(() => window.__equip?.('whg'))
+  await page.evaluate(() => window.__toggleBackpack?.())
+  await record(page, 'forge-result-backpack', async () => {
+    await sleep(4200)
+  })
+  await page.evaluate(() => window.__toggleBackpack?.())
   await page.evaluate(() => {
-    window.__gainExp?.(18000)
+    window.__gainExp?.(500000)
+    window.__setSkillLevels?.({ slz: 1, hytj: 1, lyfb: 1, hmz: 1, hyjj: 1 })
+    Object.assign(window.__scene.skillTreeState.bindings, {
+      Y: 'slz',
+      U: 'hytj',
+      I: 'lyfb',
+      O: 'hmz',
+      L: 'hyjj',
+    })
+    const monster = window.__worldState?.().monster
+    if (monster) window.__teleportTo?.(monster.x - 150)
+  })
+  await sleep(500)
+  await record(page, 'skill-combat', async () => {
+    await page.keyboard.press('i')
+    await sleep(1800)
+    const state = await page.evaluate(() => window.__worldState?.())
+    if (state?.monster) await page.evaluate((x) => window.__teleportTo?.(x - 145), state.monster.x)
+    await page.keyboard.press('o')
+    await sleep(2200)
+  })
+  await page.evaluate(() => {
     const monster = window.__worldState?.().monster
     if (monster) window.__teleportTo?.(monster.x - 135)
   })
