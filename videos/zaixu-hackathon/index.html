@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1920, height=1080" />
-    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="media/gsap.min.js"></script>
     <style>
       @font-face {
         font-family: "QiuHongKai";
@@ -375,62 +375,33 @@
         color: var(--orange);
       }
 
-      #ai-scene-bg {
-        filter: brightness(0.34) saturate(0.82);
+      #skill-title,
+      #forge-result-title,
+      #coop-battle-title {
+        right: 82px;
+        top: 72px;
+        padding: 12px 24px 16px;
+        border-right: 5px solid var(--orange);
+        background: rgba(11, 10, 13, 0.84);
+        font-size: 74px;
       }
 
-      #ai-furnace {
+      #skill-proof,
+      #coop-battle-proof {
         position: absolute;
-        z-index: 4;
-        left: 84px;
-        top: 154px;
-        width: 1050px;
-        height: 690px;
-        object-fit: cover;
-        object-position: top center;
-        border: 2px solid rgba(241, 190, 130, 0.76);
-        box-shadow: 0 18px 70px rgba(0, 0, 0, 0.64);
-      }
-
-      #ai-title {
-        left: 1160px;
-        top: 154px;
-        width: 650px;
-        font-size: 96px;
-        line-height: 1.02;
-      }
-
-      #ai-title span {
-        color: var(--orange);
-      }
-
-      #ai-steps {
-        position: absolute;
-        z-index: 10;
-        left: 1170px;
-        top: 430px;
-        display: grid;
-        gap: 26px;
-      }
-
-      .ai-step {
+        z-index: 12;
+        right: 82px;
+        bottom: 126px;
         display: flex;
-        align-items: center;
-        gap: 20px;
-        color: #fff2cb;
-        font-size: 36px;
-        font-weight: 700;
+        gap: 16px;
       }
 
-      .ai-step b {
-        display: grid;
-        width: 48px;
-        height: 48px;
-        place-items: center;
-        border: 2px solid var(--orange);
-        border-radius: 50%;
-        color: var(--orange);
-        font: 700 24px/1 Menlo, monospace;
+      #skill-proof .stamp,
+      #coop-battle-proof .stamp {
+        min-width: 96px;
+        height: 54px;
+        padding: 0 18px;
+        font-size: 31px;
       }
 
       #chapters {
@@ -457,7 +428,7 @@
       .chapter-name {
         position: absolute;
         left: 56px;
-        bottom: 80px;
+        bottom: 205px;
         z-index: 8;
         color: #fff2cb;
         font: 400 92px/1 "QiuHongKai", serif;
@@ -626,7 +597,7 @@
 
       <section id="scene-map" class="scene">
         <div class="game-frame">
-          <video id="map-video" class="clip" src="media/gameplay/world-map.mp4" muted playsinline preload="auto" data-start="11.60" data-duration="3.77" data-media-start="0.35" data-track-index="0"></video>
+          <video id="map-video" class="clip" src="media/gameplay/world-map.mp4" muted playsinline preload="auto" data-start="8.50" data-duration="3.40" data-media-start="0.35" data-track-index="0"></video>
         </div>
         <div class="chapter">WORLD / 关卡地图</div>
         <h2 id="map-title" class="feature-title">关卡不再是回忆</h2>
@@ -635,15 +606,27 @@
 
       <section id="scene-l1" class="scene">
         <div class="game-frame">
-          <video id="l1-video" class="clip" src="media/gameplay/nine-heavens-combat.mp4" muted playsinline preload="auto" data-start="15.37" data-duration="2.83" data-media-start="0.65" data-track-index="0"></video>
+          <video id="l1-video" class="clip" src="media/gameplay/nine-heavens-combat.mp4" muted playsinline preload="auto" data-start="11.90" data-duration="2.60" data-media-start="0.65" data-track-index="0"></video>
         </div>
         <h2 id="combat-line" class="feature-title">每一棍 <span>都有节奏</span></h2>
         <div id="l1-stamp" class="stamp">九重天</div>
       </section>
 
+      <section id="scene-skill" class="scene">
+        <div class="game-frame">
+          <video id="skill-video" class="clip" src="media/gameplay/skill-combat.mp4" muted playsinline preload="auto" data-start="14.50" data-duration="4.55" data-track-index="0"></video>
+        </div>
+        <h2 id="skill-title" class="feature-title">技能，真正命中</h2>
+        <div id="skill-proof">
+          <span id="skill-mp" class="stamp">法力</span>
+          <span id="skill-damage" class="stamp">伤害</span>
+          <span id="skill-cooldown" class="stamp">冷却</span>
+        </div>
+      </section>
+
       <section id="scene-l2" class="scene">
         <div class="game-frame">
-          <video id="l2-video" class="clip" src="media/gameplay/tiangongdao-combat.mp4" muted playsinline preload="auto" data-start="18.20" data-duration="5.45" data-media-start="0.35" data-track-index="0"></video>
+          <video id="l2-video" class="clip" src="media/gameplay/tiangongdao-combat.mp4" muted playsinline preload="auto" data-start="19.05" data-duration="1.44" data-media-start="0.35" data-track-index="0"></video>
         </div>
         <div id="l2-stamp" class="stamp">天宫道</div>
         <div id="combat-stamps">
@@ -655,7 +638,7 @@
 
       <section id="scene-gear" class="scene">
         <div class="game-frame">
-          <video id="gear-video" class="clip" src="media/gameplay/backpack-equipment.mp4" muted playsinline preload="auto" data-start="23.65" data-duration="3.20" data-media-start="0.35" data-track-index="0"></video>
+          <video id="gear-video" class="clip" src="media/gameplay/backpack-equipment.mp4" muted playsinline preload="auto" data-start="20.49" data-duration="2.51" data-media-start="0.35" data-track-index="0"></video>
         </div>
         <h2 id="gear-title" class="feature-title">装备，改写属性</h2>
         <div id="gear-icons">
@@ -666,42 +649,47 @@
 
       <section id="scene-forge" class="scene">
         <div class="game-frame">
-          <video id="forge-video" class="clip" src="media/gameplay/furnace.mp4" muted playsinline preload="auto" data-start="26.85" data-duration="3.72" data-media-start="0.35" data-track-index="0"></video>
+          <video id="forge-video" class="clip" src="media/gameplay/laojun-forge.mp4" muted playsinline preload="auto" data-start="23.00" data-duration="7.766" data-track-index="0"></video>
         </div>
-        <h2 id="forge-title" class="feature-title">太上老君，开炉</h2>
-        <div id="forge-icons">
-          <img id="forge-mat" src="media/stills/wptm.png" alt="material" />
-          <img id="forge-weapon" src="media/stills/ptdxzg-forge.png" alt="weapon" />
+        <h2 id="forge-title" class="feature-title">说出需求，老君开炉</h2>
+        <div class="proof-rail">自然语言请求 · 老君回应 · 炼成【尾火棍】</div>
+      </section>
+
+      <section id="scene-forge-result" class="scene">
+        <div class="game-frame">
+          <video id="forge-result-video" class="clip" src="media/gameplay/forge-result-backpack.mp4" muted playsinline preload="auto" data-start="30.77" data-duration="2.59" data-media-start="0.35" data-track-index="0"></video>
         </div>
-        <div class="proof-rail">材料真实扣除 · 产物回到背包</div>
+        <h2 id="forge-result-title" class="feature-title">装备，真的入包</h2>
+        <div class="proof-rail">檀木 -3 · 灵魂 -20 · 武器属性立即生效</div>
       </section>
 
       <section id="scene-coop" class="scene">
         <div class="game-frame">
-          <video id="coop-video" class="clip" src="media/gameplay/coop-room.mp4" muted playsinline preload="auto" data-start="30.57" data-duration="6.10" data-track-index="0"></video>
+          <video id="coop-video" class="clip" src="media/gameplay/coop-room.mp4" muted playsinline preload="auto" data-start="33.36" data-duration="6.50" data-media-start="0.60" data-track-index="0"></video>
         </div>
         <h2 id="coop-title" class="feature-title">分享链接，<span>并肩开打</span></h2>
-        <div class="proof-rail">创建房间 · 一键复制 · 点开即加入</div>
+        <div class="proof-rail">创建房间 · 一键复制 · 第二位玩家真实加入</div>
       </section>
 
-      <section id="scene-ai" class="scene">
-        <img id="ai-scene-bg" class="visual" src="media/stills/menu-keyart-ai.jpg" />
-        <img id="ai-furnace" src="media/gameplay/frames/furnace.jpg" alt="furnace" />
-        <h2 id="ai-title" class="feature-title"><span>AI</span> 太上老君<br />理解炼制请求</h2>
-        <div id="ai-steps">
-          <div id="ai-step-1" class="ai-step"><b>01</b>理解材料与数量</div>
-          <div id="ai-step-2" class="ai-step"><b>02</b>判断配方与概率</div>
-          <div id="ai-step-3" class="ai-step"><b>03</b>返回真实炼制结果</div>
+      <section id="scene-coop-battle" class="scene">
+        <div class="game-frame">
+          <video id="coop-battle-video" class="clip" src="media/gameplay/coop-battle.mp4" muted playsinline preload="auto" data-start="39.86" data-duration="5.63" data-track-index="0"></video>
+        </div>
+        <h2 id="coop-battle-title" class="feature-title">两个人，同一场战斗</h2>
+        <div id="coop-battle-proof">
+          <span id="coop-host" class="stamp">房主</span>
+          <span id="coop-guest" class="stamp">队友</span>
+          <span id="coop-live" class="stamp">同步</span>
         </div>
       </section>
 
       <section id="chapters" class="scene">
         <div class="chapter-art">
-          <img id="chapter-l1" src="media/stills/loading-nine-heavens.webp" />
+          <img id="chapter-l1" src="media/stills/loading-nine-heavens.webp" data-layout-allow-overflow />
           <div class="chapter-name">九重天</div>
         </div>
         <div class="chapter-art">
-          <img id="chapter-l2" src="media/stills/loading-heavenly-palace.webp" />
+          <img id="chapter-l2" src="media/stills/loading-heavenly-palace.webp" data-layout-allow-overflow />
           <div class="chapter-name">天宫道</div>
         </div>
         <div id="counter-row">
@@ -735,12 +723,12 @@
       <div id="transition-flash"></div>
       <div id="transition-wipe"></div>
 
-      <audio id="narration" class="clip" src="narration.wav" data-start="0" data-duration="54.590542" data-track-index="20" data-volume="1"></audio>
+      <audio id="narration" class="clip" src="narration.wav" data-start="0" data-duration="54.678708" data-track-index="20" data-volume="1"></audio>
       <audio id="music" class="clip" src="media/audio/bg1.mp3" data-start="0" data-duration="60" data-track-index="21" data-volume="0.14"></audio>
-      <audio id="hit-1" class="clip" src="media/audio/Role1_hit1AndHit2.mp3" data-start="16.20" data-duration="0.572" data-track-index="22" data-volume="0.38"></audio>
-      <audio id="hit-2" class="clip" src="media/audio/Role1_hit1AndHit2.mp3" data-start="19.10" data-duration="0.572" data-track-index="22" data-volume="0.36"></audio>
-      <audio id="hit-heavy" class="clip" src="media/audio/Role1_hit5.mp3" data-start="21.15" data-duration="0.78" data-track-index="22" data-volume="0.44"></audio>
-      <audio id="pickup" class="clip" src="media/audio/pickup.mp3" data-start="26.92" data-duration="0.624" data-track-index="22" data-volume="0.42"></audio>
+      <audio id="hit-1" class="clip" src="media/audio/Role1_hit1AndHit2.mp3" data-start="12.80" data-duration="0.572" data-track-index="22" data-volume="0.38"></audio>
+      <audio id="hit-2" class="clip" src="media/audio/Role1_hit1AndHit2.mp3" data-start="15.50" data-duration="0.572" data-track-index="22" data-volume="0.36"></audio>
+      <audio id="hit-heavy" class="clip" src="media/audio/Role1_hit5.mp3" data-start="18.00" data-duration="0.78" data-track-index="22" data-volume="0.44"></audio>
+      <audio id="pickup" class="clip" src="media/audio/pickup.mp3" data-start="30.92" data-duration="0.624" data-track-index="22" data-volume="0.42"></audio>
       <audio id="victory" class="clip" src="media/audio/Game_Victory.mp3" data-start="54.80" data-duration="2.86" data-track-index="22" data-volume="0.55"></audio>
     </div>
 
@@ -749,18 +737,20 @@
       const tl = gsap.timeline({ paused: true });
 
       const scenes = [
-        ["#hook", 0, 5.96],
-        ["#scene-login", 5.96, 2.84],
-        ["#scene-character", 8.8, 2.8],
-        ["#scene-map", 11.6, 3.77],
-        ["#scene-l1", 15.37, 2.83],
-        ["#scene-l2", 18.2, 5.45],
-        ["#scene-gear", 23.65, 3.2],
-        ["#scene-forge", 26.85, 3.72],
-        ["#scene-coop", 30.57, 6.1],
-        ["#scene-ai", 36.67, 7.83],
-        ["#chapters", 44.5, 5],
-        ["#final", 49.5, 10.5],
+        ["#hook", 0, 3.87],
+        ["#scene-login", 3.87, 2.53],
+        ["#scene-character", 6.4, 2.1],
+        ["#scene-map", 8.5, 3.4],
+        ["#scene-l1", 11.9, 2.6],
+        ["#scene-skill", 14.5, 4.55],
+        ["#scene-l2", 19.05, 1.44],
+        ["#scene-gear", 20.49, 2.51],
+        ["#scene-forge", 23, 7.77],
+        ["#scene-forge-result", 30.77, 2.59],
+        ["#scene-coop", 33.36, 6.5],
+        ["#scene-coop-battle", 39.86, 5.63],
+        ["#chapters", 45.49, 4.67],
+        ["#final", 50.16, 9.84],
       ];
 
       scenes.forEach(([selector, start, duration], index) => {
@@ -774,55 +764,55 @@
         tl.set(selector, { opacity: 0 }, start + duration);
       });
 
-      tl.fromTo("#hook-visual", { scale: 1.02 }, { scale: 1.09, duration: 5.96, ease: "none", immediateRender: false }, 0);
+      tl.fromTo("#hook-visual", { scale: 1.02 }, { scale: 1.09, duration: 3.87, ease: "none", immediateRender: false }, 0);
       tl.fromTo("#hook-copy", { opacity: 0, x: -54 }, { opacity: 1, x: 0, duration: 0.85, ease: "power3.out", immediateRender: false }, 0.35);
       tl.fromTo("#hook-seal", { opacity: 0, scale: 1.7, rotation: -16 }, { opacity: 1, scale: 1, rotation: -5, duration: 0.48, ease: "back.out(1.8)", immediateRender: false }, 1.25);
 
-      tl.fromTo("#login-visual", { scale: 1.08, x: 35 }, { scale: 1.02, x: 0, duration: 2.84, ease: "power1.out", immediateRender: false }, 5.96);
-      tl.fromTo("#login-title", { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.48, ease: "power3.out", immediateRender: false }, 6.18);
-      tl.fromTo("#login-subtitle", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.42, ease: "power2.out", immediateRender: false }, 6.52);
+      tl.fromTo("#login-visual", { scale: 1.08, x: 35 }, { scale: 1.02, x: 0, duration: 2.53, ease: "power1.out", immediateRender: false }, 3.87);
+      tl.fromTo("#login-title", { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.48, ease: "power3.out", immediateRender: false }, 4.09);
+      tl.fromTo("#login-subtitle", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.42, ease: "power2.out", immediateRender: false }, 4.43);
 
-      tl.fromTo("#character-visual", { scale: 1.03, x: -30 }, { scale: 1.09, x: 0, duration: 2.8, ease: "none", immediateRender: false }, 8.8);
-      tl.fromTo("#character-title", { opacity: 0, x: 46 }, { opacity: 1, x: 0, duration: 0.46, ease: "power3.out", immediateRender: false }, 9.0);
-      tl.fromTo("#character-subtitle", { opacity: 0, x: 32 }, { opacity: 1, x: 0, duration: 0.42, ease: "power2.out", immediateRender: false }, 9.34);
+      tl.fromTo("#character-visual", { scale: 1.03, x: -30 }, { scale: 1.09, x: 0, duration: 2.1, ease: "none", immediateRender: false }, 6.4);
+      tl.fromTo("#character-title", { opacity: 0, x: 46 }, { opacity: 1, x: 0, duration: 0.46, ease: "power3.out", immediateRender: false }, 6.6);
+      tl.fromTo("#character-subtitle", { opacity: 0, x: 32 }, { opacity: 1, x: 0, duration: 0.42, ease: "power2.out", immediateRender: false }, 6.94);
 
-      tl.fromTo("#map-title", { opacity: 0, y: -32 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", immediateRender: false }, 11.88);
-      tl.fromTo("#combat-line", { opacity: 0, y: -28 }, { opacity: 1, y: 0, duration: 0.38, ease: "power3.out", immediateRender: false }, 15.55);
-      tl.fromTo("#l1-stamp", { opacity: 0, scale: 1.45, rotation: 8 }, { opacity: 1, scale: 1, rotation: -3, duration: 0.35, ease: "back.out(1.7)", immediateRender: false }, 15.75);
+      tl.fromTo("#map-title", { opacity: 0, y: -32 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", immediateRender: false }, 8.75);
+      tl.fromTo("#combat-line", { opacity: 0, y: -28 }, { opacity: 1, y: 0, duration: 0.38, ease: "power3.out", immediateRender: false }, 12.08);
+      tl.fromTo("#l1-stamp", { opacity: 0, scale: 1.45, rotation: 8 }, { opacity: 1, scale: 1, rotation: -3, duration: 0.35, ease: "back.out(1.7)", immediateRender: false }, 12.28);
 
-      tl.fromTo("#l2-stamp", { opacity: 0, scale: 1.45 }, { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(1.7)", immediateRender: false }, 18.42);
-      tl.fromTo("#stamp-chase", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.34, ease: "power3.out", immediateRender: false }, 19.0);
-      tl.fromTo("#stamp-counter", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.34, ease: "power3.out", immediateRender: false }, 19.72);
-      tl.fromTo("#stamp-damage", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.34, ease: "power3.out", immediateRender: false }, 20.44);
+      tl.fromTo("#skill-title", { opacity: 0, x: 42 }, { opacity: 1, x: 0, duration: 0.42, ease: "power3.out", immediateRender: false }, 14.74);
+      tl.fromTo("#skill-proof .stamp", { opacity: 0, y: 28, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.36, stagger: 0.28, ease: "back.out(1.6)", immediateRender: false }, 15.28);
 
-      tl.fromTo("#gear-title", { opacity: 0, x: -36 }, { opacity: 1, x: 0, duration: 0.42, ease: "power3.out", immediateRender: false }, 23.88);
-      tl.fromTo("#gear-icons img", { opacity: 0, scale: 0.65, y: 24 }, { opacity: 1, scale: 1, y: 0, duration: 0.42, stagger: 0.16, ease: "back.out(1.8)", immediateRender: false }, 24.4);
+      tl.fromTo("#l2-stamp", { opacity: 0, scale: 1.45 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(1.7)", immediateRender: false }, 19.16);
+      tl.fromTo("#stamp-chase", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.24, ease: "power3.out", immediateRender: false }, 19.34);
+      tl.fromTo("#stamp-counter", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.24, ease: "power3.out", immediateRender: false }, 19.66);
+      tl.fromTo("#stamp-damage", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.24, ease: "power3.out", immediateRender: false }, 19.98);
 
-      tl.fromTo("#forge-title", { opacity: 0, x: -38 }, { opacity: 1, x: 0, duration: 0.42, ease: "power3.out", immediateRender: false }, 27.04);
-      tl.fromTo("#forge-mat", { opacity: 0, x: 130, scale: 0.7 }, { opacity: 1, x: 0, scale: 1, duration: 0.48, ease: "back.out(1.6)", immediateRender: false }, 27.35);
-      tl.fromTo("#forge-weapon", { opacity: 0, x: 130, scale: 0.7 }, { opacity: 1, x: 0, scale: 1, duration: 0.48, ease: "back.out(1.6)", immediateRender: false }, 28.2);
+      tl.fromTo("#gear-title", { opacity: 0, x: -36 }, { opacity: 1, x: 0, duration: 0.42, ease: "power3.out", immediateRender: false }, 20.71);
+      tl.fromTo("#gear-icons img", { opacity: 0, scale: 0.65, y: 24 }, { opacity: 1, scale: 1, y: 0, duration: 0.42, stagger: 0.16, ease: "back.out(1.8)", immediateRender: false }, 21.17);
 
-      tl.fromTo("#coop-title", { opacity: 0, y: -34 }, { opacity: 1, y: 0, duration: 0.46, ease: "power3.out", immediateRender: false }, 30.82);
-      tl.fromTo("#ai-furnace", { opacity: 0, x: -65, scale: 0.97 }, { opacity: 1, x: 0, scale: 1, duration: 0.58, ease: "power3.out", immediateRender: false }, 36.9);
-      tl.fromTo("#ai-title", { opacity: 0, x: 48 }, { opacity: 1, x: 0, duration: 0.52, ease: "power3.out", immediateRender: false }, 37.08);
-      tl.fromTo("#ai-step-1", { opacity: 0, x: 42 }, { opacity: 1, x: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, 38.12);
-      tl.fromTo("#ai-step-2", { opacity: 0, x: 42 }, { opacity: 1, x: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, 39.45);
-      tl.fromTo("#ai-step-3", { opacity: 0, x: 42 }, { opacity: 1, x: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, 40.78);
+      tl.fromTo("#forge-title", { opacity: 0, x: -38 }, { opacity: 1, x: 0, duration: 0.42, ease: "power3.out", immediateRender: false }, 23.22);
 
-      tl.fromTo("#chapter-l1", { scale: 1.08 }, { scale: 1.02, duration: 5, ease: "none", immediateRender: false }, 44.5);
-      tl.fromTo("#chapter-l2", { scale: 1.02 }, { scale: 1.08, duration: 5, ease: "none", immediateRender: false }, 44.5);
-      tl.fromTo("#counter-1", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out", immediateRender: false }, 45.0);
-      tl.fromTo("#counter-2", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out", immediateRender: false }, 45.72);
-      tl.fromTo("#counter-3", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out", immediateRender: false }, 46.44);
+      tl.fromTo("#forge-result-title", { opacity: 0, x: 42 }, { opacity: 1, x: 0, duration: 0.42, ease: "power3.out", immediateRender: false }, 31.0);
 
-      tl.fromTo("#final-visual", { scale: 1.08 }, { scale: 1.02, duration: 10.5, ease: "none", immediateRender: false }, 49.5);
-      tl.fromTo("#final-copy", { opacity: 0, x: -58 }, { opacity: 1, x: 0, duration: 0.7, ease: "power3.out", immediateRender: false }, 49.86);
-      tl.fromTo("#final-seal", { opacity: 0, scale: 1.65, rotation: 18 }, { opacity: 1, scale: 1, rotation: -5, duration: 0.48, ease: "back.out(1.8)", immediateRender: false }, 50.7);
-      tl.fromTo("#final-links", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.48, ease: "power3.out", immediateRender: false }, 54.2);
+      tl.fromTo("#coop-title", { opacity: 0, y: -34 }, { opacity: 1, y: 0, duration: 0.46, ease: "power3.out", immediateRender: false }, 33.61);
+      tl.fromTo("#coop-battle-title", { opacity: 0, x: 42 }, { opacity: 1, x: 0, duration: 0.44, ease: "power3.out", immediateRender: false }, 40.1);
+      tl.fromTo("#coop-battle-proof .stamp", { opacity: 0, y: 28, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.36, stagger: 0.24, ease: "back.out(1.6)", immediateRender: false }, 40.64);
+
+      tl.fromTo("#chapter-l1", { scale: 1.08 }, { scale: 1.02, duration: 4.67, ease: "none", immediateRender: false }, 45.49);
+      tl.fromTo("#chapter-l2", { scale: 1.02 }, { scale: 1.08, duration: 4.67, ease: "none", immediateRender: false }, 45.49);
+      tl.fromTo("#counter-1", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out", immediateRender: false }, 45.95);
+      tl.fromTo("#counter-2", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out", immediateRender: false }, 46.6);
+      tl.fromTo("#counter-3", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out", immediateRender: false }, 47.25);
+
+      tl.fromTo("#final-visual", { scale: 1.08 }, { scale: 1.02, duration: 9.84, ease: "none", immediateRender: false }, 50.16);
+      tl.fromTo("#final-copy", { opacity: 0, x: -58 }, { opacity: 1, x: 0, duration: 0.7, ease: "power3.out", immediateRender: false }, 50.48);
+      tl.fromTo("#final-seal", { opacity: 0, scale: 1.65, rotation: 18 }, { opacity: 1, scale: 1, rotation: -5, duration: 0.48, ease: "back.out(1.8)", immediateRender: false }, 51.2);
+      tl.fromTo("#final-links", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.48, ease: "power3.out", immediateRender: false }, 52.5);
 
       const emberGroups = [
-        ["#hook .ember", 0.2, 5.4],
-        ["#final .ember", 50.0, 9.0],
+        ["#hook .ember", 0.2, 3.4],
+        ["#final .ember", 50.45, 8.8],
       ];
       emberGroups.forEach(([selector, start, duration]) => {
         tl.fromTo(
@@ -848,17 +838,19 @@
         tl.set("#transition-wipe", { opacity: 0 }, time + 0.22);
       }
 
-      flashAt(8.8);
-      flashAt(11.6);
-      flashAt(18.2);
-      flashAt(26.85);
-      flashAt(36.67);
-      wipeAt(5.96);
-      wipeAt(15.37);
-      wipeAt(23.65);
-      wipeAt(30.57);
-      wipeAt(44.5);
-      wipeAt(49.5);
+      flashAt(6.4);
+      flashAt(8.5);
+      flashAt(14.5);
+      flashAt(19.05);
+      flashAt(23.0);
+      flashAt(30.77);
+      flashAt(39.86);
+      wipeAt(3.87);
+      wipeAt(11.9);
+      wipeAt(20.49);
+      wipeAt(33.36);
+      wipeAt(45.49);
+      wipeAt(50.16);
 
       window.__timelines.main = tl;
     </script>
