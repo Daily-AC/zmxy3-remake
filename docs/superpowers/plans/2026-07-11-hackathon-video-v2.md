@@ -113,10 +113,10 @@ Use `ffprobe` to confirm H.264 1920x1080 60 fps video, AAC 48 kHz stereo audio, 
 
 Copy the public assets and rendered MP4 to the existing `/demo/` deployment. Expected: watch page returns HTTP 200 and byte-range MP4 request returns HTTP 206.
 
-- [ ] **Step 3: Commit and push**
+- [x] **Step 3: Commit and push**
 
 Stage only the revised video source, curated clips, documentation, poster, and relevant README changes. Run `git diff --cached --check`, commit in English, and push `HEAD:master` to `origin`.
 
-- [ ] **Step 4: Verify the remote**
+- [x] **Step 4: Verify the remote**
 
 Confirm `origin/master` matches local `HEAD`, GitHub remains public, raw README returns HTTP 200, and the public watch page loads the revised video metadata.
