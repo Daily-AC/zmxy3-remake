@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-13
 
-**Status:** Draft for written review; the underlying design was approved section by section
+**Status:** Approved by the user after written review
 
 **Scope:** Long-term product and technical architecture for moving from the hackathon prototype to the formal development of *Zaixu Xiyou*.
 
