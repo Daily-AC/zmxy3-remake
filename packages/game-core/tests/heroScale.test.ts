@@ -35,9 +35,9 @@ describe('normal-attack formula vs. decompiled export.hero.Role1.as getRealPower
   })
 
   it('calculateHurt(atk) with no luck is exactly atk (BaseRoleProperies.as getHurt())', () => {
-    expect(calculateHurt(100)).toBe(100)
-    expect(calculateHurt(0)).toBe(0)
-    expect(calculateHurt(455)).toBe(455)
+    expect(calculateHurt(100, { random: () => 0.5 })).toBe(100)
+    expect(calculateHurt(0, { random: () => 0.5 })).toBe(0)
+    expect(calculateHurt(455, { random: () => 0.5 })).toBe(455)
   })
 
   it('calculateHurt adds a random 0..luck variance when luck is set', () => {
@@ -51,18 +51,31 @@ describe('normal-attack formula vs. decompiled export.hero.Role1.as getRealPower
   for (const atk of [10, 155, 455]) {
     for (const hit of NORMAL_ATTACK_COMBO_HITS) {
       it(`hit=${hit} atk=${atk}: power == ${REAL_COEFFICIENT[hit]} * atk`, () => {
-        const power = calculateNormalAttackPower(hit, atk, { critChance: 0, luck: 0 })
+        const power = calculateNormalAttackPower(hit, atk, { critChance: 0, luck: 0, random: () => 0.5 })
         expect(power).toBeCloseTo(REAL_COEFFICIENT[hit] * atk, 6)
       })
     }
   }
 
   it('applies the crit multiplier (2x) when forced, and gxp multiplier (1.5x) when set', () => {
-    const base = calculateNormalAttackPower('hit1', 100, { critChance: 0 })
-    const crit = calculateNormalAttackPower('hit1', 100, { forceCrit: true })
-    const gxp = calculateNormalAttackPower('hit1', 100, { critChance: 0, isGxp: true })
+    const base = calculateNormalAttackPower('hit1', 100, { critChance: 0, random: () => 0.5 })
+    const crit = calculateNormalAttackPower('hit1', 100, { forceCrit: true, random: () => 0.5 })
+    const gxp = calculateNormalAttackPower('hit1', 100, { critChance: 0, isGxp: true, random: () => 0.5 })
     expect(crit).toBeCloseTo(base * 2, 6)
     expect(gxp).toBeCloseTo(base * 1.5, 6)
+  })
+
+  it('requires an explicit source and preserves two-roll landed-hit ordering', () => {
+    expect(() => calculateHurt(100)).toThrow('random source required')
+    expect(() => calculateNormalAttackPower('hit1', 100, { critChance: 0 }))
+      .toThrow('random source required')
+    const rolls = [0.25, 0.75]
+    expect(calculateNormalAttackPower('hit1', 100, {
+      luck: 20,
+      critChance: 0,
+      random: () => rolls.shift()!,
+    })).toBe(105)
+    expect(rolls).toEqual([])
   })
 })
 
