@@ -118,8 +118,9 @@ export function calculateRealSkillDamage(
   opts: RealSkillDamageOptions = {},
 ): number {
   const c = REAL_SKILL_COEFFICIENTS[skillId]
-  const hurt = calculateHurt(atk, opts)
   const random = opts.random ?? Math.random
+  const resolvedOptions = { ...opts, random }
+  const hurt = calculateHurt(atk, resolvedOptions)
   const critRolled = opts.forceCrit ?? (random() <= (opts.critChance ?? 0))
   const critMult = critRolled ? 2 : 1
   const gxpMult = opts.isGxp ? 1.5 : 1
@@ -139,8 +140,9 @@ export function splitRealSkillDamage(
   opts: RealSkillDamageOptions = {},
 ): { fixedPart: number; powerPart: number; total: number } {
   const c = REAL_SKILL_COEFFICIENTS[skillId]
-  const hurt = calculateHurt(atk, opts)
   const random = opts.random ?? Math.random
+  const resolvedOptions = { ...opts, random }
+  const hurt = calculateHurt(atk, resolvedOptions)
   const critRolled = opts.forceCrit ?? (random() <= (opts.critChance ?? 0))
   const critMult = critRolled ? 2 : 1
   const gxpMult = opts.isGxp ? 1.5 : 1

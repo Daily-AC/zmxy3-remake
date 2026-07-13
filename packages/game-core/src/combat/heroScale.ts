@@ -131,11 +131,16 @@ export interface HurtOptions {
   random?: () => number
 }
 
+function requireRandom(random: (() => number) | undefined): () => number {
+  if (!random) throw new Error('random source required')
+  return random
+}
+
 /** Source: base.BaseRoleProperies.as:641-644 getHurt(). `atk` is this
  * project's `heroTotalAtk(id, eq)` (heroIdentity.ts) — getPower()/
  * getBasePower() is just the hero's plain total atk stat. */
 export function calculateHurt(atk: number, opts: HurtOptions = {}): number {
-  const random = opts.random ?? Math.random
+  const random = requireRandom(opts.random)
   return atk + random() * (opts.luck ?? 0)
 }
 
@@ -156,8 +161,7 @@ export interface NormalAttackOptions extends HurtOptions {
  */
 export function calculateNormalAttackPower(hit: NormalAttackHit, atk: number, opts: NormalAttackOptions = {}): number {
   const hurt = calculateHurt(atk, opts)
-  const random = opts.random ?? Math.random
-  const critRolled = opts.forceCrit ?? (random() <= (opts.critChance ?? 0))
+  const critRolled = opts.forceCrit ?? (requireRandom(opts.random)() <= (opts.critChance ?? 0))
   const critMult = critRolled ? 2 : 1
   const gxpMult = opts.isGxp ? 1.5 : 1
   return NORMAL_ATTACK_COEFFICIENT[hit] * hurt * critMult * gxpMult
