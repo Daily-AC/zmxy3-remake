@@ -1,0 +1,80 @@
+{
+  "name": "@zaixu/game-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "types": "./dist-types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist-types/index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./tick": {
+      "types": "./dist-types/time/tick.d.ts",
+      "default": "./src/time/tick.ts"
+    },
+    "./locomotion": {
+      "types": "./dist-types/hero/locomotion.d.ts",
+      "default": "./src/hero/locomotion.ts"
+    },
+    "./jump": {
+      "types": "./dist-types/hero/jump.d.ts",
+      "default": "./src/hero/jump.ts"
+    },
+    "./combo": {
+      "types": "./dist-types/hero/combo.d.ts",
+      "default": "./src/hero/combo.ts"
+    },
+    "./heroSim": {
+      "types": "./dist-types/hero/heroSim.d.ts",
+      "default": "./src/hero/heroSim.ts"
+    },
+    "./hitbox": {
+      "types": "./dist-types/combat/hitbox.d.ts",
+      "default": "./src/combat/hitbox.ts"
+    },
+    "./heroScale": {
+      "types": "./dist-types/combat/heroScale.d.ts",
+      "default": "./src/combat/heroScale.ts"
+    },
+    "./heroCombat": {
+      "types": "./dist-types/combat/heroCombat.d.ts",
+      "default": "./src/combat/heroCombat.ts"
+    },
+    "./attackSpec": {
+      "types": "./dist-types/combat/attackSpec.d.ts",
+      "default": "./src/combat/attackSpec.ts"
+    },
+    "./monsterAttackSpecs": {
+      "types": "./dist-types/combat/monsterAttackSpecs.d.ts",
+      "default": "./src/combat/monsterAttackSpecs.ts"
+    },
+    "./monsterSim": {
+      "types": "./dist-types/monster/monsterSim.d.ts",
+      "default": "./src/monster/monsterSim.ts"
+    },
+    "./session": {
+      "types": "./dist-types/session/combatSession.d.ts",
+      "default": "./src/session/combatSession.ts"
+    },
+    "./replay": {
+      "types": "./dist-types/replay/combatReplay.d.ts",
+      "default": "./src/replay/combatReplay.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -b && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "bench": "vitest run --config vitest.bench.config.ts --reporter=verbose"
+  },
+  "dependencies": {
+    "@zaixu/content": "0.1.0",
+    "@zaixu/protocol": "0.1.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

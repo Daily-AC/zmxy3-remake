@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/content" },
+    { "path": "./packages/protocol" },
+    { "path": "./packages/save-schema" },
+    { "path": "./packages/presentation-contract" },
+    { "path": "./packages/game-core" },
+    { "path": "./game" }
+  ]
+}

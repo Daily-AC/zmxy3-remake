@@ -8,23 +8,19 @@
     "declaration": true,
     "declarationMap": true,
     "emitDeclarationOnly": true,
-    "outDir": "../.tsbuild/game",
     "rootDir": "src",
-    "tsBuildInfoFile": "../.tsbuild/game/tsconfig.tsbuildinfo",
-    "resolveJsonModule": true,
+    "outDir": "dist-types",
+    "tsBuildInfoFile": "dist-types/tsconfig.tsbuildinfo",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "lib": ["ES2022", "DOM"]
+    "lib": ["ES2022"]
   },
-  "include": ["src", "src/**/*.json"],
+  "include": ["src"],
   "references": [
-    { "path": "../packages/content" },
-    { "path": "../packages/protocol" },
-    { "path": "../packages/save-schema" },
-    { "path": "../packages/presentation-contract" },
-    { "path": "../packages/game-core" }
+    { "path": "../content" },
+    { "path": "../protocol" }
   ]
 }

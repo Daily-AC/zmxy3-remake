@@ -11,5 +11,7 @@ social-server/data/
 __pycache__/
 *.pyc
 .superpowers/
+packages/*/dist-types/
+.tsbuild/
 # 注意：game/public/assets/extracted/ 里的导出素材【故意】进 git——
 # 仓库是 private，home 构建机直接 pull 即用；若将来开源必须先清洗历史。
