@@ -8,6 +8,7 @@ import { LoginScene } from './scenes/LoginScene'
 import { LobbyScene } from './scenes/LobbyScene'
 import { BattleLoadingScene } from './scenes/BattleLoadingScene'
 import { BattleScene } from './scenes/BattleScene'
+import { CombatCoreScene } from './scenes/CombatCoreScene'
 import { ensureArtFontsLoaded } from './systems/artFont'
 import { installOptimizedImageLoader } from './systems/optimizedAssets'
 import { RENDER_METRICS, installHiDpiTextFactory } from './systems/renderScale'
@@ -25,6 +26,17 @@ import { RENDER_METRICS, installHiDpiTextFactory } from './systems/renderScale'
 // frame with the browser's fallback font and never refresh once the real
 // face swaps in (Phaser Text doesn't watch document.fonts on its own).
 installOptimizedImageLoader(Phaser.Loader.LoaderPlugin.prototype)
+const searchParams = new URLSearchParams(window.location.search)
+const combatCoreSlice = searchParams.get('combatCoreSlice') === '1'
+const defaultScenes = [
+  MainMenuScene,
+  LoginScene,
+  LobbyScene,
+  SlotSelectScene,
+  CharacterSelectScene,
+  WorldMapScene,
+  SkillTreeScene, BattleLoadingScene, BattleScene,
+]
 ensureArtFontsLoaded().finally(() => {
   installHiDpiTextFactory(Phaser.GameObjects.GameObjectFactory.prototype)
   new Phaser.Game({
@@ -43,6 +55,6 @@ ensureArtFontsLoaded().finally(() => {
     // Enables `scene.add.dom(...)` so the dialogue input can live inside the
     // canvas (kept aligned to game coords by Phaser across scaling/letterboxing).
     dom: { createContainer: true },
-    scene: [MainMenuScene, LoginScene, LobbyScene, SlotSelectScene, CharacterSelectScene, WorldMapScene, SkillTreeScene, BattleLoadingScene, BattleScene],
+    scene: combatCoreSlice ? [CombatCoreScene] : defaultScenes,
   })
 })
