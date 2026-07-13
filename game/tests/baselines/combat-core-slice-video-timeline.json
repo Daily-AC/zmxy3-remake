@@ -1,0 +1,272 @@
+[
+  {
+    "scenario": "normal",
+    "milestone": "start"
+  },
+  {
+    "scenario": "normal",
+    "milestone": "whiff",
+    "event": {
+      "type": "attack-started",
+      "action": "hit1",
+      "sourceId": "hero-1",
+      "airborne": false
+    },
+    "cue": {
+      "type": "swing",
+      "action": "hit1",
+      "actorId": "hero-1",
+      "effect": "hit1",
+      "sound": "hit12"
+    }
+  },
+  {
+    "scenario": "normal",
+    "milestone": "bug-bundle"
+  },
+  {
+    "scenario": "normal",
+    "milestone": "busy",
+    "event": {
+      "type": "command-rejected",
+      "reason": "busy"
+    }
+  },
+  {
+    "scenario": "normal",
+    "milestone": "airborne-swing",
+    "event": {
+      "type": "attack-started",
+      "action": "hit1",
+      "sourceId": "hero-1",
+      "airborne": true
+    },
+    "cue": {
+      "type": "swing",
+      "action": "hit1",
+      "actorId": "hero-1",
+      "effect": "hit3",
+      "sound": "hit12"
+    }
+  },
+  {
+    "scenario": "normal",
+    "milestone": "landed"
+  },
+  {
+    "scenario": "normal",
+    "milestone": "monster-hit",
+    "events": [
+      {
+        "type": "attack-started",
+        "action": "hit1",
+        "sourceId": "monster-1",
+        "airborne": false
+      },
+      {
+        "type": "hit-confirmed",
+        "sourceId": "monster-1",
+        "targetId": "hero-1"
+      },
+      {
+        "type": "damage-applied",
+        "amount": 12,
+        "sourceId": "monster-1",
+        "targetId": "hero-1"
+      },
+      {
+        "type": "actor-staggered",
+        "actorId": "hero-1"
+      }
+    ]
+  },
+  {
+    "scenario": "normal",
+    "milestone": "replay-equal"
+  },
+  {
+    "scenario": "combo",
+    "milestone": "start"
+  },
+  {
+    "scenario": "combo",
+    "milestone": "face-right"
+  },
+  {
+    "scenario": "combo",
+    "milestone": "hit1",
+    "events": [
+      {
+        "type": "attack-started",
+        "action": "hit1",
+        "sourceId": "hero-1",
+        "airborne": false
+      },
+      {
+        "type": "damage-applied",
+        "amount": 32,
+        "sourceId": "hero-1",
+        "targetId": "monster-1"
+      }
+    ],
+    "cues": [
+      {
+        "type": "swing",
+        "action": "hit1",
+        "actorId": "hero-1",
+        "effect": "hit1",
+        "sound": "hit12"
+      },
+      {
+        "type": "impact",
+        "sourceId": "hero-1",
+        "targetId": "monster-1",
+        "hitStopMs": 50
+      }
+    ]
+  },
+  {
+    "scenario": "combo",
+    "milestone": "hit2",
+    "events": [
+      {
+        "type": "attack-started",
+        "action": "hit2",
+        "sourceId": "hero-1",
+        "airborne": false
+      },
+      {
+        "type": "damage-applied",
+        "amount": 32,
+        "sourceId": "hero-1",
+        "targetId": "monster-1"
+      }
+    ],
+    "cues": [
+      {
+        "type": "swing",
+        "action": "hit2",
+        "actorId": "hero-1",
+        "effect": "hit1",
+        "sound": "hit12"
+      },
+      {
+        "type": "impact",
+        "sourceId": "hero-1",
+        "targetId": "monster-1",
+        "hitStopMs": 50
+      }
+    ]
+  },
+  {
+    "scenario": "combo",
+    "milestone": "hit3",
+    "events": [
+      {
+        "type": "attack-started",
+        "action": "hit3",
+        "sourceId": "hero-1",
+        "airborne": false
+      },
+      {
+        "type": "damage-applied",
+        "amount": 32,
+        "sourceId": "hero-1",
+        "targetId": "monster-1"
+      }
+    ],
+    "cues": [
+      {
+        "type": "swing",
+        "action": "hit3",
+        "actorId": "hero-1",
+        "effect": "hit3",
+        "sound": "hit34"
+      },
+      {
+        "type": "impact",
+        "sourceId": "hero-1",
+        "targetId": "monster-1",
+        "hitStopMs": 50
+      }
+    ]
+  },
+  {
+    "scenario": "combo",
+    "milestone": "hit4",
+    "events": [
+      {
+        "type": "attack-started",
+        "action": "hit4",
+        "sourceId": "hero-1",
+        "airborne": false
+      },
+      {
+        "type": "damage-applied",
+        "amount": 32,
+        "sourceId": "hero-1",
+        "targetId": "monster-1"
+      }
+    ],
+    "cues": [
+      {
+        "type": "swing",
+        "action": "hit4",
+        "actorId": "hero-1",
+        "effect": "hit4",
+        "sound": "hit34"
+      },
+      {
+        "type": "impact",
+        "sourceId": "hero-1",
+        "targetId": "monster-1",
+        "hitStopMs": 50
+      }
+    ]
+  },
+  {
+    "scenario": "combo",
+    "milestone": "hit5",
+    "events": [
+      {
+        "type": "attack-started",
+        "action": "hit5",
+        "sourceId": "hero-1",
+        "airborne": false
+      },
+      {
+        "type": "damage-applied",
+        "amount": 32,
+        "sourceId": "hero-1",
+        "targetId": "monster-1"
+      }
+    ],
+    "cues": [
+      {
+        "type": "swing",
+        "action": "hit5",
+        "actorId": "hero-1",
+        "effect": "hit5",
+        "sound": "hit5"
+      },
+      {
+        "type": "impact",
+        "sourceId": "hero-1",
+        "targetId": "monster-1",
+        "hitStopMs": 50
+      }
+    ]
+  },
+  {
+    "scenario": "combo",
+    "milestone": "defeated-dead"
+  },
+  {
+    "scenario": "combo",
+    "milestone": "removed"
+  },
+  {
+    "scenario": "combo",
+    "milestone": "replay-equal"
+  }
+]

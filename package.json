@@ -10,7 +10,9 @@
     "test:game": "npm test -w zmxy3-game",
     "build:game": "npm run build -w zmxy3-game",
     "bench:combat-core": "npm run bench -w @zaixu/game-core",
-    "verify:combat-core": "npm run verify:combat-core -w zmxy3-game"
+    "verify:combat-core": "npm run verify:combat-core -w zmxy3-game",
+    "collect:windows-performance": "node game/tools/collect-windows-performance-evidence.mjs",
+    "verify:windows-performance-evidence": "node game/tools/verify-windows-performance-evidence.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

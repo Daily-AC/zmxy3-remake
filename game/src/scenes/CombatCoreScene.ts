@@ -471,7 +471,7 @@ export class CombatCoreScene extends Phaser.Scene {
       facingOverride ?? hero.facing,
     )
     const effect = this.add.sprite(placement.x, placement.y, role1EffectFrameKey(action, 1))
-      .setOrigin(placement.originX, placement.originY)
+      .setDisplayOrigin(placement.originX, placement.originY)
       .setScale(ROLE1_EFFECTS[action].scale)
       .setFlipX(placement.flipX)
       .setDepth(8)
