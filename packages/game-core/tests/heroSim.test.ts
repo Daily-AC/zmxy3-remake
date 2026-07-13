@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { TICK_MS } from '../src/systems/tick'
-import { currentDir } from '../src/systems/locomotion'
+import { TICK_MS } from '../src/time/tick'
+import { currentDir } from '../src/hero/locomotion'
 import {
   HeroEdges,
   NO_EDGES,
@@ -8,7 +8,7 @@ import {
   clearHeroInputForLock,
   initHeroState,
   makeHeroConfig,
-} from '../src/systems/heroSim'
+} from '../src/hero/heroSim'
 
 const cfg = makeHeroConfig({
   groundY: 400,
