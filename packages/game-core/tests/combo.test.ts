@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { ComboConfig, initCombo, stepCombo, ComboState } from '../src/hero/combo'
+import { TICK_MS } from '../src/time/tick'
 
 const cfg: ComboConfig = {
   // stages 1..5 each 100ms; index 0 unused.
@@ -16,6 +17,29 @@ function wait(state: ComboState, dtMs: number, grounded = true) {
 }
 
 describe('combo state machine (五段连击窗口判定)', () => {
+  it('ends a sixteen-tick action on the sixteenth accumulated tick', () => {
+    const exactTicks: ComboConfig = {
+      stageDurationsMs: [0, 16 * TICK_MS, 100, 100, 100, 100],
+      graceMs: 1500,
+      maxStage: 5,
+    }
+    const state = initCombo()
+    stepCombo(state, { attackPressed: true, grounded: true, dtMs: 0 }, exactTicks)
+
+    for (let tick = 1; tick < 16; tick += 1) {
+      expect(stepCombo(state, { attackPressed: false, grounded: true, dtMs: TICK_MS }, exactTicks).attacking).toBe(true)
+    }
+    expect(stepCombo(state, { attackPressed: false, grounded: true, dtMs: TICK_MS }, exactTicks).attacking).toBe(false)
+  })
+
+  it('chains at the inclusive grace boundary despite integration noise', () => {
+    const state: ComboState = { stage: 1, elapsedMs: 150.0000005 }
+    const result = stepCombo(state, { attackPressed: true, grounded: true, dtMs: 0 }, cfg)
+
+    expect(result.action).toBe('hit2')
+    expect(state.stage).toBe(2)
+  })
+
   it('a grounded press starts hit1', () => {
     const s = initCombo()
     const r = press(s)

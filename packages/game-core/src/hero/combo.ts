@@ -37,6 +37,8 @@
 //    normal attacks separately as a single hit1-duration swing, without
 //    starting or chaining this ComboState.
 
+import { hasReachedDuration, TIME_EPSILON_MS } from '../time/tick'
+
 export type ComboStage = 0 | 1 | 2 | 3 | 4 | 5
 
 export interface ComboConfig {
@@ -101,14 +103,14 @@ export function stepCombo(
   // lost -- Role1.as's myKeyDown() rejects the attack key outright while
   // isAttacking() is true (`return` before even reaching normalHit()); there
   // is no buffer/queue concept in the original (see file header).
-  if (state.elapsedMs < stageDur) {
+  if (!hasReachedDuration(state.elapsedMs, stageDur)) {
     return { action: actionFor(state.stage), changed: false, attacking: true }
   }
 
   // Swing finished. Only a FRESH press landing inside the post-swing grace
   // window chains to the next stage (Role1.normalHit()'s hitNum-continuation
   // window, see file header).
-  const inGrace = state.elapsedMs <= stageDur + cfg.graceMs
+  const inGrace = state.elapsedMs <= stageDur + cfg.graceMs + TIME_EPSILON_MS
   if (input.attackPressed && inGrace && state.stage < cfg.maxStage) {
     state.stage = (state.stage + 1) as ComboStage
     state.elapsedMs = 0

@@ -7,7 +7,7 @@
 // the browser's real frame rate. A real-time delta is accumulated and drained
 // one tick at a time; input edges are applied on the first tick of the batch.
 
-import { TICK_MS } from '../time/tick'
+import { hasReachedDuration, TICK_MS } from '../time/tick'
 import {
   MoveConfig,
   MoveState,
@@ -138,7 +138,7 @@ function tick(state: HeroState, edges: HeroEdges, cfg: HeroConfig): void {
   const hadAirAttack = state.airAttack !== null
   if (state.airAttack) {
     state.airAttack.elapsedMs += cfg.tickMs
-    if (state.airAttack.elapsedMs >= state.airAttack.durationMs) state.airAttack = null
+    if (hasReachedDuration(state.airAttack.elapsedMs, state.airAttack.durationMs)) state.airAttack = null
   }
 
   // An attack edge received during an active air attack is discarded even if

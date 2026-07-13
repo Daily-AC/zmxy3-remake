@@ -8,10 +8,11 @@ import {
   advanceMonster,
   MonsterInput,
   VerticalFollowConfig,
-} from '../src/systems/monsterSim'
-import { TICK_MS } from '../src/systems/tick'
-import { MONSTER_ATTACKS, horizontalAttackReach, resolveAttackSpec } from '../src/systems/attackSpec'
-import { centeredBox, overlaps } from '../src/systems/hitbox'
+} from '../src/monster/monsterSim'
+import { TICK_MS } from '../src/time/tick'
+import { horizontalAttackReach, resolveAttackHitbox } from '../src/combat/attackSpec'
+import { MONSTER_ATTACKS } from '../src/combat/monsterAttackSpecs'
+import { centeredBox, overlaps } from '../src/combat/hitbox'
 
 // Advance one fixed tick at a time for `ms`, so the per-call 8-tick budget cap
 // (a spiral-of-death guard, irrelevant at real frame deltas) never truncates.
@@ -44,6 +45,30 @@ const noHit = (heroX: number, heroAlive: boolean): MonsterInput => ({
 })
 
 describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
+  it('removes Monster7 after exactly fifteen dead-animation ticks', () => {
+    const cfg: MonsterConfig = {
+      ...makeCfg(),
+      deadDurationMs: 500,
+    }
+    const monster = initMonster(cfg, 500, 400)
+    advanceMonster(
+      monster,
+      { heroX: 500, heroAlive: true, incomingHit: { attackId: 1, damage: 999 } },
+      TICK_MS,
+      cfg,
+    )
+
+    for (let tick = 2; tick < 15; tick += 1) {
+      expect(advanceMonster(monster, noHit(500, true), TICK_MS, cfg)).not.toContainEqual(
+        expect.objectContaining({ type: 'death' }),
+      )
+    }
+    expect(advanceMonster(monster, noHit(500, true), TICK_MS, cfg)).toContainEqual(
+      expect.objectContaining({ type: 'death' }),
+    )
+    expect(monster.mode).toBe('gone')
+  })
+
   it('patrols and turns at the patrol bounds when there is no target', () => {
     const cfg = makeCfg(() => 1) // never idle
     const m = initMonster(cfg, 205, 400)
@@ -223,8 +248,8 @@ describe('monsterSim Monster30 AI (巡逻/索敌/追击/近战)', () => {
       const events = run(m, noHit(heroX, true), 4000, cfg)
 
       expect(events.some((event) => event.type === 'attack-frame')).toBe(true)
-      const resolved = resolveAttackSpec(attackSpec, { x: m.x + selfOffsetX, y: 400 }, m.facing)
-      expect(overlaps(resolved.hitbox, centeredBox(heroX + 7.5, 400, 90, 150))).toBe(true)
+      const resolved = resolveAttackHitbox(attackSpec, { x: m.x + selfOffsetX, y: 400 }, m.facing)
+      expect(overlaps(resolved, centeredBox(heroX + 7.5, 400, 90, 150))).toBe(true)
     })
   })
 

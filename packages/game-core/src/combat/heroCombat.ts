@@ -37,6 +37,8 @@
 //    the caller passes `respawnX`, so BattleScene can choose level-start
 //    coordinates without this module knowing about levels.
 
+import { hasReachedDuration } from '../time/tick'
+
 export type HeroCombatState = 'ready' | 'hurt' | 'dead'
 
 export interface HeroCombatModel {
@@ -222,7 +224,7 @@ export function updateHeroCombat(
   respawnX?: number,
 ): HeroCombatEvent[] {
   if (hero.state === 'dead') {
-    if (hero.respawnAtMs !== undefined && timeMs >= hero.respawnAtMs) {
+    if (hero.respawnAtMs !== undefined && hasReachedDuration(timeMs, hero.respawnAtMs)) {
       resetHeroCombat(hero)
       if (respawnX !== undefined) position.x = respawnX
       return [{ type: 'respawn' }]
@@ -234,7 +236,7 @@ export function updateHeroCombat(
     hero.meterInvulnerableUntilMs = undefined
   }
 
-  if (hero.state === 'hurt' && timeMs >= hero.hurtUntilMs) {
+  if (hero.state === 'hurt' && hasReachedDuration(timeMs, hero.hurtUntilMs)) {
     hero.state = 'ready'
   }
 
