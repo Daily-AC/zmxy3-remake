@@ -1,7 +1,10 @@
 import { defineContentId } from '@zaixu/content'
 import { describe, expect, it } from 'vitest'
 import { CombatSession } from '../src/session/combatSession'
+import { SeededRandom } from '../src/random/seededRandom'
 import type { CombatCommand } from '../src/session/commands'
+import type { CombatEvent } from '../src/session/events'
+import { cloneSerializable } from '../src/session/snapshot'
 import type { CombatSessionDefinition, HeroCombatDefinition } from '../src/session/types'
 
 function makeSessionDefinition(): CombatSessionDefinition {
@@ -237,5 +240,247 @@ describe('CombatSession', () => {
     session.step(2)
 
     expect(session.getSnapshot().actors[0].x).toBe(100)
+  })
+
+  it('applies the original physics formula once per hero swing', () => {
+    const closeDefinition = cloneSerializable(definition)
+    closeDefinition.monsters[0].spawn.x = 220
+    const session = new CombatSession(closeDefinition)
+    session.enqueue({ actorId: 'hero-1', sequence: 1, atTick: 1, type: 'press-right' })
+    session.enqueue({ actorId: 'hero-1', sequence: 2, atTick: 2, type: 'press-attack' })
+
+    const events = session.step(2)
+
+    expect(events).toContainEqual({
+      type: 'damage-applied',
+      tick: 2,
+      sourceId: 'hero-1',
+      targetId: 'monster-1',
+      attackId: 1,
+      rawPower: 36,
+      defense: 4,
+      amount: 32,
+      remainingHp: 118,
+    })
+    expect(events.filter((event) => event.type === 'hit-confirmed')).toHaveLength(1)
+    expect(events.map((event) => event.type)).toEqual([
+      'attack-started',
+      'hit-confirmed',
+      'damage-applied',
+      'actor-staggered',
+    ])
+    session.step(8)
+    expect(session.getSnapshot().actors.find((actor) => actor.id === 'monster-1')?.hp).toBe(118)
+  })
+
+  it('whiffs without impact while preserving the legacy RNG cadence', () => {
+    const session = new CombatSession(definition)
+    const expectedRandom = new SeededRandom(definition.seed)
+    expectedRandom.next()
+    expectedRandom.next()
+    session.enqueue({ actorId: 'hero-1', sequence: 1, atTick: 1, type: 'press-attack' })
+
+    const events = session.step()
+
+    expect(events.some((event) => event.type === 'attack-started')).toBe(true)
+    expect(events.some((event) => event.type === 'damage-applied')).toBe(false)
+    expect(session.getSnapshot().randomState).toBe(expectedRandom.getState())
+  })
+
+  it('keeps consuming one two-roll candidate per active tick after hit dedup', () => {
+    const closeDefinition = cloneSerializable(definition)
+    closeDefinition.monsters[0].spawn.x = 120
+    const session = new CombatSession(closeDefinition)
+    const expectedRandom = new SeededRandom(definition.seed)
+    for (let tick = 0; tick < 3; tick += 1) {
+      expectedRandom.next()
+      expectedRandom.next()
+    }
+    session.enqueue({ actorId: 'hero-1', sequence: 1, atTick: 1, type: 'press-attack' })
+
+    const events = session.step(3)
+
+    expect(events.filter((event) => event.type === 'damage-applied')).toHaveLength(1)
+    expect(session.getSnapshot().randomState).toBe(expectedRandom.getState())
+  })
+
+  it('applies Monster7 power 14 against hero defense 2 and knocks left', () => {
+    const closeDefinition = cloneSerializable(definition)
+    closeDefinition.hero.spawn.x = 500
+    closeDefinition.monsters[0].spawn.x = 540
+    closeDefinition.monsters[0].stats.normalAttackRate = 1
+    closeDefinition.monsters[0].decisionIntervalMs = 1000 / 30
+    const session = new CombatSession(closeDefinition)
+
+    const events = session.step(8)
+
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'damage-applied',
+      sourceId: 'monster-1',
+      targetId: 'hero-1',
+      rawPower: 14,
+      defense: 2,
+      amount: 12,
+      remainingHp: 108,
+    }))
+    expect(session.getSnapshot().actors[0].x).toBeLessThan(500)
+  })
+
+  it('rounds final magic damage with the legacy one-point floor', () => {
+    const magicDefinition = cloneSerializable(definition)
+    magicDefinition.hero.spawn.x = 500
+    magicDefinition.hero.magicDefenseFraction = 0.1
+    magicDefinition.monsters[0].spawn.x = 540
+    magicDefinition.monsters[0].stats.normalAttackRate = 1
+    magicDefinition.monsters[0].decisionIntervalMs = 1000 / 30
+    magicDefinition.monsters[0].attackPower = 7
+    magicDefinition.monsters[0].attackKind = 'magic'
+    const session = new CombatSession(magicDefinition)
+
+    expect(session.step(8)).toContainEqual(expect.objectContaining({
+      type: 'damage-applied',
+      sourceId: 'monster-1',
+      targetId: 'hero-1',
+      rawPower: 7,
+      defense: 0.1,
+      amount: 6,
+      remainingHp: 114,
+    }))
+  })
+
+  it('defeats then removes a monster after its dead animation', () => {
+    const lethalDefinition = cloneSerializable(definition)
+    lethalDefinition.monsters[0].spawn.x = 220
+    lethalDefinition.monsters[0].stats.hp = 32
+    const session = new CombatSession(lethalDefinition)
+    session.enqueue({ actorId: 'hero-1', sequence: 1, atTick: 1, type: 'press-right' })
+    session.enqueue({ actorId: 'hero-1', sequence: 2, atTick: 2, type: 'press-attack' })
+
+    expect(session.step(2)).toContainEqual(expect.objectContaining({
+      type: 'actor-defeated',
+      actorId: 'monster-1',
+    }))
+    let removed: CombatEvent | undefined
+    while (!removed && session.getSnapshot().tick < 30) {
+      removed = session.step().find((event) => event.type === 'actor-removed')
+    }
+    expect(removed).toEqual({ type: 'actor-removed', tick: 16, actorId: 'monster-1' })
+  })
+
+  it('respawns a defeated hero at the configured spawn', () => {
+    const lethalDefinition = cloneSerializable(definition)
+    lethalDefinition.hero.spawn.x = 500
+    lethalDefinition.monsters[0].spawn.x = 500
+    lethalDefinition.monsters[0].stats.normalAttackRate = 1
+    lethalDefinition.monsters[0].decisionIntervalMs = 1000 / 30
+    lethalDefinition.monsters[0].attackPower = 500
+    const session = new CombatSession(lethalDefinition)
+
+    expect(session.step(8)).toContainEqual(expect.objectContaining({
+      type: 'actor-defeated',
+      actorId: 'hero-1',
+    }))
+    const respawnEvents = session.step(45)
+    expect(respawnEvents).toContainEqual(expect.objectContaining({
+      type: 'actor-respawned',
+      actorId: 'hero-1',
+      x: 500,
+    }))
+    expect(session.getSnapshot().actors[0].hp).toBe(120)
+  })
+
+  it('freezes a defeated hero without consuming active-swing RNG', () => {
+    const lethalDefinition = cloneSerializable(definition)
+    lethalDefinition.hero.spawn.x = 500
+    lethalDefinition.monsters[0].spawn.x = 540
+    lethalDefinition.monsters[0].stats.normalAttackRate = 1
+    lethalDefinition.monsters[0].decisionIntervalMs = 1000 / 30
+    lethalDefinition.monsters[0].attackPower = 500
+    const session = new CombatSession(lethalDefinition)
+    session.enqueue({ actorId: 'hero-1', sequence: 1, atTick: 1, type: 'press-left' })
+    session.enqueue({ actorId: 'hero-1', sequence: 2, atTick: 2, type: 'press-attack' })
+
+    const deathEvents = session.step(8)
+    expect(deathEvents).toContainEqual(expect.objectContaining({ type: 'actor-defeated', actorId: 'hero-1' }))
+    const atDeath = session.getSnapshot()
+    expect(atDeath.actors[0].attacking).toBe(false)
+    const randomAtDeath = atDeath.randomState
+    const xAtDeath = atDeath.actors[0].x
+
+    session.enqueue({ actorId: 'hero-1', sequence: 3, atTick: 9, type: 'press-attack' })
+    expect(session.step(2)).toContainEqual(expect.objectContaining({
+      type: 'command-rejected',
+      reason: 'dead',
+    }))
+    expect(session.getSnapshot().actors[0].x).toBe(xAtDeath)
+    expect(session.getSnapshot().actors[0].attacking).toBe(false)
+    expect(session.getSnapshot().randomState).toBe(randomAtDeath)
+  })
+
+  it('respawns with all transient hero simulation state cleared', () => {
+    const lethalDefinition = cloneSerializable(definition)
+    lethalDefinition.hero.spawn.x = 500
+    lethalDefinition.monsters[0].spawn.x = 540
+    lethalDefinition.monsters[0].stats.normalAttackRate = 1
+    lethalDefinition.monsters[0].decisionIntervalMs = 1000 / 30
+    lethalDefinition.monsters[0].attackPower = 500
+    const session = new CombatSession(lethalDefinition)
+    session.enqueue({ actorId: 'hero-1', sequence: 1, atTick: 1, type: 'press-left' })
+    session.enqueue({ actorId: 'hero-1', sequence: 2, atTick: 1, type: 'press-jump' })
+    session.enqueue({ actorId: 'hero-1', sequence: 3, atTick: 2, type: 'press-attack' })
+    session.step(8)
+    const attackIdAtDeath = session.getSnapshot().actors[0].attackId
+
+    const respawnEvents = session.step(45)
+
+    expect(respawnEvents).toContainEqual(expect.objectContaining({ type: 'actor-respawned', actorId: 'hero-1' }))
+    const hero = session.getSnapshot().actors[0]
+    expect(hero).toMatchObject({
+      x: 500,
+      y: 400,
+      action: 'wait',
+      comboStage: null,
+      attacking: false,
+      knockbackVelocityX: 0,
+    })
+    expect(hero.attackId).toBe(attackIdAtDeath)
+    session.step(3)
+    expect(session.getSnapshot().actors[0].x).toBe(500)
+    expect(session.getSnapshot().actors[0].action).toBe('wait')
+  })
+
+  it('starts a monster attack at the maximum AABB-overlap center distance', () => {
+    const edgeDefinition = cloneSerializable(definition)
+    edgeDefinition.hero.spawn.x = 701
+    edgeDefinition.monsters[0].spawn.x = 500
+    edgeDefinition.monsters[0].stats.normalAttackRate = 1
+    edgeDefinition.monsters[0].decisionIntervalMs = 1000 / 30
+    edgeDefinition.monsters[0].targetOffsetX = 7.5
+    edgeDefinition.monsters[0].selfOffsetX = 4.5
+    edgeDefinition.hero.collisionOffset.x = 7.5
+    edgeDefinition.monsters[0].collisionOffset.x = 4.5
+    const session = new CombatSession(edgeDefinition)
+
+    expect(session.step()).toContainEqual(expect.objectContaining({
+      type: 'attack-started',
+      sourceId: 'monster-1',
+    }))
+    expect(session.getSnapshot().actors[1].x).toBe(500)
+  })
+
+  it('uses collision offsets for attack and hurt boxes while snapshots stay logical', () => {
+    const offsetDefinition = cloneSerializable(definition)
+    offsetDefinition.hero.spawn.x = 100
+    offsetDefinition.hero.collisionOffset.x = 100
+    offsetDefinition.monsters[0].spawn.x = 275
+    offsetDefinition.monsters[0].collisionOffset.x = -100
+    const session = new CombatSession(offsetDefinition)
+    session.enqueue({ actorId: 'hero-1', sequence: 1, atTick: 1, type: 'press-attack' })
+
+    expect(session.step()).toContainEqual(expect.objectContaining({
+      type: 'damage-applied',
+      targetId: 'monster-1',
+    }))
+    expect(session.getSnapshot().actors.map(({ x }) => x)).toEqual([100, 275])
   })
 })

@@ -103,10 +103,26 @@ export const HeroCombatTuning = {
   respawnDelayMs: 1500,
 } as const
 
-export function createHeroCombat(): HeroCombatModel {
+export interface HeroCombatConfig {
+  maxHp: number
+  hurtDurationMs: number
+  respawnDelayMs: number
+  knockbackPixelsPerSecond: number
+  knockbackDecayPerSecond: number
+  hitMeterThreshold: number
+  hitMeterProtectionMs: number
+}
+
+export const DEFAULT_HERO_COMBAT_CONFIG: HeroCombatConfig = {
+  ...HeroCombatTuning,
+}
+
+export function createHeroCombat(
+  config: HeroCombatConfig = DEFAULT_HERO_COMBAT_CONFIG,
+): HeroCombatModel {
   return {
-    hp: HeroCombatTuning.maxHp,
-    maxHp: HeroCombatTuning.maxHp,
+    hp: config.maxHp,
+    maxHp: config.maxHp,
     state: 'ready',
     hurtUntilMs: 0,
     invulnerableUntilMs: 0,
@@ -157,12 +173,12 @@ function hitMeterIncrement(gapMs: number | undefined): number {
   return 1
 }
 
-function accumulateHitMeter(hero: HeroCombatModel, timeMs: number): void {
+function accumulateHitMeter(hero: HeroCombatModel, timeMs: number, config: HeroCombatConfig): void {
   const gapMs = hero.lastHitAtMs === undefined ? undefined : timeMs - hero.lastHitAtMs
   hero.lastHitAtMs = timeMs
   hero.hitMeter += hitMeterIncrement(gapMs)
-  if (hero.hitMeter > HeroCombatTuning.hitMeterThreshold) {
-    hero.meterInvulnerableUntilMs = timeMs + HeroCombatTuning.hitMeterProtectionMs
+  if (hero.hitMeter > config.hitMeterThreshold) {
+    hero.meterInvulnerableUntilMs = timeMs + config.hitMeterProtectionMs
     hero.hitMeter = 0
   }
 }
@@ -178,6 +194,7 @@ export function applyHeroDamage(
   hero: HeroCombatModel,
   hit: HeroHit,
   timeMs: number,
+  config: HeroCombatConfig = DEFAULT_HERO_COMBAT_CONFIG,
 ): HeroCombatEvent[] {
   if (hero.state === 'dead') return []
 
@@ -195,15 +212,15 @@ export function applyHeroDamage(
     hero.hurtUntilMs = 0
     hero.invulnerableUntilMs = Number.POSITIVE_INFINITY
     hero.knockbackVelocityX = 0
-    hero.respawnAtMs = timeMs + HeroCombatTuning.respawnDelayMs
+    hero.respawnAtMs = timeMs + config.respawnDelayMs
     return [{ type: 'death' }]
   }
 
   hero.state = 'hurt'
-  hero.hurtUntilMs = timeMs + HeroCombatTuning.hurtDurationMs
-  hero.knockbackVelocityX = hit.knockbackX * HeroCombatTuning.knockbackPixelsPerSecond
+  hero.hurtUntilMs = timeMs + config.hurtDurationMs
+  hero.knockbackVelocityX = hit.knockbackX * config.knockbackPixelsPerSecond
 
-  accumulateHitMeter(hero, timeMs)
+  accumulateHitMeter(hero, timeMs, config)
 
   return [{ type: 'hurt' }]
 }
@@ -222,6 +239,7 @@ export function updateHeroCombat(
   timeMs: number,
   deltaMs: number,
   respawnX?: number,
+  config: HeroCombatConfig = DEFAULT_HERO_COMBAT_CONFIG,
 ): HeroCombatEvent[] {
   if (hero.state === 'dead') {
     if (hero.respawnAtMs !== undefined && hasReachedDuration(timeMs, hero.respawnAtMs)) {
@@ -246,7 +264,7 @@ export function updateHeroCombat(
   position.x += hero.knockbackVelocityX * deltaSeconds
   position.x = Math.min(Math.max(position.x, bounds.minX), bounds.maxX)
 
-  const decayFactor = Math.max(0, 1 - HeroCombatTuning.knockbackDecayPerSecond * deltaSeconds)
+  const decayFactor = Math.max(0, 1 - config.knockbackDecayPerSecond * deltaSeconds)
   hero.knockbackVelocityX *= decayFactor
   if (Math.abs(hero.knockbackVelocityX) < 1) hero.knockbackVelocityX = 0
 

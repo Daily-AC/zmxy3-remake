@@ -1,15 +1,31 @@
 import { PROTOCOL_VERSION } from '@zaixu/protocol'
-import { createHeroCombat, type HeroCombatModel } from '../combat/heroCombat'
+import { horizontalAttackReach, resolveAttackHitbox } from '../combat/attackSpec'
+import {
+  DEFAULT_HERO_COMBAT_CONFIG,
+  applyHeroDamage,
+  createHeroCombat,
+  updateHeroCombat,
+  type HeroCombatConfig,
+  type HeroCombatModel,
+} from '../combat/heroCombat'
+import {
+  applyMagicDefense,
+  applyPhysicsDefense,
+  calculateNormalAttackPower,
+  type NormalAttackHit,
+} from '../combat/heroScale'
+import { centeredBox, overlaps, type Rect } from '../combat/hitbox'
 import {
   NO_EDGES,
   advanceHero,
+  clearHeroInputForLock,
   initHeroState,
   makeHeroConfig,
   type HeroConfig,
   type HeroEdges,
   type HeroState,
 } from '../hero/heroSim'
-import { initMonster, type MonsterConfig, type MonsterState } from '../monster/monsterSim'
+import { advanceMonster, initMonster, type MonsterConfig, type MonsterState } from '../monster/monsterSim'
 import { SeededRandom } from '../random/seededRandom'
 import { TICK_MS } from '../time/tick'
 import type { CombatDeterministicState } from './checkpoint'
@@ -47,7 +63,11 @@ function mergeCommandEdge(edges: HeroEdges, type: CombatCommandType): void {
   Object.assign(edges, edgeForCommand[type])
 }
 
-function monsterConfig(definition: MonsterCombatDefinition, random: SeededRandom): MonsterConfig {
+function monsterConfig(
+  definition: MonsterCombatDefinition,
+  heroHurtboxWidth: number,
+  random: SeededRandom,
+): MonsterConfig {
   return {
     stats: definition.stats,
     patrolMin: definition.patrolMin,
@@ -63,9 +83,26 @@ function monsterConfig(definition: MonsterCombatDefinition, random: SeededRandom
     targetingGeometry: {
       selfOffsetX: definition.selfOffsetX,
       targetOffsetX: definition.targetOffsetX,
-      attackReach: definition.attack.hitbox.forward + definition.attack.hitbox.width / 2,
+      attackReach: Math.max(0, horizontalAttackReach(definition.attack, heroHurtboxWidth) - 1),
     },
   }
+}
+
+function actorCenter(
+  position: { x: number; y: number },
+  collisionOffset: { x: number; y: number },
+): { x: number; y: number } {
+  return {
+    x: position.x + collisionOffset.x,
+    y: position.y + collisionOffset.y,
+  }
+}
+
+function hurtboxAt(
+  center: { x: number; y: number },
+  size: { width: number; height: number },
+): Rect {
+  return centeredBox(center.x, center.y, size.width, size.height)
 }
 
 function monsterLifeState(mode: MonsterState['mode']): ActorLifeState {
@@ -81,9 +118,11 @@ export class CombatSession {
   private readonly queuedCommands: CombatCommand[] = []
   private readonly lastSeenSequenceByActor = new Map<ActorId, number>()
   private readonly heroConfig: HeroConfig
+  private readonly heroCombatConfig: HeroCombatConfig
   private readonly heroState: HeroState
   private readonly heroCombat: HeroCombatModel
   private readonly monsterStates = new Map<ActorId, MonsterState>()
+  private readonly monsterConfigs = new Map<ActorId, MonsterConfig>()
   private readonly monsterAttackIds = new Map<ActorId, number>()
   private currentTick = 0
 
@@ -98,14 +137,20 @@ export class CombatSession {
       comboGraceMs: this.definition.hero.comboGraceMs,
     })
     this.heroState = initHeroState(this.heroConfig, this.definition.hero.spawn.x)
-    this.heroCombat = createHeroCombat()
-    this.heroCombat.hp = this.definition.hero.maxHp
-    this.heroCombat.maxHp = this.definition.hero.maxHp
+    this.heroCombatConfig = {
+      ...DEFAULT_HERO_COMBAT_CONFIG,
+      maxHp: this.definition.hero.maxHp,
+      hurtDurationMs: this.definition.hero.hurtDurationMs,
+      respawnDelayMs: this.definition.hero.respawnDelayMs,
+    }
+    this.heroCombat = createHeroCombat(this.heroCombatConfig)
 
     for (const monster of this.definition.monsters) {
+      const config = monsterConfig(monster, this.definition.hero.hurtbox.width, this.random)
+      this.monsterConfigs.set(monster.id, config)
       this.monsterStates.set(
         monster.id,
-        initMonster(monsterConfig(monster, this.random), monster.spawn.x, monster.spawn.y),
+        initMonster(config, monster.spawn.x, monster.spawn.y),
       )
       this.monsterAttackIds.set(monster.id, 0)
     }
@@ -134,18 +179,22 @@ export class CombatSession {
         if (reason) events.push({ type: 'command-rejected', tick: this.currentTick, command, reason })
       }
 
-      const previousAttackId = this.heroState.attackId
-      advanceHero(this.heroState, edges, TICK_MS, this.heroConfig)
-      if (this.heroState.attackId !== previousAttackId) {
-        events.push({
-          type: 'attack-started',
-          tick: this.currentTick,
-          sourceId: this.definition.hero.id,
-          attackId: this.heroState.attackId,
-          action: this.heroState.action,
-          airborne: this.heroState.airAttack !== null,
-        })
+      if (this.heroCombat.state !== 'dead') {
+        const previousAttackId = this.heroState.attackId
+        advanceHero(this.heroState, edges, TICK_MS, this.heroConfig)
+        if (this.heroState.attackId !== previousAttackId) {
+          events.push({
+            type: 'attack-started',
+            tick: this.currentTick,
+            sourceId: this.definition.hero.id,
+            attackId: this.heroState.attackId,
+            action: this.heroState.action,
+            airborne: this.heroState.airAttack !== null,
+          })
+        }
       }
+
+      this.resolveCombatTick(events)
     }
     return events
   }
@@ -163,7 +212,7 @@ export class CombatSession {
       maxHp: this.heroCombat.maxHp,
       lifeState: this.heroCombat.state,
       comboStage: this.heroState.combo.stage || null,
-      statuses: [],
+      statuses: this.heroCombat.meterInvulnerableUntilMs === undefined ? [] : ['meter-invulnerable'],
       knockbackVelocityX: this.heroCombat.knockbackVelocityX,
       attackId: this.heroState.attackId,
       attacking: this.heroState.attacking,
@@ -183,7 +232,7 @@ export class CombatSession {
         maxHp: definition.stats.hp,
         lifeState: monsterLifeState(state.mode),
         comboStage: null,
-        statuses: [],
+        statuses: [state.mode, ...(state.staggerArmorMs > 0 ? ['stagger-armor'] : [])],
         knockbackVelocityX: 0,
         attackId: this.monsterAttackIds.get(definition.id)!,
         attacking: state.mode === 'attack',
@@ -235,5 +284,220 @@ export class CombatSession {
     if (command.type === 'press-attack' && this.heroState.attacking) return 'busy'
     mergeCommandEdge(edges, command.type)
     return null
+  }
+
+  private resolveCombatTick(events: CombatEvent[]): void {
+    const heroCenter = actorCenter(
+      { x: this.heroState.x, y: this.heroState.vertical.y },
+      this.definition.hero.collisionOffset,
+    )
+    const heroAction = this.heroState.action as NormalAttackHit
+    const heroAttackSpec = this.heroCombat.state !== 'dead' && this.heroState.attacking
+      ? this.definition.hero.normalAttacks[heroAction]
+      : undefined
+    const heroRawPower = heroAttackSpec
+      ? Math.max(1, Math.round(calculateNormalAttackPower(heroAction, this.definition.hero.atk, {
+          critChance: this.definition.hero.critChance,
+          random: () => this.random.next(),
+        })))
+      : null
+    const heroAttackBox = heroAttackSpec
+      ? resolveAttackHitbox(heroAttackSpec, heroCenter, this.heroState.facing)
+      : null
+    const pendingHeroHits: MonsterCombatDefinition[] = []
+
+    for (const monsterDefinition of this.definition.monsters) {
+      const monsterState = this.monsterStates.get(monsterDefinition.id)!
+      const monsterCenter = actorCenter(monsterState, monsterDefinition.collisionOffset)
+      const canReceiveHeroHit = monsterState.mode !== 'dead' && monsterState.mode !== 'gone'
+      const incomingHit =
+        canReceiveHeroHit &&
+        heroAttackBox &&
+        heroRawPower !== null &&
+        !monsterState.resolvedAttackIds.includes(this.heroState.attackId) &&
+        overlaps(heroAttackBox, hurtboxAt(monsterCenter, monsterDefinition.hurtbox))
+          ? { attackId: this.heroState.attackId, damage: heroRawPower }
+          : null
+      const hpBefore = monsterState.hp
+      const modeBefore = monsterState.mode
+      const monsterEvents = advanceMonster(
+        monsterState,
+        {
+          heroX: this.heroState.x,
+          heroY: this.heroState.vertical.y,
+          heroAlive: this.heroCombat.state !== 'dead',
+          incomingHit,
+        },
+        TICK_MS,
+        this.monsterConfigs.get(monsterDefinition.id)!,
+      )
+
+      if (incomingHit && monsterState.hp < hpBefore) {
+        events.push({
+          type: 'hit-confirmed',
+          tick: this.currentTick,
+          sourceId: this.definition.hero.id,
+          targetId: monsterDefinition.id,
+          attackId: incomingHit.attackId,
+        })
+        events.push({
+          type: 'damage-applied',
+          tick: this.currentTick,
+          sourceId: this.definition.hero.id,
+          targetId: monsterDefinition.id,
+          attackId: incomingHit.attackId,
+          rawPower: heroRawPower!,
+          defense: monsterDefinition.stats.def,
+          amount: applyPhysicsDefense(heroRawPower!, monsterDefinition.stats.def),
+          remainingHp: monsterState.hp,
+        })
+        if (monsterState.mode === 'dead' && modeBefore !== 'dead') {
+          events.push({
+            type: 'actor-defeated',
+            tick: this.currentTick,
+            actorId: monsterDefinition.id,
+            sourceId: this.definition.hero.id,
+          })
+        } else if (monsterState.mode === 'hurt') {
+          events.push({
+            type: 'actor-staggered',
+            tick: this.currentTick,
+            actorId: monsterDefinition.id,
+            untilTick: this.currentTick + Math.ceil(
+              (monsterDefinition.hurtDurationMs - monsterState.modeElapsedMs) / TICK_MS,
+            ),
+          })
+        }
+      }
+
+      for (const monsterEvent of monsterEvents) {
+        if (monsterEvent.type === 'attack-start') {
+          const attackId = this.monsterAttackIds.get(monsterDefinition.id)! + 1
+          this.monsterAttackIds.set(monsterDefinition.id, attackId)
+          events.push({
+            type: 'attack-started',
+            tick: this.currentTick,
+            sourceId: monsterDefinition.id,
+            attackId,
+            action: monsterState.action,
+            airborne: false,
+          })
+        } else if (monsterEvent.type === 'attack-frame') {
+          pendingHeroHits.push(monsterDefinition)
+        } else if (monsterEvent.type === 'death') {
+          events.push({ type: 'actor-removed', tick: this.currentTick, actorId: monsterDefinition.id })
+        }
+      }
+    }
+
+    for (const monsterDefinition of pendingHeroHits) {
+      this.resolveMonsterHit(monsterDefinition, events)
+    }
+
+    const heroCombatEvents = updateHeroCombat(
+      this.heroCombat,
+      this.heroState,
+      { minX: this.definition.hero.minX, maxX: this.definition.hero.maxX },
+      this.currentTick * TICK_MS,
+      TICK_MS,
+      this.definition.hero.spawn.x,
+      this.heroCombatConfig,
+    )
+    if (heroCombatEvents.some((event) => event.type === 'respawn')) {
+      this.resetHeroSimulationForRespawn()
+      events.push({
+        type: 'actor-respawned',
+        tick: this.currentTick,
+        actorId: this.definition.hero.id,
+        x: this.definition.hero.spawn.x,
+        y: this.definition.hero.spawn.y,
+      })
+    }
+  }
+
+  private resolveMonsterHit(monsterDefinition: MonsterCombatDefinition, events: CombatEvent[]): void {
+    const monsterState = this.monsterStates.get(monsterDefinition.id)!
+    const monsterCenter = actorCenter(monsterState, monsterDefinition.collisionOffset)
+    const heroCenter = actorCenter(
+      { x: this.heroState.x, y: this.heroState.vertical.y },
+      this.definition.hero.collisionOffset,
+    )
+    const attackBox = resolveAttackHitbox(monsterDefinition.attack, monsterCenter, monsterState.facing)
+    if (!overlaps(attackBox, hurtboxAt(heroCenter, this.definition.hero.hurtbox))) return
+
+    const mitigated = monsterDefinition.attackKind === 'physics'
+      ? applyPhysicsDefense(monsterDefinition.attackPower, this.definition.hero.def)
+      : applyMagicDefense(monsterDefinition.attackPower, this.definition.hero.magicDefenseFraction)
+    const amount = Math.max(1, Math.round(mitigated))
+    const hpBefore = this.heroCombat.hp
+    const attackId = this.monsterAttackIds.get(monsterDefinition.id)!
+    const heroEvents = applyHeroDamage(
+      this.heroCombat,
+      {
+        sourceId: monsterDefinition.id,
+        attackId,
+        damage: amount,
+        knockbackX: monsterState.facing,
+      },
+      this.currentTick * TICK_MS,
+      this.heroCombatConfig,
+    )
+    if (this.heroCombat.hp >= hpBefore) return
+
+    events.push({
+      type: 'hit-confirmed',
+      tick: this.currentTick,
+      sourceId: monsterDefinition.id,
+      targetId: this.definition.hero.id,
+      attackId,
+    })
+    events.push({
+      type: 'damage-applied',
+      tick: this.currentTick,
+      sourceId: monsterDefinition.id,
+      targetId: this.definition.hero.id,
+      attackId,
+      rawPower: monsterDefinition.attackPower,
+      defense: monsterDefinition.attackKind === 'physics'
+        ? this.definition.hero.def
+        : this.definition.hero.magicDefenseFraction,
+      amount: hpBefore - this.heroCombat.hp,
+      remainingHp: this.heroCombat.hp,
+    })
+    for (const heroEvent of heroEvents) {
+      if (heroEvent.type === 'hurt') {
+        events.push({
+          type: 'actor-staggered',
+          tick: this.currentTick,
+          actorId: this.definition.hero.id,
+          untilTick: this.currentTick + Math.ceil(this.definition.hero.hurtDurationMs / TICK_MS),
+        })
+      } else if (heroEvent.type === 'death') {
+        this.stopHeroSimulationForDefeat()
+        events.push({
+          type: 'actor-defeated',
+          tick: this.currentTick,
+          actorId: this.definition.hero.id,
+          sourceId: monsterDefinition.id,
+        })
+      }
+    }
+  }
+
+  private stopHeroSimulationForDefeat(): void {
+    clearHeroInputForLock(this.heroState)
+    this.heroState.combo.stage = 0
+    this.heroState.combo.elapsedMs = 0
+    this.heroState.airAttack = null
+    this.heroState.attacking = false
+    this.heroState.action = 'dead'
+  }
+
+  private resetHeroSimulationForRespawn(): void {
+    const attackId = this.heroState.attackId
+    const fresh = initHeroState(this.heroConfig, this.definition.hero.spawn.x)
+    fresh.vertical.y = this.definition.hero.spawn.y
+    fresh.attackId = attackId
+    Object.assign(this.heroState, fresh)
   }
 }
