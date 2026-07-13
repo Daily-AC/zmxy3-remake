@@ -1,5 +1,73 @@
 {
   "schemaVersion": 1,
-  "status": "NOT-RUN",
-  "reason": "Deferred to the designated clean Windows reference runner; local macOS telemetry is not acceptance evidence."
+  "status": "PASS",
+  "testedGitCommit": "a1fbdb49f769c1dd22ed9e66d926446755f6b9f3",
+  "sourceDigest": "379a6a0b13049c2cfec16dbf1c1f447c2e51fd84f715cfe18fccbe395dce9637",
+  "simulationRuns": [
+    {
+      "actors": 51,
+      "warmupTicks": 120,
+      "measuredTicks": 600,
+      "p50Ms": 0.004099999999993997,
+      "p95Ms": 0.010100000000022646,
+      "maxMs": 0.34370000000001255
+    },
+    {
+      "actors": 51,
+      "warmupTicks": 120,
+      "measuredTicks": 600,
+      "p50Ms": 0.004099999999993997,
+      "p95Ms": 0.009399999999970987,
+      "maxMs": 0.6157999999999788
+    },
+    {
+      "actors": 51,
+      "warmupTicks": 120,
+      "measuredTicks": 600,
+      "p50Ms": 0.004099999999993997,
+      "p95Ms": 0.011200000000030741,
+      "maxMs": 0.41360000000003083
+    }
+  ],
+  "browser": {
+    "work": {
+      "count": 600,
+      "p50Ms": 0.2000000011175871,
+      "p95Ms": 0.8000000007450581,
+      "maxMs": 4.200000001117587
+    },
+    "interval": {
+      "count": 600,
+      "p50Ms": 5.900000000372529,
+      "p95Ms": 6.599999999627471,
+      "maxMs": 9.600000001490116,
+      "droppedFrameCount": 0,
+      "droppedFrameRate": 0
+    }
+  },
+  "environment": {
+    "platform": "win32",
+    "architecture": "x64",
+    "nodeVersion": "v24.18.0",
+    "chromiumVersion": "150.0.7871.101",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "hardwareConcurrency": 24,
+    "deviceScaleFactor": 1,
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "canvasBacking": {
+      "width": 960,
+      "height": 540
+    },
+    "canvasClient": {
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080
+    },
+    "webglVendor": "Google Inc. (NVIDIA)",
+    "webglRenderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5090 Laptop GPU (0x00002C58) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  }
 }
