@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  DEFAULT_HERO_COMBAT_CONFIG,
   HeroCombatTuning,
   HeroHit,
   createHeroCombat,
@@ -16,6 +17,23 @@ function hit(partial: Partial<HeroHit> = {}): HeroHit {
 }
 
 describe('heroCombat (受伤/受击条/死亡/复活)', () => {
+  it('honors configured max HP and respawn delay', () => {
+    const config = {
+      ...DEFAULT_HERO_COMBAT_CONFIG,
+      maxHp: 40,
+      respawnDelayMs: 300,
+    }
+    const hero = createHeroCombat(config)
+    const pos = { x: 500 }
+
+    expect(hero.hp).toBe(40)
+    expect(applyHeroDamage(hero, hit({ damage: 40 }), 1000, config)).toEqual([{ type: 'death' }])
+    expect(hero.respawnAtMs).toBe(1300)
+    expect(updateHeroCombat(hero, pos, bounds, 1299, 16, undefined, config)).toEqual([])
+    expect(updateHeroCombat(hero, pos, bounds, 1300, 16, undefined, config)).toEqual([{ type: 'respawn' }])
+    expect(hero.hp).toBe(40)
+  })
+
   it('starts at full HP and ready', () => {
     const hero = createHeroCombat()
     expect(hero.hp).toBe(HeroCombatTuning.maxHp)
