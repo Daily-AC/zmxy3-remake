@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -15,6 +16,10 @@ function git(...args: string[]): string {
   return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim()
 }
 
+function sha256File(filePath: string): string {
+  return createHash('sha256').update(readFileSync(filePath)).digest('hex')
+}
+
 const definition = createLegacyCombatSliceDefinition()
 const totalTicks = 180
 const trace = runLegacyCombatSliceTrace(definition, CANONICAL_LEGACY_COMMANDS, totalTicks)
@@ -22,8 +27,8 @@ const fixture = {
   version: 1,
   metadata: {
     baselineCommit: git('rev-parse', 'hackathon-2026-final^{commit}'),
-    battleSceneSourceHash: git('hash-object', 'game/src/scenes/BattleScene.ts'),
-    oracleSourceHash: git('hash-object', 'game/src/adapters/legacyCombatSliceOracle.ts'),
+    battleSceneSourceHash: sha256File(path.join(gameRoot, 'src/scenes/BattleScene.ts')),
+    oracleSourceHash: sha256File(path.join(gameRoot, 'src/adapters/legacyCombatSliceOracle.ts')),
   },
   seed: definition.seed,
   definition,

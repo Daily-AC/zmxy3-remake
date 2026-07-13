@@ -368,7 +368,31 @@ export function stableLegacyHash(value: unknown): string {
 }
 
 function cloneOwned<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
+  const ancestors = new WeakSet<object>()
+  const clone = (entry: unknown): unknown => {
+    if (entry === null || typeof entry === 'string' || typeof entry === 'boolean' || typeof entry === 'number') {
+      return entry
+    }
+    if (entry === undefined) return undefined
+    if (typeof entry !== 'object') {
+      throw new TypeError('legacy combat data contains a non-serializable value')
+    }
+    if (ancestors.has(entry)) throw new TypeError('legacy combat data contains a cycle')
+    ancestors.add(entry)
+    try {
+      if (Array.isArray(entry)) return entry.map(clone)
+      const prototype = Object.getPrototypeOf(entry)
+      if (prototype !== Object.prototype && prototype !== null) {
+        throw new TypeError('legacy combat data must contain only plain objects')
+      }
+      const output: Record<string, unknown> = Object.create(prototype) as Record<string, unknown>
+      for (const [key, child] of Object.entries(entry)) output[key] = clone(child)
+      return output
+    } finally {
+      ancestors.delete(entry)
+    }
+  }
+  return clone(value) as T
 }
 
 function pointWithOffset(position: LegacyPoint, offset: LegacyPoint): LegacyPoint {
