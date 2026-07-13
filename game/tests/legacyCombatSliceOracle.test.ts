@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { MONSTER_ATTACKS } from '../src/systems/attackSpec'
 import {
   CANONICAL_LEGACY_COMMANDS,
+  LegacyCombatSliceOracle,
   createLegacyCombatSliceDefinition,
   legacyFinalizeIncomingHeroDamage,
   legacyHeroSwingIntent,
@@ -73,6 +74,34 @@ describe('legacy combat slice helpers', () => {
   it('derives knockback from current positions after the hero crosses behind', () => {
     expect(legacyMonsterKnockbackDirection(610, 600)).toBe(1)
     expect(legacyMonsterKnockbackDirection(590, 600)).toBe(-1)
+  })
+
+  it('preserves special numbers for deterministic checkpoint encoding', () => {
+    const definition = createLegacyCombatSliceDefinition()
+    definition.hero.maxX = Number.POSITIVE_INFINITY
+    definition.hero.minX = Number.NEGATIVE_INFINITY
+    definition.hero.atk = Number.NaN
+
+    const checkpoint = new LegacyCombatSliceOracle(definition).getDeterministicState()
+
+    expect(checkpoint.domain.definition).toMatchObject({
+      hero: {
+        maxX: 'positive-infinity',
+        minX: 'negative-infinity',
+        atk: 'nan',
+      },
+    })
+  })
+
+  it('owns definition data and rejects cyclic input', () => {
+    const definition = createLegacyCombatSliceDefinition()
+    const oracle = new LegacyCombatSliceOracle(definition)
+    definition.hero.atk = 999
+    expect(oracle.getDeterministicState().domain.definition).toMatchObject({ hero: { atk: 36 } })
+
+    const cyclic = createLegacyCombatSliceDefinition() as LegacySliceDefinition & { cycle?: unknown }
+    cyclic.cycle = cyclic
+    expect(() => new LegacyCombatSliceOracle(cyclic)).toThrow()
   })
 
   it('gives both Monster2 hit frames distinct landed-hit ids', () => {

@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import golden from './fixtures/combat-core-slice-legacy-golden.json'
 import {
@@ -6,12 +9,16 @@ import {
   type LegacySliceDefinition,
 } from '../src/adapters/legacyCombatSliceOracle'
 
+function sha256File(filePath: string): string {
+  return createHash('sha256').update(readFileSync(filePath)).digest('hex')
+}
+
 describe('legacy combat slice golden trace', () => {
   it('reproduces every accepted legacy frame without rewriting provenance metadata', () => {
     expect(golden.metadata).toEqual({
       baselineCommit: 'bdf9405726eea6c209d48f720fed8a95c815dfc7',
-      battleSceneSourceHash: '2da181c402efafb4a7893befb08123adeab11e30',
-      oracleSourceHash: '19fa981bdc312811594777485f5f8e4c2e7a2770',
+      battleSceneSourceHash: sha256File(path.resolve(process.cwd(), 'src/scenes/BattleScene.ts')),
+      oracleSourceHash: sha256File(path.resolve(process.cwd(), 'src/adapters/legacyCombatSliceOracle.ts')),
     })
     expect(golden.seed).toBe(golden.definition.seed)
     expect(golden.totalTicks).toBe(180)
