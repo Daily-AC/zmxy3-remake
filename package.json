@@ -1,0 +1,20 @@
+{
+  "name": "zaixu-xiyou",
+  "private": true,
+  "workspaces": ["game", "packages/*"],
+  "scripts": {
+    "typecheck:projects": "tsc -b",
+    "typecheck:core": "npm run typecheck -w @zaixu/game-core",
+    "test:contracts": "npm test -w @zaixu/content && npm test -w @zaixu/protocol && npm test -w @zaixu/save-schema && npm test -w @zaixu/presentation-contract",
+    "test:core": "npm test -w @zaixu/game-core",
+    "test:game": "npm test -w zmxy3-game",
+    "build:game": "npm run build -w zmxy3-game",
+    "bench:combat-core": "npm run bench -w @zaixu/game-core",
+    "verify:combat-core": "npm run verify:combat-core -w zmxy3-game"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  }
+}

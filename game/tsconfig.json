@@ -4,6 +4,13 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "outDir": "../.tsbuild/game",
+    "rootDir": "src",
+    "tsBuildInfoFile": "../.tsbuild/game/tsconfig.tsbuildinfo",
     "resolveJsonModule": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -12,5 +19,12 @@
     "isolatedModules": true,
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["src"]
+  "include": ["src", "src/**/*.json"],
+  "references": [
+    { "path": "../packages/content" },
+    { "path": "../packages/protocol" },
+    { "path": "../packages/save-schema" },
+    { "path": "../packages/presentation-contract" },
+    { "path": "../packages/game-core" }
+  ]
 }
