@@ -29,7 +29,7 @@ import {
   advanceSkillOverlay,
   spawnedHitboxToRect,
 } from '../systems/monsterBehaviors'
-import { heroAttackBox, centeredBox, overlaps, type Rect } from '../systems/hitbox'
+import { centeredBox, overlaps, type Rect } from '../systems/hitbox'
 import {
   fallbackMonsterAttackSpec,
   horizontalAttackReach,
@@ -89,9 +89,14 @@ import {
 import {
   AttackKind,
   NormalAttackHit,
-  calculateNormalAttackPower,
   resolveIncomingHeroDamage,
 } from '../systems/heroScale'
+import {
+  legacyFinalizeIncomingHeroDamage,
+  legacyHeroSwingIntent,
+  legacyMonsterAttackHitbox,
+  legacyMonsterKnockbackDirection,
+} from '../adapters/legacyCombatSliceOracle'
 import {
   spawnEnemyProjectile,
   stepEnemyProjectilesAgainstTargets,
@@ -3063,24 +3068,30 @@ export class BattleScene extends Phaser.Scene {
     const s = this.heroState
     if (!s.attacking) return
     const heroCenter = this.heroVisualCenter()
-    const box = heroAttackBox(heroCenter.x, heroCenter.y, s.facing)
-    const hitKey = COMBO_STAGE_HIT[s.combo.stage] ?? 'hit1'
-    const atk = heroTotalAtk(this.identity, this.equipment)
-    const crit = heroStats(this.identity, this.equipment).crit
-    const damage = Math.max(1, Math.round(calculateNormalAttackPower(hitKey, atk, { critChance: crit })))
+    const intent = legacyHeroSwingIntent({
+      attacking: s.attacking,
+      comboStage: s.combo.stage,
+      attackId: s.attackId,
+      facing: s.facing,
+      center: heroCenter,
+      atk: heroTotalAtk(this.identity, this.equipment),
+      critChance: heroStats(this.identity, this.equipment).crit,
+      random: Math.random,
+    })
+    if (!intent) return
     let firstHit: MonsterEntity | null = null
     for (const e of this.aliveMonsters()) {
       const mBox = this.monsterHitbox(e)
-      if (!overlaps(box, mBox)) continue
-      if (e.state.resolvedAttackIds.includes(s.attackId)) continue
-      if (e.hitQueue.some((h) => h.attackId === s.attackId)) continue
-      if (!this.queueOrSendHeroHit(e, s.attackId, damage)) continue
+      if (!overlaps(intent.hitbox, mBox)) continue
+      if (e.state.resolvedAttackIds.includes(intent.attackId)) continue
+      if (e.hitQueue.some((h) => h.attackId === intent.attackId)) continue
+      if (!this.queueOrSendHeroHit(e, intent.attackId, intent.rawPower)) continue
       const mc = this.monsterVisualCenter(e)
-      this.floatText(mc.x, this.monsterVisibleTopY(e) - 14, `${damage}`, 'damage')
+      this.floatText(mc.x, this.monsterVisibleTopY(e) - 14, `${intent.rawPower}`, 'damage')
       if (!firstHit) firstHit = e
     }
-    if (firstHit && !this.playedHitIds.has(s.attackId)) {
-      this.playedHitIds.add(s.attackId)
+    if (firstHit && !this.playedHitIds.has(intent.attackId)) {
+      this.playedHitIds.add(intent.attackId)
       this.rollHitProcs(firstHit)
       this.onLocalHitFx()
     }
@@ -3527,8 +3538,9 @@ export class BattleScene extends Phaser.Scene {
       e.state.facing,
     )
     if (visual && resolved.effect) this.spawnMonsterHit1Effect(visual.phase, resolved.effect)
-    if (overlaps(resolved.hitbox, this.currentHeroHurtbox())) this.monsterHitsHero(e)
-    this.sendRemoteHeroHits(e, resolved.hitbox, e.attackPower, e.attackKind)
+    const hitbox = legacyMonsterAttackHitbox(spec, this.monsterVisualCenter(e), e.state.facing)
+    if (overlaps(hitbox, this.currentHeroHurtbox())) this.monsterHitsHero(e)
+    this.sendRemoteHeroHits(e, hitbox, e.attackPower, e.attackKind)
   }
 
   private spawnMonsterHit1Effect(
@@ -3687,18 +3699,13 @@ export class BattleScene extends Phaser.Scene {
   private monsterHitsHero(e: MonsterEntity, overridePower?: number, overrideKind?: AttackKind): void {
     if (isHeroDead(this.identity)) return
     if (isHeroInvincible(this.identity, this.simClockMs)) return
-    const mitigated = Math.max(
-      1,
-      Math.round(
-        resolveIncomingHeroDamage(
-          overridePower ?? e.attackPower,
-          overrideKind ?? e.attackKind,
-          heroTotalDef(this.identity, this.equipment),
-          heroMagicDef(this.identity),
-        ),
-      ),
+    const mitigated = legacyFinalizeIncomingHeroDamage(
+      overridePower ?? e.attackPower,
+      overrideKind ?? e.attackKind,
+      heroTotalDef(this.identity, this.equipment),
+      heroMagicDef(this.identity),
     )
-    const knockbackX = this.heroState.x < e.state.x ? -1 : 1
+    const knockbackX = legacyMonsterKnockbackDirection(this.heroState.x, e.state.x)
     const hit: HeroHit = {
       sourceId: this.coopMonsterId(e),
       attackId: ++e.attackId,
