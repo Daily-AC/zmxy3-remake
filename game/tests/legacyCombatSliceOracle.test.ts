@@ -9,6 +9,7 @@ import {
   legacyMonsterKnockbackDirection,
   legacyMonsterAttackHitbox,
   runLegacyCombatSliceTrace,
+  toLegacyDeterministicValue,
   type LegacyCombatEvent,
   type LegacySliceDefinition,
 } from '../src/adapters/legacyCombatSliceOracle'
@@ -76,21 +77,20 @@ describe('legacy combat slice helpers', () => {
     expect(legacyMonsterKnockbackDirection(590, 600)).toBe(-1)
   })
 
-  it('preserves special numbers for deterministic checkpoint encoding', () => {
+  it('preserves special numbers in the standalone deterministic encoder but rejects them in definitions', () => {
     const definition = createLegacyCombatSliceDefinition()
     definition.hero.maxX = Number.POSITIVE_INFINITY
     definition.hero.minX = Number.NEGATIVE_INFINITY
     definition.hero.atk = Number.NaN
 
-    const checkpoint = new LegacyCombatSliceOracle(definition).getDeterministicState()
-
-    expect(checkpoint.domain.definition).toMatchObject({
+    expect(toLegacyDeterministicValue(definition)).toMatchObject({
       hero: {
         maxX: 'positive-infinity',
         minX: 'negative-infinity',
         atk: 'nan',
       },
     })
+    expect(() => new LegacyCombatSliceOracle(definition)).toThrow()
   })
 
   it('owns definition data and rejects cyclic input', () => {

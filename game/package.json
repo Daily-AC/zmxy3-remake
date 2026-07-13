@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run validate:content && tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "validate:content": "vitest run tests/contentBuildGate.test.ts",
     "verify:combat-core": "node tools/verify-combat-core-slice.mjs"
   },
   "dependencies": {

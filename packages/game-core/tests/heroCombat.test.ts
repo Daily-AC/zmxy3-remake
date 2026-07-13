@@ -69,14 +69,14 @@ describe('heroCombat (受伤/受击条/死亡/复活)', () => {
     expect(hero.hp).toBe(hpAfterFirst)
   })
 
-  it('preserves explicit hard invulnerability and consumes a blocked attack id', () => {
+  it('preserves explicit hard invulnerability without consuming a blocked attack id', () => {
     const hero = createHeroCombat()
     hero.invulnerableUntilMs = 1500
 
     expect(applyHeroDamage(hero, hit({ attackId: 11 }), 1200)).toEqual([])
     expect(hero.hp).toBe(hero.maxHp)
-    expect(applyHeroDamage(hero, hit({ attackId: 11 }), 1600)).toEqual([])
-    expect(applyHeroDamage(hero, hit({ attackId: 12 }), 1600)).toEqual([{ type: 'hurt' }])
+    expect(hero.resolvedHitIds).not.toContain('monster-1:11')
+    expect(applyHeroDamage(hero, hit({ attackId: 11 }), 1600)).toEqual([{ type: 'hurt' }])
     expect(hero.hp).toBe(hero.maxHp - 15)
   })
 
@@ -152,10 +152,17 @@ describe('heroCombat (受伤/受击条/死亡/复活)', () => {
     expect(events).toEqual([])
     expect(hero.hp).toBe(hpAtTrip)
     expect(isHeroInvulnerable(hero, trippedAt + 100)).toBe(true)
+    expect(hero.resolvedHitIds).not.toContain(`monster-1:${sourceCounter + 1}`)
 
     // Protection lifts once the ~3s window has fully elapsed.
     updateHeroCombat(hero, pos, bounds, trippedAt + HeroCombatTuning.hitMeterProtectionMs, 16)
     expect(hero.meterInvulnerableUntilMs).toBeUndefined()
+    expect(applyHeroDamage(
+      hero,
+      { sourceId: 'monster-1', attackId: sourceCounter + 1, damage: 1, knockbackX: 0 },
+      trippedAt + HeroCombatTuning.hitMeterProtectionMs,
+    )).toEqual([{ type: 'hurt' }])
+    expect(hero.hp).toBe(hpAtTrip - 1)
   })
 
   it('dies at HP <= 0 and schedules a respawn', () => {

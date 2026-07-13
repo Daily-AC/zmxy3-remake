@@ -4,6 +4,7 @@ import {
   DEFAULT_HERO_COMBAT_CONFIG,
   applyHeroDamage,
   createHeroCombat,
+  isHeroDamageInvulnerable,
   updateHeroCombat,
   type HeroCombatConfig,
   type HeroCombatModel,
@@ -123,6 +124,7 @@ export class CombatSession {
   private readonly heroCombat: HeroCombatModel
   private readonly monsterStates = new Map<ActorId, MonsterState>()
   private readonly monsterConfigs = new Map<ActorId, MonsterConfig>()
+  private readonly monsterSwingEventIds = new Map<ActorId, number>()
   private readonly monsterAttackIds = new Map<ActorId, number>()
   private currentTick = 0
 
@@ -152,6 +154,7 @@ export class CombatSession {
         monster.id,
         initMonster(config, monster.spawn.x, monster.spawn.y),
       )
+      this.monsterSwingEventIds.set(monster.id, 0)
       this.monsterAttackIds.set(monster.id, 0)
     }
   }
@@ -260,6 +263,7 @@ export class CombatSession {
         monsters: this.definition.monsters.map((definition) => ({
           id: definition.id,
           attackId: this.monsterAttackIds.get(definition.id)!,
+          swingEventId: this.monsterSwingEventIds.get(definition.id)!,
           simulation: this.monsterStates.get(definition.id)!,
         })),
       },
@@ -372,8 +376,8 @@ export class CombatSession {
 
       for (const monsterEvent of monsterEvents) {
         if (monsterEvent.type === 'attack-start') {
-          const attackId = this.monsterAttackIds.get(monsterDefinition.id)! + 1
-          this.monsterAttackIds.set(monsterDefinition.id, attackId)
+          const attackId = this.monsterSwingEventIds.get(monsterDefinition.id)! + 1
+          this.monsterSwingEventIds.set(monsterDefinition.id, attackId)
           events.push({
             type: 'attack-started',
             tick: this.currentTick,
@@ -424,13 +428,15 @@ export class CombatSession {
     )
     const attackBox = resolveAttackHitbox(monsterDefinition.attack, monsterCenter, monsterState.facing)
     if (!overlaps(attackBox, hurtboxAt(heroCenter, this.definition.hero.hurtbox))) return
+    const timeMs = this.currentTick * TICK_MS
+    if (isHeroDamageInvulnerable(this.heroCombat, timeMs)) return
 
     const mitigated = monsterDefinition.attackKind === 'physics'
       ? applyPhysicsDefense(monsterDefinition.attackPower, this.definition.hero.def)
       : applyMagicDefense(monsterDefinition.attackPower, this.definition.hero.magicDefenseFraction)
     const amount = Math.max(1, Math.round(mitigated))
     const hpBefore = this.heroCombat.hp
-    const attackId = this.monsterAttackIds.get(monsterDefinition.id)!
+    const attackId = this.monsterAttackIds.get(monsterDefinition.id)! + 1
     const heroEvents = applyHeroDamage(
       this.heroCombat,
       {
@@ -439,10 +445,11 @@ export class CombatSession {
         damage: amount,
         knockbackX: monsterState.facing,
       },
-      this.currentTick * TICK_MS,
+      timeMs,
       this.heroCombatConfig,
     )
     if (this.heroCombat.hp >= hpBefore) return
+    this.monsterAttackIds.set(monsterDefinition.id, attackId)
 
     events.push({
       type: 'hit-confirmed',

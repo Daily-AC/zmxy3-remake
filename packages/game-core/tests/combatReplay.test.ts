@@ -22,7 +22,7 @@ describe('deterministic combat recording and replay', () => {
     const recording = createCombatRecording(makeSessionDefinition({ monsterX: 220 }), commands, 60)
     const replay = replayCombat(recording)
 
-    expect(recording.expectedFinalHash).toBe('b641defd')
+    expect(recording.expectedFinalHash).toBe('04ea4b00')
     expect(replay.finalHash).toBe(recording.expectedFinalHash)
     expect(replay.events).toEqual(recording.events)
     expect(replay.matchesExpectedHash).toBe(true)
@@ -61,6 +61,16 @@ describe('deterministic combat recording and replay', () => {
     expect(right.getSnapshot()).toEqual(left.getSnapshot())
     expect(stableHash(right.getDeterministicState()))
       .not.toBe(stableHash(left.getDeterministicState()))
+  })
+
+  it('hashes the monster swing counter independently from landed-hit ids', () => {
+    const session = new CombatSession(makeSessionDefinition())
+    const left = cloneSerializable(session.getDeterministicState())
+    expect(left.domain.monsters[0]).toHaveProperty('swingEventId', 0)
+    const right = cloneSerializable(left)
+    ;(right.domain.monsters[0] as unknown as Record<string, unknown>).swingEventId = 1
+
+    expect(stableHash(right)).not.toBe(stableHash(left))
   })
 
   it('produces one hash and event stream across one hundred recordings', () => {

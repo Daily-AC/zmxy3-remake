@@ -152,13 +152,17 @@ export function isHeroCombatDead(hero: HeroCombatModel): boolean {
   return hero.state === 'dead'
 }
 
-export function isHeroInvulnerable(hero: HeroCombatModel, timeMs: number): boolean {
+export function isHeroDamageInvulnerable(hero: HeroCombatModel, timeMs: number): boolean {
   if (hero.state === 'dead') return false
   if (timeMs < hero.invulnerableUntilMs) return true
   if (hero.meterInvulnerableUntilMs !== undefined && timeMs < hero.meterInvulnerableUntilMs) {
     return true
   }
   return false
+}
+
+export function isHeroInvulnerable(hero: HeroCombatModel, timeMs: number): boolean {
+  return isHeroDamageInvulnerable(hero, timeMs)
 }
 
 // TODO-verify: kagami's beAttackDoing() only documents "denser hits add more,
@@ -185,10 +189,9 @@ function accumulateHitMeter(hero: HeroCombatModel, timeMs: number, config: HeroC
 
 /**
  * Resolve one incoming hit against the hero. Dedups by (sourceId, attackId)
- * first — same as kagami's CombatSystem.resolveHitOnce — so a swing blocked by
- * explicit hard invulnerability is consumed and cannot retroactively land
- * once protection passes. Returns the events this call produced (empty if the
- * hit was a dup, or blocked by death/hard invulnerability).
+ * after checking hard/meter protection. A protected frame is not resolved and
+ * can reuse the same landed-hit id after protection passes. Returns the events
+ * this call produced (empty if blocked by death/protection or already resolved).
  */
 export function applyHeroDamage(
   hero: HeroCombatModel,
@@ -197,12 +200,11 @@ export function applyHeroDamage(
   config: HeroCombatConfig = DEFAULT_HERO_COMBAT_CONFIG,
 ): HeroCombatEvent[] {
   if (hero.state === 'dead') return []
+  if (isHeroDamageInvulnerable(hero, timeMs)) return []
 
   const hitId = `${hit.sourceId}:${hit.attackId}`
   if (hero.resolvedHitIds.includes(hitId)) return []
   hero.resolvedHitIds.push(hitId)
-
-  if (isHeroInvulnerable(hero, timeMs)) return []
 
   hero.hp = Math.max(0, hero.hp - Math.max(0, hit.damage))
   hero.lastDamageEvent = hit
