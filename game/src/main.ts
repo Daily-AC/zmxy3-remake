@@ -9,6 +9,7 @@ import { LobbyScene } from './scenes/LobbyScene'
 import { BattleLoadingScene } from './scenes/BattleLoadingScene'
 import { BattleScene } from './scenes/BattleScene'
 import { ensureArtFontsLoaded } from './systems/artFont'
+import { installOptimizedImageLoader } from './systems/optimizedAssets'
 import { RENDER_METRICS, installHiDpiTextFactory } from './systems/renderScale'
 
 // Milestone 2 combat slice: ground physics, jump/double-jump, five-hit combo.
@@ -23,6 +24,7 @@ import { RENDER_METRICS, installHiDpiTextFactory } from './systems/renderScale'
 // local files, resolves fast, but text scenes must not draw on the first
 // frame with the browser's fallback font and never refresh once the real
 // face swaps in (Phaser Text doesn't watch document.fonts on its own).
+installOptimizedImageLoader(Phaser.Loader.LoaderPlugin.prototype)
 ensureArtFontsLoaded().finally(() => {
   installHiDpiTextFactory(Phaser.GameObjects.GameObjectFactory.prototype)
   new Phaser.Game({

@@ -17,10 +17,40 @@
          DOM 容器）——不要再叠 flex 居中，两套居中会把 DOM 输入层和 canvas 拆开。 */
       #app { position: fixed; inset: 0; }
       #app canvas { box-shadow: 0 0 60px rgba(0, 0, 0, 0.75); }
+      #asset-loading {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: grid;
+        align-content: end;
+        padding: clamp(38px, 8vh, 86px) clamp(34px, 8vw, 120px);
+        box-sizing: border-box;
+        color: #fff5e3;
+        background:
+          linear-gradient(90deg, rgba(9, 4, 3, 0.9) 0%, rgba(9, 4, 3, 0.56) 48%, rgba(9, 4, 3, 0.16) 100%),
+          url('/assets/generated/loading-nine-heavens.webp') center / cover no-repeat,
+          #140905;
+        opacity: 1;
+        transition: opacity 220ms ease;
+      }
+      #asset-loading.is-hidden { opacity: 0; pointer-events: none; }
+      .asset-loading-kicker { color: #ffbf4a; font: 700 15px/1.4 system-ui, sans-serif; }
+      .asset-loading-title { margin-top: 8px; font: 700 clamp(36px, 7vw, 62px)/1.05 "Kaiti SC", STKaiti, KaiTi, serif; text-shadow: 0 3px 16px #2a1007; }
+      .asset-loading-status { margin-top: 18px; color: #ead8bd; font: 16px/1.5 system-ui, sans-serif; }
+      .asset-loading-track { width: min(680px, 78vw); height: 3px; margin-top: 18px; background: rgba(255, 240, 210, 0.22); overflow: hidden; }
+      #asset-loading-bar { width: 4%; height: 100%; background: #ffa31a; box-shadow: 0 0 16px rgba(255, 163, 26, 0.8); transition: width 120ms linear; }
+      #asset-loading-progress { margin-top: 9px; color: #ffd27a; font: 700 14px/1 system-ui, sans-serif; }
     </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="asset-loading" role="status" aria-live="polite">
+      <div class="asset-loading-kicker">再续西游 · 云路校准</div>
+      <div class="asset-loading-title">天庭推演中</div>
+      <div id="asset-loading-status" class="asset-loading-status">正在唤醒天庭画卷...</div>
+      <div class="asset-loading-track"><div id="asset-loading-bar"></div></div>
+      <div id="asset-loading-progress">0%</div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
