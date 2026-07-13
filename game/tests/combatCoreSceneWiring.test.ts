@@ -59,6 +59,8 @@ describe('combat core slice wiring', () => {
     expect(source).toContain('Math.min(deltaMs, TICK_MS * 8)')
     expect(source).toContain('actor.x + actorDef.collisionOffset.x')
     expect(source).toContain('actor.y + actorDef.collisionOffset.y')
+    expect(source).toContain('.setDisplayOrigin(placement.originX, placement.originY)')
+    expect(source).not.toContain('.setOrigin(placement.originX, placement.originY)')
     expect(source).toContain('structuredClone')
     expect(source).toContain('delete window.__combatCoreSlice')
     expect(source).toContain('getDeterminismProof')
