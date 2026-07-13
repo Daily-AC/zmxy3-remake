@@ -21,6 +21,7 @@ export interface CombatDeterministicState {
     monsters: readonly {
       id: string
       attackId: number
+      swingEventId: number
       simulation: DeterministicValue
     }[]
   }

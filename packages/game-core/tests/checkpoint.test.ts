@@ -36,7 +36,7 @@ describe('toDeterministicValue', () => {
         definition: {},
         heroSimulation: {},
         heroCombat: {},
-        monsters: [],
+        monsters: [{ id: 'monster-1', attackId: 0, swingEventId: 0, simulation: {} }],
       },
       protocol: {
         protocolVersion: PROTOCOL_VERSION,
@@ -45,5 +45,6 @@ describe('toDeterministicValue', () => {
       },
     }
     expect(state.protocol.protocolVersion).toBe(PROTOCOL_VERSION)
+    expect(state.domain.monsters[0].swingEventId).toBe(0)
   })
 })

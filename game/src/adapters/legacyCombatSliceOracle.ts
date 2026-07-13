@@ -1,6 +1,26 @@
 import type { AttackSpec } from '@zaixu/game-core/attackSpec'
 import { resolveAttackHitbox } from '@zaixu/game-core/attackSpec'
 import { MONSTER_ATTACKS } from '@zaixu/game-core/monsterAttackSpecs'
+import { defineContentId, type RuleProvenance } from '@zaixu/content'
+import {
+  validateCombatSessionDefinition,
+  type ActorId,
+  type ActorLifeState,
+  type BoxSize,
+  type CombatActorSnapshot,
+  type CombatCommand,
+  type CombatCommandType,
+  type CombatDeterministicState,
+  type CombatEvent,
+  type CombatSessionDefinition,
+  type CombatSnapshot,
+  type CommandRejectionReason,
+  type DeterministicValue,
+  type Facing,
+  type HeroCombatDefinition,
+  type MonsterCombatDefinition,
+  type Point,
+} from '@zaixu/game-core'
 import { PROTOCOL_VERSION } from '@zaixu/protocol'
 import {
   applyHeroDamage,
@@ -24,7 +44,6 @@ import {
   initMonster,
   type MonsterConfig,
   type MonsterState,
-  type MonsterStats,
 } from '../systems/monsterSim'
 import {
   calculateNormalAttackPower,
@@ -105,194 +124,39 @@ export function legacyMonsterKnockbackDirection(heroX: number, monsterX: number)
   return heroX < monsterX ? -1 : 1
 }
 
-export type LegacyActorId = string
-export type LegacyFacing = -1 | 1
-export type LegacyActorLifeState = 'ready' | 'hurt' | 'dead' | 'removed'
+export type LegacyActorId = ActorId
+export type LegacyFacing = Facing
+export type LegacyActorLifeState = ActorLifeState
+export type LegacyPoint = Point
+export type LegacyBoxSize = BoxSize
+export type LegacyHeroDefinition = HeroCombatDefinition
+export type LegacyMonsterDefinition = MonsterCombatDefinition
+export type LegacyRuleProvenance = RuleProvenance
+export type LegacySliceDefinition = CombatSessionDefinition
+export type LegacyCommandType = CombatCommandType
+export type LegacyCombatCommand = CombatCommand
+export type LegacyCommandRejectionReason = CommandRejectionReason
+export type LegacyCombatEvent = CombatEvent
+export type LegacyCombatActorSnapshot = CombatActorSnapshot
+export type LegacyCombatSnapshot = CombatSnapshot
+export type LegacyDeterministicValue = DeterministicValue
+export type LegacyCombatDeterministicState = CombatDeterministicState
 
-export interface LegacyPoint {
-  x: number
-  y: number
-}
-
-export interface LegacyBoxSize {
-  width: number
-  height: number
-}
-
-export interface LegacyHeroDefinition {
-  id: LegacyActorId
-  contentId: string
-  spawn: LegacyPoint
-  collisionOffset: LegacyPoint
-  groundY: number
-  minX: number
-  maxX: number
-  maxHp: number
-  atk: number
-  def: number
-  magicDefenseFraction: number
-  critChance: number
-  comboStageDurationsMs: readonly number[]
-  comboGraceMs: number
-  normalAttacks: Readonly<Record<NormalAttackHit, AttackSpec>>
-  hurtbox: LegacyBoxSize
-  hurtDurationMs: number
-  respawnDelayMs: number
-}
-
-export interface LegacyMonsterDefinition {
-  id: LegacyActorId
-  contentId: string
-  spawn: LegacyPoint
-  collisionOffset: LegacyPoint
-  stats: MonsterStats
-  patrolMin: number
-  patrolMax: number
-  hurtDurationMs: number
-  attackDurationMs: number
-  deadDurationMs: number
-  attackCooldownMs: number
-  decisionIntervalMs: number
-  attack: AttackSpec
-  attackPower: number
-  attackKind: 'physics' | 'magic'
-  hurtbox: LegacyBoxSize
-  targetOffsetX: number
-  selfOffsetX: number
-}
-
-export interface LegacyRuleProvenance {
-  ruleId: string
-  origin: 'canonical' | 'adapted' | 'invented'
-  source: string
-}
-
-export interface LegacySliceDefinition {
-  version: 1
-  contentVersion: string
-  tickRate: 30
-  seed: number
-  provenance: readonly LegacyRuleProvenance[]
-  hero: LegacyHeroDefinition
-  monsters: readonly LegacyMonsterDefinition[]
-}
-
-export type LegacyCommandType =
-  | 'press-left'
-  | 'release-left'
-  | 'press-right'
-  | 'release-right'
-  | 'press-jump'
-  | 'press-attack'
-
-export interface LegacyCombatCommand {
-  actorId: LegacyActorId
-  sequence: number
-  atTick: number
-  type: LegacyCommandType
-}
-
-export type LegacyCommandRejectionReason = 'unknown-actor' | 'stale-sequence' | 'dead' | 'busy'
-
-export type LegacyCombatEvent =
-  | {
-      type: 'command-rejected'
-      tick: number
-      command: LegacyCombatCommand
-      reason: LegacyCommandRejectionReason
-    }
-  | {
-      type: 'attack-started'
-      tick: number
-      sourceId: LegacyActorId
-      attackId: number
-      action: string
-      airborne: boolean
-    }
-  | {
-      type: 'hit-confirmed'
-      tick: number
-      sourceId: LegacyActorId
-      targetId: LegacyActorId
-      attackId: number
-    }
-  | {
-      type: 'damage-applied'
-      tick: number
-      sourceId: LegacyActorId
-      targetId: LegacyActorId
-      attackId: number
-      rawPower: number
-      defense: number
-      amount: number
-      remainingHp: number
-    }
-  | { type: 'actor-staggered'; tick: number; actorId: LegacyActorId; untilTick: number }
-  | { type: 'actor-defeated'; tick: number; actorId: LegacyActorId; sourceId: LegacyActorId }
-  | { type: 'actor-removed'; tick: number; actorId: LegacyActorId }
-  | { type: 'actor-respawned'; tick: number; actorId: LegacyActorId; x: number; y: number }
-
-export interface LegacyCombatActorSnapshot {
-  id: LegacyActorId
-  kind: 'hero' | 'monster'
-  contentId: string
-  x: number
-  y: number
-  facing: LegacyFacing
-  action: string
-  hp: number
-  maxHp: number
-  lifeState: LegacyActorLifeState
-  comboStage: number | null
-  statuses: readonly string[]
-  knockbackVelocityX: number
-  attackId: number
-  attacking: boolean
-}
-
-export interface LegacyCombatSnapshot {
-  version: 1
-  contentVersion: string
-  tick: number
-  randomState: number
-  actors: readonly LegacyCombatActorSnapshot[]
-}
-
-export type LegacyDeterministicValue =
-  | null
-  | boolean
-  | number
-  | string
-  | readonly LegacyDeterministicValue[]
-  | { readonly [key: string]: LegacyDeterministicValue }
-
-export interface LegacyCombatDeterministicState {
-  version: 1
-  contentVersion: string
-  domain: {
-    tick: number
-    randomState: number
-    definition: LegacyDeterministicValue
-    heroSimulation: LegacyDeterministicValue
-    heroCombat: LegacyDeterministicValue
+export type ImmutableLegacyCombatDeterministicState = Omit<CombatDeterministicState, 'domain'> & {
+  domain: Omit<CombatDeterministicState['domain'], 'monsters'> & {
     monsters: readonly {
       id: string
       attackId: number
-      simulation: LegacyDeterministicValue
+      simulation: DeterministicValue
     }[]
-  }
-  protocol: {
-    protocolVersion: typeof PROTOCOL_VERSION
-    queuedCommands: readonly LegacyCombatCommand[]
-    lastSeenSequences: readonly { actorId: string; sequence: number }[]
   }
 }
 
 export interface LegacyCombatSliceFrame {
   tick: number
-  checkpoint: LegacyCombatDeterministicState
-  snapshot: LegacyCombatSnapshot
-  events: readonly LegacyCombatEvent[]
+  checkpoint: ImmutableLegacyCombatDeterministicState
+  snapshot: CombatSnapshot
+  events: readonly CombatEvent[]
 }
 
 export interface LegacyCombatSliceTrace {
@@ -415,7 +279,7 @@ function mergeEdge(target: HeroEdges, command: LegacyCommandType): void {
 }
 
 interface LegacyMonsterRuntime {
-  definition: LegacyMonsterDefinition
+  definition: MonsterCombatDefinition
   config: MonsterConfig
   state: MonsterState
   /** Presentation event sequence. Legacy local damage IDs advance only when an eligible hit is attempted. */
@@ -424,18 +288,18 @@ interface LegacyMonsterRuntime {
 }
 
 export class LegacyCombatSliceOracle {
-  private readonly definition: LegacySliceDefinition
+  private readonly definition: CombatSessionDefinition
   private readonly random: LegacyXorshift32
-  private readonly queuedCommands: LegacyCombatCommand[] = []
-  private readonly lastSeenSequenceByActor = new Map<LegacyActorId, number>()
+  private readonly queuedCommands: CombatCommand[] = []
+  private readonly lastSeenSequenceByActor = new Map<ActorId, number>()
   private readonly heroConfig: HeroConfig
   private readonly heroState: HeroState
   private readonly heroCombat: HeroCombatModel
   private readonly monsters: LegacyMonsterRuntime[]
   private currentTick = 0
 
-  constructor(definition: LegacySliceDefinition) {
-    this.definition = cloneOwned(definition)
+  constructor(definition: CombatSessionDefinition) {
+    this.definition = validateCombatSessionDefinition(definition)
     this.random = new LegacyXorshift32(this.definition.seed)
     this.heroConfig = makeHeroConfig({
       groundY: this.definition.hero.groundY,
@@ -483,20 +347,20 @@ export class LegacyCombatSliceOracle {
     })
   }
 
-  enqueue(command: LegacyCombatCommand): void {
+  enqueue(command: CombatCommand): void {
     this.queuedCommands.push({ ...command })
     this.queuedCommands.sort((left, right) => left.atTick - right.atTick || left.sequence - right.sequence)
   }
 
-  step(): LegacyCombatEvent[] {
+  step(): CombatEvent[] {
     this.currentTick += 1
-    const events: LegacyCombatEvent[] = []
+    const events: CombatEvent[] = []
     const edges: HeroEdges = { ...NO_EDGES }
     const due = this.queuedCommands.filter((command) => command.atTick <= this.currentTick)
     this.queuedCommands.splice(0, due.length)
 
     for (const command of due) {
-      let reason: LegacyCommandRejectionReason | null = null
+      let reason: CommandRejectionReason | null = null
       if (command.actorId !== this.definition.hero.id) {
         reason = 'unknown-actor'
       } else {
@@ -731,8 +595,8 @@ export class LegacyCombatSliceOracle {
     return events
   }
 
-  getSnapshot(): LegacyCombatSnapshot {
-    const actors: LegacyCombatActorSnapshot[] = [
+  getSnapshot(): CombatSnapshot {
+    const actors: CombatActorSnapshot[] = [
       {
         id: this.definition.hero.id,
         kind: 'hero',
@@ -750,7 +614,7 @@ export class LegacyCombatSliceOracle {
         attackId: this.heroState.attackId,
         attacking: this.heroState.attacking,
       },
-      ...this.monsters.map(({ definition, state, attackId }): LegacyCombatActorSnapshot => ({
+      ...this.monsters.map(({ definition, state, attackId }): CombatActorSnapshot => ({
         id: definition.id,
         kind: 'monster',
         contentId: definition.contentId,
@@ -784,7 +648,7 @@ export class LegacyCombatSliceOracle {
     })
   }
 
-  getDeterministicState(): LegacyCombatDeterministicState {
+  getDeterministicState(): CombatDeterministicState {
     return cloneOwned({
       version: 1,
       contentVersion: this.definition.contentVersion,
@@ -794,9 +658,10 @@ export class LegacyCombatSliceOracle {
         definition: toLegacyDeterministicValue(this.definition),
         heroSimulation: toLegacyDeterministicValue(this.heroState),
         heroCombat: toLegacyDeterministicValue(this.heroCombat),
-        monsters: this.monsters.map(({ definition, state, attackId }) => ({
+        monsters: this.monsters.map(({ definition, state, attackId, swingEventId }) => ({
           id: definition.id,
           attackId,
+          swingEventId,
           simulation: toLegacyDeterministicValue(state),
         })),
       },
@@ -838,7 +703,7 @@ export function createLegacyCombatSliceDefinition(): LegacySliceDefinition {
     ],
     hero: {
       id: 'hero-1',
-      contentId: 'character.zaixu.wukong',
+      contentId: defineContentId('character.zaixu.wukong'),
       spawn: { x: 480, y: 400 },
       collisionOffset: { x: 7.5, y: -22.5 },
       groundY: 400,
@@ -865,7 +730,7 @@ export function createLegacyCombatSliceDefinition(): LegacySliceDefinition {
     monsters: [
       {
         id: 'monster-1',
-        contentId: 'monster.chapter1.monster7',
+        contentId: defineContentId('monster.chapter1.monster7'),
         spawn: { x: 600, y: 400 },
         collisionOffset: { x: 4.5, y: 3 },
         stats: {
@@ -906,9 +771,21 @@ export const CANONICAL_LEGACY_COMMANDS: readonly LegacyCombatCommand[] = [
   { actorId: 'hero-1', sequence: 9, atTick: 100, type: 'press-jump' },
 ]
 
+function immutableLegacyCheckpoint(
+  checkpoint: CombatDeterministicState,
+): ImmutableLegacyCombatDeterministicState {
+  return cloneOwned({
+    ...checkpoint,
+    domain: {
+      ...checkpoint.domain,
+      monsters: checkpoint.domain.monsters.map(({ swingEventId: _swingEventId, ...monster }) => monster),
+    },
+  })
+}
+
 export function runLegacyCombatSliceTrace(
-  definition: LegacySliceDefinition,
-  commands: readonly LegacyCombatCommand[],
+  definition: CombatSessionDefinition,
+  commands: readonly CombatCommand[],
   totalTicks: number,
 ): LegacyCombatSliceTrace {
   const oracle = new LegacyCombatSliceOracle(definition)
@@ -916,7 +793,7 @@ export function runLegacyCombatSliceTrace(
   const frames: LegacyCombatSliceFrame[] = []
   for (let tick = 0; tick < totalTicks; tick += 1) {
     const events = oracle.step()
-    const checkpoint = oracle.getDeterministicState()
+    const checkpoint = immutableLegacyCheckpoint(oracle.getDeterministicState())
     frames.push({
       tick: checkpoint.domain.tick,
       checkpoint,
@@ -924,6 +801,6 @@ export function runLegacyCombatSliceTrace(
       events: cloneOwned(events),
     })
   }
-  const finalCheckpoint = frames.at(-1)?.checkpoint ?? oracle.getDeterministicState()
+  const finalCheckpoint = frames.at(-1)?.checkpoint ?? immutableLegacyCheckpoint(oracle.getDeterministicState())
   return { frames, finalHash: stableLegacyHash(finalCheckpoint) }
 }

@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { TICK_MS } from '../systems/tick'
 import { FloatingTextLaneAllocator } from '../systems/floatingTextLayout'
-import { RoleData, ActionSpec, actionFrameTimings, actionDurationMs } from '../systems/roleData'
+import { RoleData, ActionSpec, actionDurationMs } from '../systems/roleData'
 import {
   HeroConfig,
   HeroState,
@@ -88,7 +88,6 @@ import {
 } from '../systems/soulPurse'
 import {
   AttackKind,
-  NormalAttackHit,
   resolveIncomingHeroDamage,
 } from '../systems/heroScale'
 import {
@@ -259,6 +258,24 @@ import { ResultBanner } from '../ui/hud/ResultBanner'
 import { Toast, spawnFloatingText } from '../ui/hud/Toast'
 import { rarityCss } from '../ui/hud/rarity'
 import roleRaw from '../data/roles/role1.json'
+import { monsterAttackPower } from '../data/monsterAttackPower'
+import {
+  HERO_IDLE_CONTENT,
+  MONSTER_IDLE_CONTENT,
+  computeVisibleTopY,
+  monsterBaselineCorrectionY,
+} from '../presentation/actorVisualMetrics'
+import {
+  role1AttackEffectForSwing,
+  role1ComboStageSound,
+} from '../presentation/role1AttackPresentation'
+import { registerRoleAnimations } from '../presentation/registerRoleAnimations'
+
+export {
+  computeVisibleTopY,
+  monsterBaselineCorrectionY,
+} from '../presentation/actorVisualMetrics'
+export { role1AttackEffectForSwing } from '../presentation/role1AttackPresentation'
 
 const roleData = roleRaw as unknown as RoleData
 
@@ -308,40 +325,6 @@ const MONSTER30_BULLET = {
   radius: 58,
   ttlMs: 900,
 } as const
-
-// hitstun-triad pen (2026-07-09): real AS3 hit1 attackBackInfoDict.power/
-// attackKind for every L1/L2 species (this port's own ffdec decompile of
-// export.monster.MonsterN, 打开我开始玩.swf). Replaces the old grunt/miniboss
-// heuristic ("derive a modest value from def", BattleScene.ts's own comment
-// admitted this was a placeholder) that made every non-final-boss hit
-// noticeably weaker than intended -- see tasks/hitstun-triad-report.md for
-// the full table + decompile citations. Grunts/minibosses/kings all set
-// `attackBackInfoDict["hit1"]` UNCONDITIONALLY in their constructors (only hp
-// differs across the `gc.curStage==3&&curLevel==3||curStage==8` elite-stage
-// branch some of them have), so one value per species covers L1/L2 correctly
-// regardless of branch. Monster9/10/19 are branch-conditional (`curStage==9`
-// elite form is 600/physics, far above L1/L2 scope) -- the else-branch value
-// below is the one level1.ts/level2.ts's own MonsterStats already use.
-const MONSTER_HIT1_POWER: Record<string, { power: number; kind: AttackKind }> = {
-  // L1
-  monster30: { power: 5, kind: 'physics' }, // 攀爬段蜂群
-  monster8: { power: 8, kind: 'physics' }, // 杂兵
-  monster7: { power: 14, kind: 'physics' }, // 杂兵 (matches monsterBehaviors.ts's Monster7Spec)
-  monster3: { power: 14, kind: 'physics' }, // 巫鹰 (L1 boss)
-  monster2: { power: 28, kind: 'physics' }, // 顺风耳 (miniboss)
-  monster5: { power: 40, kind: 'physics' }, // 巨灵神 (miniboss)
-  monster4: { power: 50, kind: 'physics' }, // 千里眼 (miniboss)
-  // L2
-  monster10: { power: 30, kind: 'physics' }, // 杂兵 (else-branch)
-  monster9: { power: 40, kind: 'physics' }, // 杂兵 (else-branch)
-  monster19: { power: 50, kind: 'physics' }, // 杂兵 (else-branch)
-  monster6: { power: 100, kind: 'physics' }, // 增长天王 (king)
-  monster16: { power: 129, kind: 'physics' }, // 广目天王 (king)
-  monster15: { power: 186, kind: 'physics' }, // 多闻天王 (L2 boss)
-  // L3/L4 (out of active scope, kept for code that might still reach them)
-  monster22: { power: 345, kind: 'physics' }, // 二郎神 hit1 (post-buff)
-  monster34: { power: 829, kind: 'physics' }, // 邪·悟空 hit1
-}
 
 // l1-truth pen (2026-07-09): AS3 marks these `isBoss=true` in their own
 // constructors (tasks/l1-truth-report.md, decompile-confirmed) -- 千里眼/
@@ -422,65 +405,6 @@ const SL11_SCENE_ART_TEX = 'online_sl11_full'
 const SL11_SCENE_ART_SCALE = 2371 / 1269
 const SL11_SCENE_ART_X = 622.699 - 443 * SL11_SCENE_ART_SCALE
 const SL11_SCENE_ART_Y = -1872.45 + STAND_SINK - 271 * SL11_SCENE_ART_SCALE
-
-interface VisualContentBounds {
-  top: number
-  bottom: number
-}
-
-// First idle-frame visible-pixel bounds, measured from the shipped PNG alpha
-// channel with alpha >= 16. These are content bounds inside one sheet cell,
-// not whole-cell approximations; keep the renderer, hitboxes, HP bars and
-// floating numbers in the same visible coordinate space.
-const HERO_IDLE_CONTENT: VisualContentBounds = { top: 72, bottom: 172 }
-const MONSTER_IDLE_CONTENT: Record<string, VisualContentBounds> = {
-  monster2: { top: 40, bottom: 171 },
-  monster3: { top: 40, bottom: 146 },
-  monster4: { top: 39, bottom: 156 },
-  monster5: { top: 159, bottom: 298 },
-  monster6: { top: 159, bottom: 335 },
-  monster7: { top: 29, bottom: 130 },
-  monster8: { top: 29, bottom: 123 },
-  monster9: { top: 59, bottom: 170 },
-  monster10: { top: 59, bottom: 173 },
-  monster15: { top: 120, bottom: 309 },
-  monster16: { top: 29, bottom: 240 },
-  monster19: { top: 59, bottom: 181 },
-  monster30: { top: 33, bottom: 108 },
-}
-
-function visibleBottomOffset(cellH: number, offsetY: number, scale: number, contentBottom: number): number {
-  return offsetY * scale + (contentBottom - cellH / 2) * scale
-}
-
-export function computeVisibleTopY(input: {
-  stateY: number
-  offsetY: number
-  scale: number
-  cellH: number
-  contentTop: number
-  baselineCorrectionY?: number
-}): number {
-  return input.stateY +
-    input.offsetY * input.scale +
-    (input.contentTop - input.cellH / 2) * input.scale +
-    (input.baselineCorrectionY ?? 0)
-}
-
-export function monsterBaselineCorrectionY(species: string): number {
-  if (species === 'monster30') return 0
-  const bounds = MONSTER_IDLE_CONTENT[species]
-  const data = MONSTER_DATA[species]
-  if (!bounds || !data) return 0
-  const heroBottom = visibleBottomOffset(
-    roleData.sheet.cellH,
-    roleData.offset.y,
-    HERO_SCALE,
-    HERO_IDLE_CONTENT.bottom,
-  )
-  const monsterBottom = visibleBottomOffset(data.sheet.cellH, data.offset.y, HERO_SCALE, bounds.bottom)
-  return heroBottom - monsterBottom
-}
 
 export function climbBackgroundVisibility(hasPillarTexture: boolean): { pillar: boolean; fallback: boolean } {
   return { pillar: hasPillarTexture, fallback: !hasPillarTexture }
@@ -630,21 +554,6 @@ const NPC_ANIM_PREFIX = 'npc_'
 // fixes the actual infinite-hitstun root cause: presses mid-swing no longer
 // buffer/auto-chain, matching Role1.as's real input-rejection behavior).
 const COMBO_GRACE_MS = 1500
-// combo.stage (1-5) -> the normal-attack hit key whose real coefficient drives
-// damage (heroScale.NORMAL_ATTACK_COEFFICIENT). Index 0 is unused (stage 0 = idle).
-const COMBO_STAGE_HIT: (NormalAttackHit | null)[] = [null, 'hit1', 'hit2', 'hit3', 'hit4', 'hit5']
-
-export function role1AttackEffectForSwing(
-  previousAttackId: number,
-  currentAttackId: number,
-  comboStage: number,
-): Role1EffectAction | null {
-  if (currentAttackId === previousAttackId) return null
-  if (comboStage === 0) return 'hit3' // official Wukong air attack uses hit3/Role1Bullet3
-  const action = COMBO_STAGE_HIT[comboStage]
-  if (!action) return null
-  return action === 'hit2' ? 'hit1' : action
-}
 const MON_START_X = 900
 // Monster hit-test box baseline (see monsterHitbox()) -- 120x140 is the
 // project-chosen AABB size this project has used for a "hero-sized" monster
@@ -1054,12 +963,12 @@ export class BattleScene extends Phaser.Scene {
     this.floatingTextLanes.clear()
     configureLogicalCamera(this)
     this.buildBackground()
-    this.registerAnimations(roleData, HERO_TEX, HERO_LOOP, '')
+    registerRoleAnimations(this.anims, roleData, HERO_TEX, HERO_LOOP, '')
     // Register every campaign species' animations under a per-species prefix.
     for (const species of Object.keys(SPECIES_SHEET)) {
       const data = MONSTER_DATA[species]
       if (data && this.textures.exists(species)) {
-        this.registerAnimations(data, species, MON_LOOP, species + '_')
+        registerRoleAnimations(this.anims, data, species, MON_LOOP, species + '_')
       }
     }
     this.registerNpcIdle()
@@ -1453,7 +1362,7 @@ export class BattleScene extends Phaser.Scene {
       heroCenter.y + (visualBox?.offsetY ?? 0),
       this.heroState.facing,
     )
-    this.playSfx(this.hitSfxKey(5), 0.5)
+    this.playSfx(role1ComboStageSound(5), 0.5)
     // Skill level for the real damage formula: jdy stage-2 reuses stage-1's
     // level; others use the runtime's learned level (min 1 since it just cast).
     const skillLevel = Math.max(1, this.skillRuntime.levels[skillId])
@@ -1689,20 +1598,6 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private registerAnimations(data: RoleData, tex: string, loop: Set<string>, prefix: string): void {
-    for (const [name, spec] of Object.entries(data.actions)) {
-      // Anims live on the global AnimationManager and survive scene restarts —
-      // don't re-create (which warns) when returning to a level we've seen.
-      if (this.anims.exists(prefix + name)) continue
-      const frames = actionFrameTimings(data.sheet, spec as ActionSpec, TICK_MS).map((t) => ({
-        key: tex,
-        frame: t.index,
-        duration: t.durationMs,
-      }))
-      this.anims.create({ key: prefix + name, frames, repeat: loop.has(name) ? -1 : 0 })
-    }
-  }
-
   /**
    * 太上老君 idle loop from row 0 of the boss sheet. No initBBDC stopCounts
    * exist for this repurposed boss art, so use a uniform slow per-frame duration.
@@ -1726,7 +1621,7 @@ export class BattleScene extends Phaser.Scene {
   // just the most fitting original swirl asset to render it with, not a
   // reconstruction of a specific original screen). Each frame is its own
   // PNG (not a packed spritesheet), so this is a manual multi-texture
-  // animation rather than registerAnimations()'s spritesheet-index path.
+  // animation rather than registerRoleAnimations()'s spritesheet-index path.
   private registerTransferWind(): void {
     if (this.anims.exists('transferwind')) return
     const frames = []
@@ -2175,16 +2070,6 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  /** Raw (pre-mitigation) attack power a species deals to the hero -- see
-   * MONSTER_HIT1_POWER's header for the real AS3 source. Falls back to the
-   * old def-derived heuristic only for a species this table doesn't cover
-   * (defensive: no L1/L2 species should ever hit this branch). */
-  private monsterAttackPower(species: string, stats: MonsterStats): { power: number; kind: AttackKind } {
-    const real = MONSTER_HIT1_POWER[species]
-    if (real) return real
-    return { power: Math.min(60, 8 + stats.def * 1.5), kind: 'physics' }
-  }
-
   /** `y` defaults to GROUND_Y for existing ground callers; sl11's continuous
    * spawner passes raw AS3 scene y values so Monster30 and 巫鹰 live at climb
    * altitude instead of on the flat arena line. */
@@ -2212,7 +2097,7 @@ export class BattleScene extends Phaser.Scene {
     const scale = HERO_SCALE
     const isMiniBoss = MINIBOSS_SPECIES.has(species)
     const sprite = this.add.sprite(x, y, tex).setScale(scale).setDepth(isBoss || isMiniBoss ? 9 : 8)
-    const atk = this.monsterAttackPower(species, stats)
+    const atk = monsterAttackPower(species, stats)
     const skillGate = MONSTER_SKILL_GATES[species]
     const entity: MonsterEntity = {
       species,
@@ -3121,7 +3006,7 @@ export class BattleScene extends Phaser.Scene {
     )
     if (!action) return
     this.lastAttackEffectId = this.heroState.attackId
-    this.playSfx(this.hitSfxKey(this.heroState.combo.stage), 0.5)
+    this.playSfx(role1ComboStageSound(this.heroState.combo.stage), 0.5)
     const facing = this.heroState.facing as -1 | 1
     const placement = resolveRole1EffectPlacement(
       action,
@@ -3653,12 +3538,6 @@ export class BattleScene extends Phaser.Scene {
     this.floatText(this.heroVisualCenter().x, this.heroVisibleTopY() - 10, `+${healed || power}`, 'heal')
     this.hero.setTint(0xd6ffd6)
     this.time.delayedCall(120, () => this.hero.clearTint())
-  }
-
-  private hitSfxKey(stage: number): string {
-    if (stage <= 2) return 'hit12'
-    if (stage <= 4) return 'hit34'
-    return 'hit5'
   }
 
   // Kill reward: feed the exp through the identity host so a level-up grows the
