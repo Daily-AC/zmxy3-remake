@@ -14,7 +14,7 @@ import {
   estimateHitsToKillHero,
   BOSS_REFERENCE,
   type NormalAttackHit,
-} from '../src/systems/heroScale'
+} from '../src/combat/heroScale'
 
 // Reference coefficients below are transcribed directly from a decompile of
 // export.hero.Role1.as's getRealPower2() (this task's own ffdec run against

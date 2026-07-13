@@ -4,11 +4,10 @@ import {
   initMoveState,
   pressLeft,
   pressRight,
-  releaseLeft,
   releaseRight,
   currentDir,
   moveVelocity,
-} from '../src/systems/locomotion'
+} from '../src/hero/locomotion'
 
 const cfg = DEFAULT_MOVE_CONFIG
 

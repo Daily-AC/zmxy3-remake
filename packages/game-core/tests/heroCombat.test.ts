@@ -7,7 +7,7 @@ import {
   updateHeroCombat,
   isHeroInvulnerable,
   isHeroCombatDead,
-} from '../src/systems/heroCombat'
+} from '../src/combat/heroCombat'
 
 const bounds = { minX: 0, maxX: 1000 }
 

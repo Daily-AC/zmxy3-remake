@@ -5,7 +5,7 @@ import {
   initVertical,
   requestJump,
   stepVertical,
-} from '../src/systems/jump'
+} from '../src/hero/jump'
 
 const cfg: JumpConfig = { ...DEFAULT_JUMP_CONFIG, groundY: 400 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ComboConfig, initCombo, stepCombo, ComboState } from '../src/systems/combo'
+import { ComboConfig, initCombo, stepCombo, ComboState } from '../src/hero/combo'
 
 const cfg: ComboConfig = {
   // stages 1..5 each 100ms; index 0 unused.

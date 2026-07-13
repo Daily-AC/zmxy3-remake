@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { overlaps, centeredBox, heroAttackBox, DEFAULT_ATTACK_BOX } from '../src/systems/hitbox'
+import { overlaps, centeredBox, heroAttackBox, DEFAULT_ATTACK_BOX } from '../src/combat/hitbox'
 
 describe('hitbox AABB (攻击盒判定)', () => {
   it('detects overlap and separation', () => {
