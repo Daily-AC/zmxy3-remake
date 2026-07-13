@@ -31,7 +31,7 @@ export const ART_FONT_CANDIDATES: ArtFontCandidate[] = [
   {
     id: 'mashan',
     family: 'Ma Shan Zheng',
-    file: 'MaShanZheng-Regular.ttf',
+    file: 'MaShanZheng-UI.woff2',
     note: '马善政毛笔行书 -- 流畅飘逸，笔画偏细，呼应选人屏/对话框的墨迹水墨气质；Google Fonts OFL，零许可风险',
   },
   {
@@ -69,12 +69,12 @@ export function artFontById(id: string): ArtFontCandidate {
 let loaded: Promise<void> | null = null
 
 /**
- * Register + load every candidate's @font-face before any Phaser Text using
- * them is created -- Canvas text silently falls back to the default font if
+ * Register + load the active font before any Phaser Text using it is created.
+ * Canvas text silently falls back to the default font if
  * you draw before the FontFace finishes loading, and Phaser Text doesn't
  * re-measure/redraw on its own once the font swaps in later. Memoized so
- * every scene can call this in create() for free after the first time (the
- * files are local, so this resolves in well under a frame once cached).
+ * every scene can call this in create() for free after the first time. Loading
+ * inactive candidates here used to block boot on roughly 30 MiB of fonts.
  */
 export function ensureArtFontsLoaded(): Promise<void> {
   if (loaded) return loaded
@@ -84,8 +84,8 @@ export function ensureArtFontsLoaded(): Promise<void> {
     return loaded
   }
   loaded = Promise.all(
-    ART_FONT_CANDIDATES.map((c) => {
-      const face = new FontFace(c.family, `url(assets/fonts/${c.file})`)
+    [activeArtFont()].map((c) => {
+      const face = new FontFace(c.family, `url(assets/fonts/${c.file}) format("woff2")`)
       fontsApi.add(face)
       return face
         .load()
