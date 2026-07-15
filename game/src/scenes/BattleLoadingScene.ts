@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import type { CoopSession } from '../net/socialClient'
+import type { SlotId } from '../systems/saveSlots'
 import { activeArtFont } from '../systems/artFont'
 import { addEmbers } from '../ui/embers'
 import { BATTLE_READY_EVENT } from './BattleScene'
@@ -15,6 +16,7 @@ import { SCENE } from './shellShared'
 
 export interface BattleData {
   campaignIndex: number
+  activeSlot?: SlotId
   coopSession?: CoopSession
   runtime?: 'legacy' | 'production'
 }

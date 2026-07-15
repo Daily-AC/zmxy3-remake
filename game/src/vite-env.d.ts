@@ -11,6 +11,8 @@ interface BattleRuntimeObservation {
   getSnapshot(): unknown
   getEvents(): unknown
   getHash(): string
+  enqueue(command: { type: string; actorId: string; sequence: number; atTick: number }): void
+  setManualMode(enabled: boolean): void
   step(ticks?: number): unknown
 }
 

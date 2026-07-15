@@ -18,7 +18,7 @@ describe('battle loading wiring', () => {
     const worldMap = read('../src/scenes/WorldMapScene.ts')
     expect(worldMap).toMatch(/BATTLE_LOADING_BACKGROUNDS/)
     expect(worldMap).toMatch(
-      /this\.scene\.start\(SCENE\.battleLoading, \{ battleData: \{ campaignIndex, runtime \} \}\)/,
+      /this\.scene\.start\(SCENE\.battleLoading, \{ battleData: \{ campaignIndex, activeSlot: this\.slot, runtime \} \}\)/,
     )
     expect(worldMap).not.toMatch(/this\.scene\.start\(SCENE\.battle, \{ campaignIndex \}\)/)
   })

@@ -275,7 +275,7 @@ export class WorldMapScene extends Phaser.Scene {
     if (!isCampaignLevelUnlocked(campaignIndex, this.currentIndex)) return false
     this.npcClient?.dispose()
     const runtime = battleRuntimeForCampaign(campaignIndex, window.location.search)
-    this.scene.start(SCENE.battleLoading, { battleData: { campaignIndex, runtime } })
+    this.scene.start(SCENE.battleLoading, { battleData: { campaignIndex, activeSlot: this.slot, runtime } })
     return true
   }
 
