@@ -69,4 +69,39 @@ describe('BattleRuntime', () => {
     expect(runtime.step()).toContainEqual({ type: 'stage-cleared', tick: 3, levelId: 'sl11' })
     expect(runtime.getSnapshot().level).toEqual({ id: 'sl11', doorVisible: true, cleared: true })
   })
+
+  it('simulates ranged monster projectiles through the hero damage path', () => {
+    const definition = makeBattleDefinition()
+    const monster = definition.monsters.monster30
+    monster.stats.normalAttackRate = 1
+    monster.stats.attackRange = 500
+    monster.decisionIntervalMs = 1000 / 30
+    monster.attackDurationMs = 1000 / 30
+    monster.attack.hitFrameFractions = [1]
+    monster.attackPower = 5
+    monster.behavior = {
+      rangedAttack: {
+        kind: 'Monster30Bullet1',
+        speedPxPerSecond: 620,
+        radius: 10,
+        ttlMs: 1000,
+      },
+    }
+    const encounter = definition.level.encounters[0]
+    if (encounter.kind !== 'continuous') throw new Error('expected continuous fixture')
+    encounter.initialDelayTicks = 0
+    encounter.count = 1
+    encounter.spawnOffset = { x: { min: -100, max: -100 }, y: { min: 0, max: 0 } }
+    const runtime = new BattleRuntime(definition)
+
+    const events = runtime.step(20)
+
+    expect(events.some((event) => event.type === 'projectile-spawned')).toBe(true)
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'damage-applied',
+      targetId: 'hero-1',
+      rawPower: 5,
+    }))
+    expect(runtime.getSnapshot().actors[0].hp).toBeLessThan(120)
+  })
 })
