@@ -60,6 +60,10 @@
     "./replay": {
       "types": "./dist-types/replay/combatReplay.d.ts",
       "default": "./src/replay/combatReplay.ts"
+    },
+    "./battle": {
+      "types": "./dist-types/battle/index.d.ts",
+      "default": "./src/battle/index.ts"
     }
   },
   "scripts": {
