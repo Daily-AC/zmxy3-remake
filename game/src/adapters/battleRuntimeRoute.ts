@@ -5,5 +5,7 @@ export function battleRuntimeForCampaign(
   search: string,
 ): BattleRuntimeSelection {
   const params = new URLSearchParams(search)
-  return campaignIndex === 0 && params.get('battleRuntime') === '1' ? 'production' : 'legacy'
+  return (campaignIndex === 0 || campaignIndex === 1) && params.get('battleRuntime') === '1'
+    ? 'production'
+    : 'legacy'
 }

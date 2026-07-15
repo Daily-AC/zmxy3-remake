@@ -19,7 +19,13 @@ import {
 } from '../adapters/battleRuntimePresentation'
 import { compileSl11BattleDefinition } from '../adapters/sl11BattleDefinition'
 import { compileSl11RuntimeGateDefinition, useSl11RuntimeGate } from '../adapters/sl11RuntimeGateDefinition'
+import { compileSl12BattleDefinition } from '../adapters/sl12BattleDefinition'
+import { compileSl12RuntimeGateDefinition } from '../adapters/sl12RuntimeGateDefinition'
+import monster2Raw from '../data/monsters/monster2.json'
 import monster3Raw from '../data/monsters/monster3.json'
+import monster4Raw from '../data/monsters/monster4.json'
+import monster7Raw from '../data/monsters/monster7.json'
+import monster8Raw from '../data/monsters/monster8.json'
 import monster30Raw from '../data/monsters/monster30.json'
 import role1Raw from '../data/roles/role1.json'
 import { registerRoleAnimations } from '../presentation/registerRoleAnimations'
@@ -44,7 +50,11 @@ const TRANSFER_FRAME_COUNT = 10
 const SLZ_EFFECT_FRAME_COUNT = 6
 const roleData = role1Raw as RoleData
 const monsterData: Record<string, RoleData> = {
+  monster2: monster2Raw as RoleData,
   monster3: monster3Raw as RoleData,
+  monster4: monster4Raw as RoleData,
+  monster7: monster7Raw as RoleData,
+  monster8: monster8Raw as RoleData,
   monster30: monster30Raw as RoleData,
 }
 
@@ -96,6 +106,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.activeSlot = data?.activeSlot ?? asSlotId(this.registry.get(REG.activeSlot))
     const saved = this.activeSlot === null ? undefined : readSlot(shellStorage(), this.activeSlot)
     this.runtimeProfile = saved ? compileBattleRuntimeProfile(restoreGameState(saved.save)) : undefined
+    this.definition = this.compileDefinition()
     this.clearTransitionScheduled = false
     this.manualMode = false
   }
@@ -118,9 +129,11 @@ export class BattleRuntimeScene extends Phaser.Scene {
       ].includes(asset.key)) continue
       if (!this.textures.exists(asset.key)) this.load.image(asset.key, asset.url)
     }
-    for (const species of ['monster3', 'monster30']) {
+    for (const species of Object.keys(this.definition.monsters)) {
       const data = monsterData[species]
-      this.load.spritesheet(`runtime-${species}`, `assets/extracted/level1/${species === 'monster3' ? 'Monster3' : 'Monster30_clean'}.png`, {
+      const number = species.slice('monster'.length)
+      const file = species === 'monster30' ? 'Monster30_clean' : `Monster${number}`
+      this.load.spritesheet(`runtime-${species}`, `assets/extracted/level1/${file}.png`, {
         frameWidth: data.sheet.cellW,
         frameHeight: data.sheet.cellH,
       })
@@ -129,6 +142,9 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.load.image('runtime-platform', 'assets/generated/platform_beam.png')
     this.load.image('runtime-cloud-1', 'assets/generated/cloud_puff1.png')
     this.load.image('runtime-cloud-2', 'assets/generated/cloud_puff2.png')
+    this.load.image('runtime-floor-bg', 'assets/extracted/level1/floorBg1.png')
+    this.load.image('runtime-sl12-foreground', 'assets/extracted/level1/bg12.png')
+    this.load.image('runtime-sl12-floor', 'assets/extracted/level1/online_floor12_full.png')
     this.load.image('runtime-projectile', 'assets/extracted/level1/hit1-effects/Monster30Bullet1/01.png')
     for (let frame = 1; frame <= TRANSFER_FRAME_COUNT; frame += 1) {
       this.load.image(`runtime-transfer-${frame}`, `assets/extracted/effects/transferwind_${frame}.png`)
@@ -145,9 +161,6 @@ export class BattleRuntimeScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.definition = useSl11RuntimeGate(window.location.search)
-      ? compileSl11RuntimeGateDefinition(0x5a17, this.runtimeProfile?.combat)
-      : compileSl11BattleDefinition(0x5a17, this.runtimeProfile?.combat)
     this.runtime = new BattleRuntime(this.definition)
     this.snapshot = this.runtime.getSnapshot()
     this.registerAnimations()
@@ -188,7 +201,8 @@ export class BattleRuntimeScene extends Phaser.Scene {
         `runtime-weapon-${showId}-`,
       )
     }
-    for (const [species, data] of Object.entries(monsterData)) {
+    for (const species of Object.keys(this.definition.monsters)) {
+      const data = monsterData[species]
       registerRoleAnimations(this.anims, data, `runtime-${species}`, MONSTER_LOOPING_ACTIONS, `runtime-${species}-`)
     }
     if (!this.anims.exists('runtime-transfer')) {
@@ -221,31 +235,41 @@ export class BattleRuntimeScene extends Phaser.Scene {
       bounds.right - bounds.left,
       bounds.bottom - bounds.top + cameraBottomPadding,
     )
-    const background = this.add.tileSprite(
+    if (this.definition.level.id === 'sl12') {
+      const base = this.add.tileSprite(
+        bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top,
+        'runtime-floor-bg',
+      ).setOrigin(0).setDepth(-30)
+      base.setTileScale(540 / 690)
+      this.add.image(0, -56, 'runtime-sl12-foreground').setOrigin(0).setDepth(-10)
+      this.add.image(-200, 405, 'runtime-sl12-floor').setOrigin(0).setDepth(2)
+    } else {
+      const background = this.add.tileSprite(
       bounds.left,
       bounds.top,
       bounds.right - bounds.left,
       bounds.bottom - bounds.top,
       'runtime-pillar',
-    ).setOrigin(0).setDepth(-30)
-    background.setTileScale(0.95)
+      ).setOrigin(0).setDepth(-30)
+      background.setTileScale(0.95)
 
-    const beamHeight = 42
-    for (const wall of walls) {
-      if (wall.width < wall.height * 2) continue
-      const beam = this.add.tileSprite(wall.x, wall.y, wall.width, beamHeight, 'runtime-platform')
+      const beamHeight = 42
+      for (const wall of walls) {
+        if (wall.width < wall.height * 2) continue
+        const beam = this.add.tileSprite(wall.x, wall.y, wall.width, beamHeight, 'runtime-platform')
+          .setOrigin(0).setDepth(2)
+        beam.setTileScale(beamHeight / 292)
+      }
+      const floor = this.add.tileSprite(bounds.left, 400, bounds.right - bounds.left, 72, 'runtime-platform')
         .setOrigin(0).setDepth(2)
-      beam.setTileScale(beamHeight / 292)
-    }
-    const floor = this.add.tileSprite(bounds.left, 400, bounds.right - bounds.left, 72, 'runtime-platform')
-      .setOrigin(0).setDepth(2)
-    floor.setTileScale(72 / 292)
-    for (const [x, y, key] of [
-      [180, 180, 'runtime-cloud-1'], [820, -180, 'runtime-cloud-2'],
-      [260, -760, 'runtime-cloud-2'], [760, -1320, 'runtime-cloud-1'],
-      [250, -1840, 'runtime-cloud-2'],
-    ] as const) {
-      this.add.image(x, y, key).setAlpha(0.38).setDepth(-10)
+      floor.setTileScale(72 / 292)
+      for (const [x, y, key] of [
+        [180, 180, 'runtime-cloud-1'], [820, -180, 'runtime-cloud-2'],
+        [260, -760, 'runtime-cloud-2'], [760, -1320, 'runtime-cloud-1'],
+        [250, -1840, 'runtime-cloud-2'],
+      ] as const) {
+        this.add.image(x, y, key).setAlpha(0.38).setDepth(-10)
+      }
     }
 
     this.weapon = this.add.sprite(0, 0, this.weaponTexture()).setScale(1.5).setDepth(11)
@@ -305,7 +329,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
       atk: this.definition.hero.atk,
       weaponName: this.runtimeProfile?.hud.weaponName ?? '行者棍',
     })
-    this.status.setText(`sl11  tick ${this.snapshot.tick}\n${stableHash(this.runtime.getDeterministicState())}`)
+    this.status.setText(`${this.definition.level.id}  tick ${this.snapshot.tick}\n${stableHash(this.runtime.getDeterministicState())}`)
     const active = this.snapshot.heroSkill.activeSkillId
     const definition = active ? this.definition.hero.skills[active] : undefined
     const remaining = Math.max(0, this.snapshot.heroSkill.cooldownUntilTick - this.snapshot.tick)
@@ -346,7 +370,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
     if (visible) view.sprite.play(`${presentation.animationPrefix}${snapshotAction(actor)}`, true)
     view.hp.clear()
     if (actor.kind === 'monster' && visible) {
-      const width = speciesForActor(actor) === 'monster3' ? 130 : 68
+      const width = ['monster2', 'monster3', 'monster4'].includes(speciesForActor(actor) ?? '') ? 130 : 68
       view.hp.fillStyle(0x210f0f, 0.85).fillRect(x - width / 2, y - 100, width, 7)
       view.hp.fillStyle(0xe04436, 1).fillRect(x - width / 2 + 1, y - 99, (width - 2) * actor.hp / actor.maxHp, 5)
     }
@@ -455,7 +479,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
       this.activeSlot,
       this.campaignIndex,
     )
-    this.add.text(480, 170, '九重天 · 通关', {
+    this.add.text(480, 170, `${this.definition.level.id === 'sl12' ? '天宫道' : '九重天'} · 通关`, {
       fontSize: '48px', color: '#fff1b0', stroke: '#5a250f', strokeThickness: 7,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(200)
     this.time.delayedCall(900, () => this.scene.start(SCENE.worldMap))
@@ -471,6 +495,17 @@ export class BattleRuntimeScene extends Phaser.Scene {
       setManualMode: (enabled) => { this.manualMode = enabled },
       step: (ticks = 1) => structuredClone(this.advanceRuntime(ticks)),
     }
+  }
+
+  private compileDefinition(): BattleDefinition {
+    if (this.campaignIndex === 1) {
+      return useSl11RuntimeGate(window.location.search)
+        ? compileSl12RuntimeGateDefinition(0x5a17, this.runtimeProfile?.combat)
+        : compileSl12BattleDefinition(0x5a17, this.runtimeProfile?.combat)
+    }
+    return useSl11RuntimeGate(window.location.search)
+      ? compileSl11RuntimeGateDefinition(0x5a17, this.runtimeProfile?.combat)
+      : compileSl11BattleDefinition(0x5a17, this.runtimeProfile?.combat)
   }
 
   private advanceRuntime(ticks = 1): BattleSnapshot {

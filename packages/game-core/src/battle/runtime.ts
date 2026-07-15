@@ -34,7 +34,13 @@ import { TICK_MS } from '../time/tick'
 import { BattleActorRegistry } from './actorRegistry'
 import { createBattleCheckpoint, decodeBattleCheckpoint, type BattleCheckpoint } from './checkpoint'
 import { validateBattleDefinition } from './definition'
-import { advanceEncounter, createEncounterState, type BattleEncounterState, type EncounterEffect } from './encounter'
+import {
+  advanceEncounter,
+  createEncounterState,
+  stopPointBarrierX,
+  type BattleEncounterState,
+  type EncounterEffect,
+} from './encounter'
 import { resolveHorizontalMotion, resolveVerticalMotion } from './platform'
 import {
   spawnBattleProjectile,
@@ -172,7 +178,11 @@ export class BattleRuntime {
       comboGraceMs: this.definition.hero.comboGraceMs,
     })
     this.heroConfig.jump.platformResolver = (query) => resolveVerticalMotion(walls, query)
-    this.heroConfig.resolveHorizontal = (query) => resolveHorizontalMotion(walls, query).x
+    this.heroConfig.resolveHorizontal = (query) => {
+      const resolved = resolveHorizontalMotion(walls, query).x
+      const barrier = this.encounter ? stopPointBarrierX(this.encounter, this.definition.level) : null
+      return barrier !== null && query.toX > query.fromX ? Math.min(resolved, barrier) : resolved
+    }
     this.heroCombatConfig = {
       ...DEFAULT_HERO_COMBAT_CONFIG,
       maxHp: this.definition.hero.maxHp,

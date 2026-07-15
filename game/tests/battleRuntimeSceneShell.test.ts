@@ -8,7 +8,8 @@ const read = (path: string): string => readFileSync(new URL(path, import.meta.ur
 describe('BattleRuntimeScene shell boundary', () => {
   it('opts only sl11 into the production runtime behind an explicit query flag', () => {
     expect(battleRuntimeForCampaign(0, '?battleRuntime=1')).toBe('production')
-    expect(battleRuntimeForCampaign(1, '?battleRuntime=1')).toBe('legacy')
+    expect(battleRuntimeForCampaign(1, '?battleRuntime=1')).toBe('production')
+    expect(battleRuntimeForCampaign(2, '?battleRuntime=1')).toBe('legacy')
     expect(battleRuntimeForCampaign(0, '')).toBe('legacy')
   })
 
