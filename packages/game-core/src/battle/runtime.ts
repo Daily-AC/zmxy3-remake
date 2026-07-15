@@ -327,6 +327,7 @@ export class BattleRuntime {
         cooldownUntilTick: this.heroSkill.cooldownUntilTick,
         activeSkillId: this.heroSkill.active?.skillId ?? null,
       },
+      heroEquipment: this.definition.hero.equipment,
       actors,
       projectiles: this.projectiles,
     })

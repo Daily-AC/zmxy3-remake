@@ -11,6 +11,7 @@ import {
 } from '@zaixu/game-core'
 import { BattleRuntimeInput } from '../adapters/battleRuntimeInput'
 import { persistBattleRuntimeClear } from '../adapters/battleRuntimeSettlement'
+import { compileBattleRuntimeProfile, type CompiledBattleRuntimeProfile } from '../adapters/battleRuntimeProfile'
 import {
   presentationForActor,
   snapshotAction,
@@ -23,8 +24,12 @@ import monster30Raw from '../data/monsters/monster30.json'
 import role1Raw from '../data/roles/role1.json'
 import { registerRoleAnimations } from '../presentation/registerRoleAnimations'
 import type { RoleData } from '../systems/roleData'
+import { restoreGameState } from '../systems/save'
 import { asSlotId, type SlotId } from '../systems/saveSlots'
+import { readSlot } from '../systems/saveSlots'
 import { RoleInfoHud } from '../ui/hud/RoleInfoHud'
+import { SkillBarHud } from '../ui/hud/SkillBarHud'
+import { HUD_ICONS, HUD_TEXTURES, ONLINE_TEXTURES } from '../ui/hud/hudTheme'
 import type { BattleData } from './BattleLoadingScene'
 import { REG, SCENE, shellStorage } from './shellShared'
 
@@ -32,7 +37,7 @@ export const BATTLE_RUNTIME_READY_EVENT = 'battle-runtime-ready'
 
 const HERO_ID = 'hero-1'
 const HERO_TEXTURE = 'runtime-role1'
-const WEAPON_TEXTURE = 'runtime-role1-equip0'
+const WEAPON_SHOW_IDS = [0, 1, 2] as const
 const LOOPING_ACTIONS = new Set(['wait', 'wait2', 'walk', 'run'])
 const MONSTER_LOOPING_ACTIONS = new Set(['wait', 'walk'])
 const TRANSFER_FRAME_COUNT = 10
@@ -56,10 +61,14 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private accumulatorMs = 0
   private readonly actorViews = new Map<string, ActorView>()
   private readonly projectileViews = new Map<string, Phaser.GameObjects.Image>()
-  private keys!: Record<'left' | 'right' | 'jump' | 'attack' | 'interact' | 'skill1', Phaser.Input.Keyboard.Key>
+  private keys!: Record<
+    'left' | 'right' | 'jump' | 'attack' | 'interact' | 'skillY' | 'skillU' | 'skillI' | 'skillO' | 'skillL',
+    Phaser.Input.Keyboard.Key
+  >
   private weapon!: Phaser.GameObjects.Sprite
   private portal?: Phaser.GameObjects.Container
   private heroHud!: RoleInfoHud
+  private skillBar!: SkillBarHud
   private status!: Phaser.GameObjects.Text
   private respawnNotice?: Phaser.GameObjects.Text
   private skillEffect?: Phaser.GameObjects.Sprite
@@ -68,6 +77,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private activeSlot: SlotId | null = null
   private clearTransitionScheduled = false
   private manualMode = false
+  private runtimeProfile?: CompiledBattleRuntimeProfile
 
   constructor() {
     super(SCENE.battleRuntime)
@@ -84,6 +94,8 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.skillEffect = undefined
     this.campaignIndex = data?.campaignIndex ?? 0
     this.activeSlot = data?.activeSlot ?? asSlotId(this.registry.get(REG.activeSlot))
+    const saved = this.activeSlot === null ? undefined : readSlot(shellStorage(), this.activeSlot)
+    this.runtimeProfile = saved ? compileBattleRuntimeProfile(restoreGameState(saved.save)) : undefined
     this.clearTransitionScheduled = false
     this.manualMode = false
   }
@@ -93,10 +105,19 @@ export class BattleRuntimeScene extends Phaser.Scene {
       frameWidth: roleData.sheet.cellW,
       frameHeight: roleData.sheet.cellH,
     })
-    this.load.spritesheet(WEAPON_TEXTURE, 'assets/extracted/role1_equip0.png', {
-      frameWidth: roleData.sheet.cellW,
-      frameHeight: roleData.sheet.cellH,
-    })
+    for (const showId of WEAPON_SHOW_IDS) {
+      this.load.spritesheet(`runtime-role1-equip${showId}`, `assets/extracted/role1_equip${showId}.png`, {
+        frameWidth: roleData.sheet.cellW,
+        frameHeight: roleData.sheet.cellH,
+      })
+    }
+    for (const asset of [...HUD_TEXTURES, ...HUD_ICONS, ...ONLINE_TEXTURES]) {
+      if (![
+        'hud_avatar_wukong', 'hud_ri_bg', 'hud_ri_head', 'hud_ri_hp', 'hud_ri_mp', 'hud_ri_exp',
+        'hud_ri_rage', 'skilldock', 'skill_slz',
+      ].includes(asset.key)) continue
+      if (!this.textures.exists(asset.key)) this.load.image(asset.key, asset.url)
+    }
     for (const species of ['monster3', 'monster30']) {
       const data = monsterData[species]
       this.load.spritesheet(`runtime-${species}`, `assets/extracted/level1/${species === 'monster3' ? 'Monster3' : 'Monster30_clean'}.png`, {
@@ -125,8 +146,8 @@ export class BattleRuntimeScene extends Phaser.Scene {
 
   create(): void {
     this.definition = useSl11RuntimeGate(window.location.search)
-      ? compileSl11RuntimeGateDefinition(0x5a17)
-      : compileSl11BattleDefinition(0x5a17)
+      ? compileSl11RuntimeGateDefinition(0x5a17, this.runtimeProfile?.combat)
+      : compileSl11BattleDefinition(0x5a17, this.runtimeProfile?.combat)
     this.runtime = new BattleRuntime(this.definition)
     this.snapshot = this.runtime.getSnapshot()
     this.registerAnimations()
@@ -150,7 +171,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
         jump: this.keys.jump.isDown,
         attack: this.keys.attack.isDown,
         interact: this.keys.interact.isDown,
-        skillId: this.keys.skill1.isDown ? 'slz' : null,
+        skillId: this.activeBoundSkill(),
       })) this.runtime.enqueue(command)
       this.advanceRuntime()
     }
@@ -158,7 +179,15 @@ export class BattleRuntimeScene extends Phaser.Scene {
 
   private registerAnimations(): void {
     registerRoleAnimations(this.anims, roleData, HERO_TEXTURE, LOOPING_ACTIONS, 'runtime-hero-')
-    registerRoleAnimations(this.anims, roleData, WEAPON_TEXTURE, LOOPING_ACTIONS, 'runtime-weapon-')
+    for (const showId of WEAPON_SHOW_IDS) {
+      registerRoleAnimations(
+        this.anims,
+        roleData,
+        `runtime-role1-equip${showId}`,
+        LOOPING_ACTIONS,
+        `runtime-weapon-${showId}-`,
+      )
+    }
     for (const [species, data] of Object.entries(monsterData)) {
       registerRoleAnimations(this.anims, data, `runtime-${species}`, MONSTER_LOOPING_ACTIONS, `runtime-${species}-`)
     }
@@ -219,8 +248,14 @@ export class BattleRuntimeScene extends Phaser.Scene {
       this.add.image(x, y, key).setAlpha(0.38).setDepth(-10)
     }
 
-    this.weapon = this.add.sprite(0, 0, WEAPON_TEXTURE).setScale(1.5).setDepth(11)
+    this.weapon = this.add.sprite(0, 0, this.weaponTexture()).setScale(1.5).setDepth(11)
     this.heroHud = new RoleInfoHud(this, 12, 10, { scale: 1.05 })
+    this.skillBar = new SkillBarHud(this, 2, 366, { scale: 1.2 })
+    this.skillBar.setSlots((['Y', 'U', 'I', 'O', 'L'] as const).map((hotkey) => ({
+      hotkey,
+      skillId: this.runtimeProfile?.hud.bindings[hotkey] ?? undefined,
+      disabled: !this.runtimeProfile?.hud.bindings[hotkey],
+    })))
     this.status = this.add.text(948, 12, '', {
       fontFamily: 'monospace', fontSize: '13px', color: '#fff7df',
       stroke: '#2c1b13', strokeThickness: 4,
@@ -234,7 +269,11 @@ export class BattleRuntimeScene extends Phaser.Scene {
       jump: Phaser.Input.Keyboard.KeyCodes.K,
       attack: Phaser.Input.Keyboard.KeyCodes.J,
       interact: Phaser.Input.Keyboard.KeyCodes.UP,
-      skill1: Phaser.Input.Keyboard.KeyCodes.Y,
+      skillY: Phaser.Input.Keyboard.KeyCodes.Y,
+      skillU: Phaser.Input.Keyboard.KeyCodes.U,
+      skillI: Phaser.Input.Keyboard.KeyCodes.I,
+      skillO: Phaser.Input.Keyboard.KeyCodes.O,
+      skillL: Phaser.Input.Keyboard.KeyCodes.L,
     }) as typeof this.keys
   }
 
@@ -256,17 +295,36 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.renderPortal()
     const hero = this.snapshot.actors[0]
     this.heroHud.update({
-      level: 1,
+      level: this.runtimeProfile?.hud.level ?? 1,
       hp: hero.hp,
       maxHp: hero.maxHp,
       mp: this.snapshot.heroSkill.mp,
       maxMp: this.snapshot.heroSkill.maxMp,
-      exp: 0,
-      expToNext: 1,
+      exp: this.runtimeProfile?.hud.exp ?? 0,
+      expToNext: this.runtimeProfile?.hud.expToNext ?? 1,
       atk: this.definition.hero.atk,
-      weaponName: '行者棍',
+      weaponName: this.runtimeProfile?.hud.weaponName ?? '行者棍',
     })
     this.status.setText(`sl11  tick ${this.snapshot.tick}\n${stableHash(this.runtime.getDeterministicState())}`)
+    const active = this.snapshot.heroSkill.activeSkillId
+    const definition = active ? this.definition.hero.skills[active] : undefined
+    const remaining = Math.max(0, this.snapshot.heroSkill.cooldownUntilTick - this.snapshot.tick)
+    const cooldownFrac = definition && definition.cooldownTicks > 0 ? remaining / definition.cooldownTicks : 0
+    const bindings = this.runtimeProfile?.hud.bindings
+    for (const [index, hotkey] of (['Y', 'U', 'I', 'O', 'L'] as const).entries()) {
+      this.skillBar.setCooldown(index, bindings?.[hotkey] ? cooldownFrac : 0)
+    }
+  }
+
+  private activeBoundSkill(): string | null {
+    const bindings = this.runtimeProfile?.hud.bindings
+    for (const [hotkey, key] of [
+      ['Y', this.keys.skillY], ['U', this.keys.skillU], ['I', this.keys.skillI],
+      ['O', this.keys.skillO], ['L', this.keys.skillL],
+    ] as const) {
+      if (key.isDown && bindings?.[hotkey]) return bindings[hotkey]
+    }
+    return null
   }
 
   private createActorView(actor: CombatActorSnapshot): ActorView {
@@ -293,9 +351,15 @@ export class BattleRuntimeScene extends Phaser.Scene {
       view.hp.fillStyle(0xe04436, 1).fillRect(x - width / 2 + 1, y - 99, (width - 2) * actor.hp / actor.maxHp, 5)
     }
     if (actor.kind === 'hero') {
+      const weaponTexture = this.weaponTexture()
+      if (this.weapon.texture.key !== weaponTexture) this.weapon.setTexture(weaponTexture)
       this.weapon.setPosition(x, y).setFlipX(actor.facing === 1).setVisible(visible)
-      if (visible) this.weapon.play(`runtime-weapon-${snapshotAction(actor)}`, true)
+      if (visible) this.weapon.play(`runtime-weapon-${this.snapshot.heroEquipment.weaponShowId}-${snapshotAction(actor)}`, true)
     }
+  }
+
+  private weaponTexture(): string {
+    return `runtime-role1-equip${this.snapshot?.heroEquipment.weaponShowId ?? this.runtimeProfile?.combat.weaponShowId ?? 0}`
   }
 
   private renderProjectiles(): void {
@@ -425,5 +489,6 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.respawnNotice?.destroy()
     this.skillEffect?.destroy()
     this.heroHud.container.destroy(true)
+    this.skillBar.container.destroy(true)
   }
 }

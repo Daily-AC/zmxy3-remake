@@ -45,6 +45,11 @@ export interface Sl11BattleProfile {
   def: number
   magicDefenseFraction: number
   critChance: number
+  maxMp: number
+  slzLevel: number
+  weaponItemId: string | null
+  armorItemId: string | null
+  weaponShowId: number
 }
 
 function ticks(ms: number): number {
@@ -118,20 +123,25 @@ export function compileSl11BattleDefinition(
     def: profile.def ?? fallbackHero.def,
     magicDefenseFraction: profile.magicDefenseFraction ?? fallbackHero.magicDefenseFraction,
     critChance: profile.critChance ?? fallbackHero.critChance,
-    maxMp: getRole1MaxMp(1),
+    maxMp: profile.maxMp ?? getRole1MaxMp(1),
+    equipment: {
+      weaponItemId: profile.weaponItemId ?? null,
+      armorItemId: profile.armorItemId ?? null,
+      weaponShowId: profile.weaponShowId ?? 0,
+    },
     skills: {
       slz: {
         id: 'slz',
         action: 'hit6',
-        learnedLevel: 1,
-        mpCost: getRole1SkillMpCost('slz', 1),
+        learnedLevel: profile.slzLevel ?? 1,
+        mpCost: getRole1SkillMpCost('slz', profile.slzLevel ?? 1),
         durationTicks: ticks(650),
         cooldownTicks: ticks(650),
         hitTick: 1,
         hitbox: { forward: 30, y: 40, width: 170, height: 150 },
         damage: Math.max(1, Math.round(calculateRealSkillDamage(
           'slz',
-          1,
+          profile.slzLevel ?? 1,
           profile.atk ?? fallbackHero.atk,
           { critChance: 0, random: () => 1 },
         ))),

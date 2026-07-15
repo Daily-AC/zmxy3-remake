@@ -15,6 +15,7 @@ export function makeBattleDefinition(): BattleDefinition {
       ...session.hero,
       maxMp: 50,
       skills: {},
+      equipment: { weaponItemId: null, armorItemId: null, weaponShowId: 0 },
       spawn: { x: 100, y: 400 },
       groundY: 400,
       minX: 0,
