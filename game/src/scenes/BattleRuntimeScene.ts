@@ -81,7 +81,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
     })
     for (const species of ['monster3', 'monster30']) {
       const data = monsterData[species]
-      this.load.spritesheet(`runtime-${species}`, `assets/extracted/level1/${species === 'monster3' ? 'Monster3' : 'Monster30'}.png`, {
+      this.load.spritesheet(`runtime-${species}`, `assets/extracted/level1/${species === 'monster3' ? 'Monster3' : 'Monster30_clean'}.png`, {
         frameWidth: data.sheet.cellW,
         frameHeight: data.sheet.cellH,
       })
@@ -153,7 +153,13 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private buildWorld(): void {
     const { bounds, walls } = this.definition.level
     this.cameras.main.setBackgroundColor('#d7edf5')
-    this.cameras.main.setBounds(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top)
+    const cameraBottomPadding = 120
+    this.cameras.main.setBounds(
+      bounds.left,
+      bounds.top,
+      bounds.right - bounds.left,
+      bounds.bottom - bounds.top + cameraBottomPadding,
+    )
     const background = this.add.tileSprite(
       bounds.left,
       bounds.top,
