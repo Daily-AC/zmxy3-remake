@@ -3,6 +3,7 @@ import type { CoopSession } from '../net/socialClient'
 import { activeArtFont } from '../systems/artFont'
 import { addEmbers } from '../ui/embers'
 import { BATTLE_READY_EVENT } from './BattleScene'
+import { BATTLE_RUNTIME_READY_EVENT } from './BattleRuntimeScene'
 import {
   battleLoadingBackground,
   battleLoadingContext,
@@ -15,6 +16,13 @@ import { SCENE } from './shellShared'
 export interface BattleData {
   campaignIndex: number
   coopSession?: CoopSession
+  runtime?: 'legacy' | 'production'
+}
+
+export function battleTarget(data: BattleData): { sceneKey: string; readyEvent: string } {
+  return data.runtime === 'production'
+    ? { sceneKey: SCENE.battleRuntime, readyEvent: BATTLE_RUNTIME_READY_EVENT }
+    : { sceneKey: SCENE.battle, readyEvent: BATTLE_READY_EVENT }
 }
 
 interface BattleLoadingData {
@@ -42,6 +50,7 @@ export class BattleLoadingScene extends Phaser.Scene {
   private progressText?: Phaser.GameObjects.Text
   private progressBar?: Phaser.GameObjects.Graphics
   private battle?: Phaser.Scene
+  private readyEvent = BATTLE_READY_EVENT
 
   constructor() {
     super(SCENE.battleLoading)
@@ -106,12 +115,14 @@ export class BattleLoadingScene extends Phaser.Scene {
     })
 
     this.exposeHook()
-    const battle = this.scene.get(SCENE.battle)
+    const target = battleTarget(this.battleData)
+    const battle = this.scene.get(target.sceneKey)
     this.battle = battle
+    this.readyEvent = target.readyEvent
     battle.load.on('progress', this.onLoadProgress)
-    battle.events.once(BATTLE_READY_EVENT, this.onBattleReady)
+    battle.events.once(this.readyEvent, this.onBattleReady)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown)
-    this.scene.launch(SCENE.battle, this.battleData)
+    this.scene.launch(target.sceneKey, this.battleData)
     this.scene.bringToTop(SCENE.battleLoading)
   }
 
@@ -151,7 +162,7 @@ export class BattleLoadingScene extends Phaser.Scene {
     const battle = this.battle
     if (battle) {
       battle.load.off('progress', this.onLoadProgress)
-      battle.events.off(BATTLE_READY_EVENT, this.onBattleReady)
+      battle.events.off(this.readyEvent, this.onBattleReady)
     }
     this.battle = undefined
     delete (window as unknown as Record<string, unknown>).__shellLoadingState

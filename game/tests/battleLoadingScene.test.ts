@@ -78,11 +78,12 @@ describe('BattleLoadingScene', () => {
     expect(loading).toMatch(/backgroundKey: this\.loadingBackground\.key/)
   })
 
-  it('launches battle with the original payload, stays above it, and stops only on ready', () => {
+  it('launches the selected battle target with the original payload and stops only on its ready event', () => {
     const loading = source()
-    expect(loading).toMatch(/this\.scene\.launch\(SCENE\.battle, this\.battleData\)/)
+    expect(loading).toMatch(/const target = battleTarget\(this\.battleData\)/)
+    expect(loading).toMatch(/this\.scene\.launch\(target\.sceneKey, this\.battleData\)/)
     expect(loading).toMatch(/this\.scene\.bringToTop\(SCENE\.battleLoading\)/)
-    expect(loading).toMatch(/battle\.events\.once\(BATTLE_READY_EVENT, this\.onBattleReady\)/)
+    expect(loading).toMatch(/battle\.events\.once\(this\.readyEvent, this\.onBattleReady\)/)
     expect(loading).toMatch(/this\.scene\.stop\(SCENE\.battleLoading\)/)
   })
 
@@ -91,7 +92,7 @@ describe('BattleLoadingScene', () => {
     expect(loading).toMatch(/battleLoadingStatusFrames/)
     expect(loading).toMatch(/loop: true/)
     expect(loading).toMatch(/battle\.load\.off\('progress', this\.onLoadProgress\)/)
-    expect(loading).toMatch(/battle\.events\.off\(BATTLE_READY_EVENT, this\.onBattleReady\)/)
+    expect(loading).toMatch(/battle\.events\.off\(this\.readyEvent, this\.onBattleReady\)/)
     expect(loading).toMatch(/delete .*__shellLoadingState/)
   })
 })

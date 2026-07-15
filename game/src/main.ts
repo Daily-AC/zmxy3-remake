@@ -9,6 +9,7 @@ import { LobbyScene } from './scenes/LobbyScene'
 import { BattleLoadingScene } from './scenes/BattleLoadingScene'
 import { BattleScene } from './scenes/BattleScene'
 import { CombatCoreScene } from './scenes/CombatCoreScene'
+import { BattleRuntimeScene } from './scenes/BattleRuntimeScene'
 import { ensureArtFontsLoaded } from './systems/artFont'
 import { installOptimizedImageLoader } from './systems/optimizedAssets'
 import { RENDER_METRICS, installHiDpiTextFactory } from './systems/renderScale'
@@ -35,7 +36,7 @@ const defaultScenes = [
   SlotSelectScene,
   CharacterSelectScene,
   WorldMapScene,
-  SkillTreeScene, BattleLoadingScene, BattleScene,
+  SkillTreeScene, BattleLoadingScene, BattleScene, BattleRuntimeScene,
 ]
 ensureArtFontsLoaded().finally(() => {
   installHiDpiTextFactory(Phaser.GameObjects.GameObjectFactory.prototype)
