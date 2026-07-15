@@ -93,6 +93,11 @@ export type BattleHeroDefinition = HeroCombatDefinition & {
   }
 }
 
+export type BattleHeroLoadout = Pick<
+  BattleHeroDefinition,
+  'maxHp' | 'atk' | 'def' | 'magicDefenseFraction' | 'critChance' | 'maxMp' | 'equipment' | 'skills'
+>
+
 export interface BattleDefinition {
   version: 1
   contentVersion: string
@@ -124,6 +129,13 @@ export type BattleCommand = CombatCommand | {
   actorId: ActorId
   sequence: number
   atTick: number
+} | {
+  type: 'apply-hero-loadout'
+  transactionId: string
+  loadout: BattleHeroLoadout
+  actorId: ActorId
+  sequence: number
+  atTick: number
 }
 
 export type BattleCommandRejectionReason = CommandRejectionReason
@@ -133,6 +145,7 @@ export type BattleCommandRejectionReason = CommandRejectionReason
   | 'cooldown'
   | 'unknown-loot'
   | 'invalid-loot-resolution'
+  | 'invalid-hero-loadout'
 
 export type BattleEvent = Exclude<CombatEvent, { type: 'command-rejected' }>
   | { type: 'command-rejected'; tick: number; command: BattleCommand; reason: BattleCommandRejectionReason }
@@ -179,6 +192,20 @@ export type BattleEvent = Exclude<CombatEvent, { type: 'command-rejected' }>
       mpBefore: number
       mpAfter: number
     }
+  | {
+      type: 'hero-loadout-applied'
+      tick: number
+      transactionId: string
+      equipment: BattleHeroLoadout['equipment']
+      hpBefore: number
+      hpAfter: number
+      maxHpBefore: number
+      maxHpAfter: number
+      mpBefore: number
+      mpAfter: number
+      maxMpBefore: number
+      maxMpAfter: number
+    }
 
 export interface BattleSnapshot {
   version: 1
@@ -187,6 +214,7 @@ export interface BattleSnapshot {
   randomState: number
   level: { id: string; doorVisible: boolean; cleared: boolean }
   heroSkill: Pick<BattleSkillState, 'mp' | 'maxMp' | 'cooldownUntilTick'> & { activeSkillId: string | null }
+  heroLoadout: BattleHeroLoadout
   heroEquipment: BattleHeroDefinition['equipment']
   actors: readonly CombatActorSnapshot[]
   projectiles: readonly BattleProjectile[]

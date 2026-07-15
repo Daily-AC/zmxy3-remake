@@ -25,6 +25,11 @@ function snapshot(): BattleSnapshot {
     randomState: 1,
     level: { id: 'sl11', doorVisible: false, cleared: false },
     heroSkill: { mp: 10, maxMp: 50, cooldownUntilTick: 0, activeSkillId: null },
+    heroLoadout: {
+      maxHp: 100, atk: 10, def: 1, magicDefenseFraction: 0, critChance: 0, maxMp: 50,
+      equipment: { weaponItemId: null, armorItemId: null, weaponShowId: 0 },
+      skills: {},
+    },
     heroEquipment: { weaponItemId: null, armorItemId: null, weaponShowId: 0 },
     actors: [{
       id: 'hero-1', kind: 'hero', contentId: 'hero.role1.wukong', x: 0, y: 0,

@@ -14,6 +14,8 @@ interface BattleRuntimeObservation {
   enqueue(command: { type: string; skillId?: string; actorId: string; sequence: number; atTick: number }): void
   setManualMode(enabled: boolean): void
   step(ticks?: number): unknown
+  equipItem(itemId: string): boolean
+  getWeaponTexture(): string
 }
 
 interface CombatCoreSliceObservation {

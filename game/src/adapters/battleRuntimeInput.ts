@@ -2,7 +2,7 @@ import type { BattleCommand } from '@zaixu/game-core'
 
 type PhysicalBattleCommand = Exclude<
   BattleCommand,
-  { type: 'press-skill' } | { type: 'resolve-loot-pickup' }
+  { type: 'press-skill' } | { type: 'resolve-loot-pickup' } | { type: 'apply-hero-loadout' }
 >
 
 export interface BattleRuntimeKeyState {
