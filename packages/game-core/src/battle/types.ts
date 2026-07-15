@@ -5,6 +5,7 @@ import type {
   HeroCombatDefinition,
   MonsterCombatDefinition,
 } from '../session/types'
+import type { RangedAttackConfig, VerticalFollowConfig } from '../monster/monsterSim'
 import type { CombatCommand } from '../session/commands'
 import type { CommandRejectionReason } from '../session/commands'
 import type { CombatEvent } from '../session/events'
@@ -22,7 +23,12 @@ export interface BattleNumberRange {
   max: number
 }
 
-export type BattleMonsterDefinition = Omit<MonsterCombatDefinition, 'id' | 'spawn'>
+export type BattleMonsterDefinition = Omit<MonsterCombatDefinition, 'id' | 'spawn'> & {
+  behavior?: {
+    verticalFollow?: VerticalFollowConfig
+    rangedAttack?: RangedAttackConfig
+  }
+}
 
 export interface TimedSpawnDefinition {
   speciesId: string

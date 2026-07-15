@@ -102,6 +102,8 @@ function monsterConfig(
     tickMs: TICK_MS,
     rng: () => random.next(),
     attackSpec: definition.attack,
+    verticalFollow: definition.behavior?.verticalFollow,
+    rangedAttack: definition.behavior?.rangedAttack,
     isBoss,
     targetingGeometry: {
       selfOffsetX: definition.selfOffsetX,

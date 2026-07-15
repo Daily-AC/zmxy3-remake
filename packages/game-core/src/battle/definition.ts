@@ -68,6 +68,23 @@ const StopPointEncounterSchema = z.object({
 const EncounterSchema = z.discriminatedUnion('kind', [ContinuousEncounterSchema, StopPointEncounterSchema])
 const MonsterDefinitionSchema = MonsterCombatDefinitionBaseSchema
   .omit({ id: true, spawn: true })
+  .extend({
+    behavior: z.object({
+      verticalFollow: z.object({
+        enabled: z.boolean(),
+        speed: finite.nonnegative(),
+        arriveThreshold: finite.nonnegative(),
+      }).strict().optional(),
+      rangedAttack: z.object({
+        kind: stableId,
+        speedPxPerSecond: finite.positive(),
+        radius: finite.positive(),
+        ttlMs: finite.positive(),
+        spawnOffsetX: finite.optional(),
+        spawnOffsetY: finite.optional(),
+      }).strict().optional(),
+    }).strict().optional(),
+  })
   .superRefine(refineMonsterPatrolBounds)
 
 export const BattleDefinitionSchema = z.object({
