@@ -10,7 +10,9 @@ Campaign indices `0..2` select `BattleRuntimeScene`. Later campaign nodes and co
 
 ## Runtime Boundary
 
-`BattleRuntime` owns fixed-tick movement, platforms, actors, encounters, attacks, projectiles, damage, the transfer door, and stage clear. Phaser samples input, submits commands, renders snapshots, and presents events. Browser storage is reached through the shell adapter, not from core.
+`BattleRuntime` owns fixed-tick movement, platforms, actors, encounters, attacks, projectiles, damage, loot entities, pickup requests, the active weapon/armor loadout, the transfer door, and stage clear. Phaser samples input, submits commands, renders snapshots, and presents events. Browser storage is reached through shell adapters, not from core.
+
+Loot and equipment use two-phase authority transactions. Core requests a pickup; the inventory adapter plans against a clone and confirms the accepted quantity. Equipment changes are likewise planned against a cloned save, applied through `apply-hero-loadout`, and committed to inventory/storage only after `hero-loadout-applied`. Weapon appearance, attack, defense, critical chance, skill damage, max HP, and max MP therefore change in one deterministic tick. Recipe crafting plans material, soul, and product changes against a cloned save and commits them together.
 
 The gate-only `window.__battleRuntime` hook is installed only when `runtimeDebug=gate`:
 
@@ -18,6 +20,8 @@ The gate-only `window.__battleRuntime` hook is installed only when `runtimeDebug
 - `enqueue(command)` uses the same ordered `BattleCommand` boundary as keyboard input.
 - `setManualMode(true)` disables the render-loop clock for deterministic stepping.
 - `step(ticks)` advances the same runtime and presentation event path used in play.
+- `equipItem(itemId)` uses the production equipment transaction from the browser gate.
+- `getWeaponTexture()` exposes the rendered weapon sheet for visual-loadout assertions.
 
 The gate fixture shortens only encounter timing and monster health. Production content remains unchanged: `sl11` keeps its vertical geometry and Owl trigger; `sl12` keeps five source StopPoints and thirteen MonsterAppearPoints; `sl13` keeps five source StopPoints, fourteen MonsterAppearPoints, Giant Spirit finale, and both Monster30 streams. Equipped weapon/armor attributes and the bound `slz` skill are compiled into the same deterministic definition.
 
@@ -36,19 +40,20 @@ node game/tools/verify-sl11-runtime.mjs
 npm run verify:combat-core
 ```
 
-The browser gate starts isolated preview, NPC, and social servers on reserved ports. It registers through the real shell, then proves the three independent world-map/loading routes, movement, jump, equipped weapon rendering, skill MP consumption, all eleven encounter transitions, each door interaction, campaign frontier persistence, and the legacy fallback. Any console error, page exception, failed request, blank screenshot, missing event, wrong StopPoint, or wrong frontier fails the command.
+The browser gate starts isolated preview, NPC, and social servers on reserved ports. It registers through the real shell, then proves the three independent world-map/loading routes, movement, jump, original chapter-one drops, capacity-aware pickup, persisted material/soul recipe crafting, backpack rendering, weapon/armor equip, hot combat-stat and weapon-sheet changes, skill MP consumption, all eleven encounter transitions, each door interaction, campaign frontier persistence, and the immutable legacy fallback. Any console error, page exception, failed request, blank screenshot, missing event, wrong StopPoint, failed transaction, or wrong frontier fails the command.
 
 Evidence is regenerated under `game/tmp/sl11-runtime/`:
 
 - `world-map.png`
 - `stage-cleared.png`
+- `sl12-backpack-before-equip.png`
 - `sl12-stage-cleared.png`
 - `sl13-stage-cleared.png`
 - `legacy-fallback.png`
 - `result.json` with the runtime hashes and event count
 - `runtime-ready-failure.*` when scene readiness fails
 
-Latest local proof on 2026-07-15: `sl11=6929b390`, `sl12=a1f87e5a`, `sl13=a245c05a`; saved frontier is `2` (南天门).
+Latest local proof on 2026-07-16: `sl11=8df48257`, `sl12=4c95a0fe`, `sl13=48c35d36`; saved frontier is `2` (南天门). The same run persisted `8` dropped soul, `3` timber, one starter staff, two starter armors, crafted one `whg` after deducting three timber and twenty soul, then equipped a dropped weapon and armor before clearing the remaining stages.
 
 ## Failure Triage
 
@@ -61,4 +66,4 @@ Latest local proof on 2026-07-15: `sl11=6929b390`, `sl12=a1f87e5a`, `sl13=a245c0
 
 ## Deferred Work
 
-The production host now covers the complete first-chapter battle slice, the necessary `slz` skill, and weapon/armor-derived attributes. Item drops and inventory transactions remain on the legacy host. Co-op remains on `BattleScene` until room commands can enter the deterministic runtime through a server-authoritative transport. `BattleScene` also stays available as the query-free rollback path while those systems migrate.
+The production host now covers the complete first-chapter battle slice, the necessary `slz` skill, authoritative drops and pickup, weapon/armor inventory transactions, hot loadout attributes, save restoration, selling, and the starter recipe. AI-authored free-form forge output remains a map-side validated transaction rather than deterministic combat state. Co-op remains on `BattleScene` until room commands can enter the deterministic runtime through a server-authoritative transport. `BattleScene` also stays byte-locked as the query-free rollback path while those systems migrate.

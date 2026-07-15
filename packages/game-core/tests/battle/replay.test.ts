@@ -32,6 +32,33 @@ describe('BattleRuntime recording and replay', () => {
     expect(new Set(hashes)).toEqual(new Set([recording.expectedFinalHash]))
   })
 
+  it('replays an authority loadout transaction identically at 30, 60, and 120 Hz', () => {
+    const definition = makeBattleDefinition()
+    const hero = definition.hero
+    const loadout = {
+      maxHp: hero.maxHp + 20,
+      atk: hero.atk + 10,
+      def: hero.def + 5,
+      magicDefenseFraction: hero.magicDefenseFraction,
+      critChance: hero.critChance,
+      maxMp: hero.maxMp + 10,
+      equipment: { weaponItemId: 'whg', armorItemId: 'ptdxzf', weaponShowId: 2 },
+      skills: hero.skills,
+    }
+    const recording = createBattleRecording(definition, [{
+      type: 'apply-hero-loadout', transactionId: 'equip-1', loadout,
+      actorId: 'battle-authority', sequence: 1, atTick: 60,
+    }], 120)
+    const results = [30, 60, 120].map((renderHz) => playBattleRecording(recording, { renderHz }))
+
+    expect(recording.events).toContainEqual(expect.objectContaining({
+      type: 'hero-loadout-applied', transactionId: 'equip-1', equipment: loadout.equipment,
+    }))
+    expect(new Set(results.map((result) => result.finalHash)))
+      .toEqual(new Set([recording.expectedFinalHash]))
+    for (const result of results) expect(result.events).toEqual(recording.events)
+  })
+
   it('detects changed content and owns recording inputs', () => {
     const definition = makeBattleDefinition()
     const sourceCommands = cloneSerializable(commands)
