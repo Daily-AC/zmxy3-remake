@@ -28,10 +28,12 @@ import {
 import { advanceMonster, initMonster, type MonsterConfig, type MonsterState } from '../monster/monsterSim'
 import { SeededRandom } from '../random/seededRandom'
 import type { CommandRejectionReason } from '../session/commands'
+import { toDeterministicValue, type DeterministicValue } from '../session/checkpoint'
 import { cloneSerializable } from '../session/snapshot'
 import type { ActorId, ActorLifeState, CombatActorSnapshot } from '../session/types'
 import { TICK_MS } from '../time/tick'
 import { BattleActorRegistry } from './actorRegistry'
+import { createBattleCheckpoint, decodeBattleCheckpoint, type BattleCheckpoint } from './checkpoint'
 import { validateBattleDefinition } from './definition'
 import { advanceEncounter, createEncounterState, type BattleEncounterState, type EncounterEffect } from './encounter'
 import { resolveHorizontalMotion, resolveVerticalMotion } from './platform'
@@ -109,7 +111,7 @@ function monsterConfig(
   }
 }
 
-export interface BattleDeterministicState {
+export interface BattleRuntimeState {
   version: 1
   definition: BattleDefinition
   tick: number
@@ -131,14 +133,14 @@ export class BattleRuntime {
   private readonly heroCombatConfig: HeroCombatConfig
   private readonly heroState: HeroState
   private readonly heroCombat: HeroCombatModel
-  private readonly actors = new BattleActorRegistry()
+  private readonly actors: BattleActorRegistry
   private readonly monsterConfigs = new Map<ActorId, MonsterConfig>()
   private readonly encounter: BattleEncounterState
   private currentTick = 0
 
-  constructor(input: BattleDefinition) {
+  constructor(input: BattleDefinition, restored?: BattleRuntimeState) {
     this.definition = validateBattleDefinition(input)
-    this.random = new SeededRandom(this.definition.seed)
+    this.random = restored ? SeededRandom.fromState(restored.randomState) : new SeededRandom(this.definition.seed)
     const walls = this.definition.level.walls
     this.heroConfig = makeHeroConfig({
       groundY: this.definition.hero.groundY,
@@ -149,16 +151,38 @@ export class BattleRuntime {
     })
     this.heroConfig.jump.platformResolver = (query) => resolveVerticalMotion(walls, query)
     this.heroConfig.resolveHorizontal = (query) => resolveHorizontalMotion(walls, query).x
-    this.heroState = initHeroState(this.heroConfig, this.definition.level.heroSpawn.x)
-    this.heroState.vertical.y = this.definition.level.heroSpawn.y
     this.heroCombatConfig = {
       ...DEFAULT_HERO_COMBAT_CONFIG,
       maxHp: this.definition.hero.maxHp,
       hurtDurationMs: this.definition.hero.hurtDurationMs,
       respawnDelayMs: this.definition.hero.respawnDelayMs,
     }
-    this.heroCombat = createHeroCombat(this.heroCombatConfig)
-    this.encounter = createEncounterState(this.definition.level)
+    if (restored) {
+      this.assertRestoredState(restored)
+      this.heroState = restored.heroSimulation
+      this.heroCombat = restored.heroCombat
+      this.actors = BattleActorRegistry.restore(restored.actors)
+      this.encounter = restored.encounter
+      this.currentTick = restored.tick
+      this.queuedCommands.push(...restored.queuedCommands)
+      for (const entry of restored.lastSeenSequences) {
+        this.lastSeenSequenceByActor.set(entry.actorId, entry.sequence)
+      }
+      for (const record of this.actors.records()) {
+        this.monsterConfigs.set(record.id, monsterConfig(
+          this.definition.monsters[record.speciesId],
+          this.definition.hero.hurtbox.width,
+          this.random,
+          record.encounterId.endsWith('-boss'),
+        ))
+      }
+    } else {
+      this.heroState = initHeroState(this.heroConfig, this.definition.level.heroSpawn.x)
+      this.heroState.vertical.y = this.definition.level.heroSpawn.y
+      this.heroCombat = createHeroCombat(this.heroCombatConfig)
+      this.actors = new BattleActorRegistry()
+      this.encounter = createEncounterState(this.definition.level)
+    }
   }
 
   enqueue(command: BattleCommand): void {
@@ -274,8 +298,21 @@ export class BattleRuntime {
     })
   }
 
-  getDeterministicState(): BattleDeterministicState {
-    return cloneSerializable({
+  getDeterministicState(): DeterministicValue {
+    return toDeterministicValue(this.captureState())
+  }
+
+  createCheckpoint(): BattleCheckpoint {
+    return createBattleCheckpoint(this.captureState())
+  }
+
+  static restore(checkpoint: BattleCheckpoint): BattleRuntime {
+    const state = decodeBattleCheckpoint<BattleRuntimeState>(checkpoint)
+    return new BattleRuntime(state.definition, state)
+  }
+
+  private captureState(): BattleRuntimeState {
+    return {
       version: 1,
       definition: this.definition,
       tick: this.currentTick,
@@ -288,7 +325,25 @@ export class BattleRuntime {
       lastSeenSequences: [...this.lastSeenSequenceByActor]
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([actorId, sequence]) => ({ actorId, sequence })),
-    })
+    }
+  }
+
+  private assertRestoredState(state: BattleRuntimeState): void {
+    if (state.version !== 1) throw new TypeError('battle runtime state version must be 1')
+    if (!Number.isSafeInteger(state.tick) || state.tick < 0) throw new TypeError('battle runtime tick is invalid')
+    if (!Number.isInteger(state.randomState) || state.randomState < 0 || state.randomState > 0xffffffff) {
+      throw new TypeError('battle runtime random state is invalid')
+    }
+    for (const command of state.queuedCommands) {
+      if (!Number.isSafeInteger(command.atTick) || command.atTick <= state.tick) {
+        throw new TypeError('restored command tick must be in the future')
+      }
+    }
+    for (const entry of state.lastSeenSequences) {
+      if (!Number.isSafeInteger(entry.sequence) || entry.sequence < 0) {
+        throw new TypeError('restored command sequence is invalid')
+      }
+    }
   }
 
   private applyCommand(command: BattleCommand, edges: HeroEdges): CommandRejectionReason | null {
