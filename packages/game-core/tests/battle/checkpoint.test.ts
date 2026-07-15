@@ -31,4 +31,23 @@ describe('BattleRuntime checkpoint', () => {
     expect(restored.getSnapshot()).toEqual(runtime.getSnapshot())
     expect(() => BattleRuntime.restore(checkpoint)).toThrow(/hash/)
   })
+
+  it('restores MP, shared cooldown, and an in-flight skill action', () => {
+    const definition = makeBattleDefinition()
+    definition.hero.skills.slz = {
+      id: 'slz', action: 'hit6', learnedLevel: 1, mpCost: 36,
+      durationTicks: 20, cooldownTicks: 20, hitTick: 4,
+      hitbox: { forward: 30, y: 0, width: 170, height: 150 },
+      damage: 200, attackKind: 'physics',
+    }
+    const original = new BattleRuntime(definition)
+    original.enqueue({ type: 'press-skill', skillId: 'slz', actorId: 'hero-1', sequence: 1, atTick: 1 })
+    original.step(2)
+    const restored = BattleRuntime.restore(original.createCheckpoint())
+
+    expect(restored.getSnapshot().heroSkill).toEqual(original.getSnapshot().heroSkill)
+    expect(restored.getSnapshot().heroSkill).toMatchObject({ mp: 14, activeSkillId: 'slz' })
+    expect(restored.step(25)).toEqual(original.step(25))
+    expect(stableHash(restored.getDeterministicState())).toBe(stableHash(original.getDeterministicState()))
+  })
 })

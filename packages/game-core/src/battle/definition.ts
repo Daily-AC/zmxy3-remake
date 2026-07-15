@@ -1,8 +1,9 @@
 import { RuleProvenanceSchema } from '@zaixu/content'
 import { z } from 'zod'
 import {
-  HeroCombatDefinitionSchema,
+  HeroCombatDefinitionBaseSchema,
   MonsterCombatDefinitionBaseSchema,
+  refineHeroCombatBounds,
   refineMonsterPatrolBounds,
 } from '../session/definition'
 import { assertPlainData } from '../session/plainData'
@@ -37,6 +38,31 @@ const WallSchema = z.object({
   height: finite.positive(),
   rotation: finite.optional(),
 }).strict()
+const SkillDefinitionSchema = z.object({
+  id: stableId,
+  action: stableId,
+  learnedLevel: z.number().int().min(0).max(18),
+  mpCost: finite.nonnegative(),
+  durationTicks: positiveInteger,
+  cooldownTicks: nonNegativeInteger,
+  hitTick: positiveInteger,
+  hitbox: z.object({
+    forward: finite,
+    y: finite,
+    width: finite.positive(),
+    height: finite.positive(),
+  }).strict(),
+  damage: finite.nonnegative(),
+  attackKind: z.enum(['physics', 'magic']),
+}).strict().superRefine((skill, context) => {
+  if (skill.hitTick >= skill.durationTicks) {
+    context.addIssue({ code: 'custom', message: 'skill hit tick must occur before its end tick', path: ['hitTick'] })
+  }
+})
+const BattleHeroDefinitionSchema = HeroCombatDefinitionBaseSchema.extend({
+  maxMp: finite.nonnegative(),
+  skills: z.record(stableId, SkillDefinitionSchema),
+}).superRefine(refineHeroCombatBounds)
 const TimedSpawnSchema = z.object({
   speciesId: stableId,
   x: finite,
@@ -93,7 +119,7 @@ export const BattleDefinitionSchema = z.object({
   tickRate: z.literal(30),
   seed: z.number().int().min(0).max(0xffffffff),
   provenance: z.array(RuleProvenanceSchema),
-  hero: HeroCombatDefinitionSchema,
+  hero: BattleHeroDefinitionSchema,
   monsters: z.record(stableId, MonsterDefinitionSchema),
   level: z.object({
     id: stableId,
@@ -105,6 +131,11 @@ export const BattleDefinitionSchema = z.object({
   }).strict(),
 }).strict().superRefine((definition, context) => {
   const { bounds, door, heroSpawn, encounters } = definition.level
+  for (const [skillId, skill] of Object.entries(definition.hero.skills)) {
+    if (skill.id !== skillId) {
+      context.addIssue({ code: 'custom', message: 'skill id must match its registry key', path: ['hero', 'skills', skillId, 'id'] })
+    }
+  }
   const inside = (x: number, y: number): boolean =>
     x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom
 

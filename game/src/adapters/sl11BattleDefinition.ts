@@ -14,6 +14,9 @@ import role1Raw from '../data/roles/role1.json'
 import { monsterBaselineCorrectionY } from '../presentation/actorVisualMetrics'
 import { TICK_MS } from '../systems/tick'
 import { actionDurationMs, type RoleData } from '../systems/roleData'
+import { getRole1SkillMpCost } from '../systems/heroSkill'
+import { getRole1MaxMp } from '../systems/mp'
+import { calculateRealSkillDamage } from '../systems/skillDamageReal'
 import { buildCombatCoreSliceDefinition } from './combatCoreDefinition'
 
 const SCALE = 1.5
@@ -115,6 +118,26 @@ export function compileSl11BattleDefinition(
     def: profile.def ?? fallbackHero.def,
     magicDefenseFraction: profile.magicDefenseFraction ?? fallbackHero.magicDefenseFraction,
     critChance: profile.critChance ?? fallbackHero.critChance,
+    maxMp: getRole1MaxMp(1),
+    skills: {
+      slz: {
+        id: 'slz',
+        action: 'hit6',
+        learnedLevel: 1,
+        mpCost: getRole1SkillMpCost('slz', 1),
+        durationTicks: ticks(650),
+        cooldownTicks: ticks(650),
+        hitTick: 1,
+        hitbox: { forward: 30, y: 40, width: 170, height: 150 },
+        damage: Math.max(1, Math.round(calculateRealSkillDamage(
+          'slz',
+          1,
+          profile.atk ?? fallbackHero.atk,
+          { critChance: 0, random: () => 1 },
+        ))),
+        attackKind: 'physics' as const,
+      },
+    },
   }
 
   return validateBattleDefinition({
@@ -126,6 +149,7 @@ export function compileSl11BattleDefinition(
       { ruleId: 'sl11.geometry', origin: 'canonical', source: 'game/src/data/levels/level1-geometry.json' },
       { ruleId: 'sl11.encounter', origin: 'canonical', source: 'game/src/data/levels/level1.ts' },
       { ruleId: 'role1.combat', origin: 'canonical', source: 'game/src/adapters/combatCoreDefinition.ts' },
+      { ruleId: 'role1.skill.slz', origin: 'canonical', source: 'game/src/systems/skillDamageReal.ts' },
       { ruleId: 'monster30.flight', origin: 'adapted', source: 'game/src/scenes/BattleScene.ts#monsterConfigFor' },
     ],
     hero,

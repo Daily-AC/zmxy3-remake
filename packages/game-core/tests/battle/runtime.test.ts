@@ -36,6 +36,67 @@ describe('BattleRuntime', () => {
     expect(events.some((event) => event.type === 'hit-confirmed')).toBe(false)
   })
 
+  it('casts a learned skill through the command boundary and applies its authoritative hit', () => {
+    const definition = makeBattleDefinition()
+    definition.hero.skills.slz = {
+      id: 'slz',
+      action: 'hit6',
+      learnedLevel: 1,
+      mpCost: 36,
+      durationTicks: 20,
+      cooldownTicks: 20,
+      hitTick: 1,
+      hitbox: { forward: 30, y: 0, width: 220, height: 180 },
+      damage: 200,
+      attackKind: 'physics',
+    }
+    definition.monsters.monster30.stats.hp = 100
+    const encounter = definition.level.encounters[0]
+    if (encounter.kind !== 'continuous') throw new Error('expected continuous fixture')
+    encounter.initialDelayTicks = 0
+    encounter.count = 1
+    encounter.spawnOffset = { x: { min: 30, max: 30 }, y: { min: 0, max: 0 } }
+    const runtime = new BattleRuntime(definition)
+    runtime.step()
+    runtime.enqueue({ type: 'press-skill', skillId: 'slz', actorId: 'hero-1', sequence: 1, atTick: 2 })
+
+    expect(runtime.step()).toContainEqual(expect.objectContaining({
+      type: 'skill-cast',
+      skillId: 'slz',
+      action: 'hit6',
+      mpBefore: 50,
+      mpAfter: 14,
+    }))
+    expect(runtime.getSnapshot().heroSkill).toMatchObject({ mp: 14, activeSkillId: 'slz' })
+    const hitEvents = runtime.step()
+    expect(hitEvents).toContainEqual(expect.objectContaining({ type: 'hit-confirmed', sourceId: 'hero-1' }))
+    expect(hitEvents).toContainEqual(expect.objectContaining({
+      type: 'damage-applied',
+      rawPower: 200,
+      amount: 196,
+      remainingHp: 0,
+    }))
+  })
+
+  it('rejects unknown skills and normal attacks during an active skill', () => {
+    const definition = makeBattleDefinition()
+    definition.hero.skills.slz = {
+      id: 'slz', action: 'hit6', learnedLevel: 1, mpCost: 0,
+      durationTicks: 20, cooldownTicks: 20, hitTick: 1,
+      hitbox: { forward: 30, y: 0, width: 220, height: 180 },
+      damage: 1, attackKind: 'physics',
+    }
+    const runtime = new BattleRuntime(definition)
+    runtime.enqueue({ type: 'press-skill', skillId: 'missing', actorId: 'hero-1', sequence: 1, atTick: 1 })
+    runtime.enqueue({ type: 'press-skill', skillId: 'slz', actorId: 'hero-1', sequence: 2, atTick: 1 })
+    runtime.enqueue({ type: 'press-attack', actorId: 'hero-1', sequence: 3, atTick: 1 })
+
+    const events = runtime.step()
+    expect(events).toContainEqual(expect.objectContaining({ type: 'command-rejected', reason: 'unknown-skill' }))
+    expect(events).toContainEqual(expect.objectContaining({ type: 'command-rejected', reason: 'busy' }))
+    expect(events.filter((event) => event.type === 'skill-cast')).toHaveLength(1)
+  })
+
   it('resolves horizontal movement against core-owned walls', () => {
     const definition = makeBattleDefinition()
     definition.level.walls.push({ type: 'solid', x: 110, y: 300, width: 40, height: 200 })

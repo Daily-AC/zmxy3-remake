@@ -44,4 +44,23 @@ describe('BattleRuntime recording and replay', () => {
     changed.definition.seed += 1
     expect(replayBattle(changed).verified).toBe(false)
   })
+
+  it('records skill commands, MP spending, and cooldown state deterministically', () => {
+    const definition = makeBattleDefinition()
+    definition.hero.skills.slz = {
+      id: 'slz', action: 'hit6', learnedLevel: 1, mpCost: 36,
+      durationTicks: 20, cooldownTicks: 20, hitTick: 1,
+      hitbox: { forward: 30, y: 0, width: 170, height: 150 },
+      damage: 200, attackKind: 'physics',
+    }
+    const recording = createBattleRecording(definition, [
+      { type: 'press-skill', skillId: 'slz', actorId: 'hero-1', sequence: 1, atTick: 1 },
+    ], 30)
+    const replay = replayBattle(recording)
+
+    expect(recording.events).toContainEqual(expect.objectContaining({
+      type: 'skill-cast', skillId: 'slz', mpBefore: 50, mpAfter: 14,
+    }))
+    expect(replay.verified).toBe(true)
+  })
 })

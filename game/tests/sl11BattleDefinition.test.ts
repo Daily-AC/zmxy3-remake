@@ -40,6 +40,17 @@ describe('compileSl11BattleDefinition', () => {
       rangedAttack: { kind: 'Monster30Bullet1', speedPxPerSecond: 620, radius: 58, ttlMs: 900 },
     })
     expect(first.monsters.monster3.stats).toMatchObject({ hp: 160, def: 6 })
+    expect(first.hero).toMatchObject({
+      maxMp: 50,
+      skills: {
+        slz: {
+          id: 'slz', action: 'hit6', learnedLevel: 1, mpCost: 36,
+          durationTicks: 20, cooldownTicks: 20, hitTick: 1, attackKind: 'physics',
+        },
+      },
+    })
+    expect(first.hero.skills.slz.damage).toBeGreaterThan(0)
+    expect(first.provenance).toContainEqual(expect.objectContaining({ ruleId: 'role1.skill.slz', origin: 'canonical' }))
     expect(validateBattleDefinition(first)).toEqual(first)
   })
 })

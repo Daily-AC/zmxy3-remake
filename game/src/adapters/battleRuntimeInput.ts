@@ -6,6 +6,7 @@ export interface BattleRuntimeKeyState {
   jump: boolean
   attack: boolean
   interact: boolean
+  skillId: string | null
 }
 
 const RELEASE_COMMAND = {
@@ -20,12 +21,13 @@ export class BattleRuntimeInput {
     jump: false,
     attack: false,
     interact: false,
+    skillId: null,
   }
   private sequence = 0
 
   sample(actorId: string, tick: number, current: BattleRuntimeKeyState): BattleCommand[] {
     const commands: BattleCommand[] = []
-    const push = (type: BattleCommand['type']): void => {
+    const push = (type: Exclude<BattleCommand['type'], 'press-skill'>): void => {
       commands.push({ actorId, sequence: ++this.sequence, atTick: tick, type })
     }
     if (current.left && !this.previous.left) push('press-left')
@@ -35,6 +37,15 @@ export class BattleRuntimeInput {
     if (current.jump && !this.previous.jump) push('press-jump')
     if (current.attack && !this.previous.attack) push('press-attack')
     if (current.interact && !this.previous.interact) push('press-interact')
+    if (current.skillId && current.skillId !== this.previous.skillId) {
+      commands.push({
+        actorId,
+        sequence: ++this.sequence,
+        atTick: tick,
+        type: 'press-skill',
+        skillId: current.skillId,
+      })
+    }
     this.previous = { ...current }
     return commands
   }
