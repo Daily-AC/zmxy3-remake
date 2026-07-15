@@ -120,16 +120,6 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
   await page.evaluate(() => {
     const key = 'zmxy3-remake.slot.v1.0'
     const envelope = JSON.parse(localStorage.getItem(key))
-    envelope.save.equipment.weapon = {
-      id: 'runtime-gate-staff', name: '验收青云棍', kind: 'equip', rarity: 2,
-      sourceType: 'zbwq', sourceUser: '悟空', sourceShowId: 1,
-      effects: [{ type: 'stat', stat: 'atk', value: 7 }, { type: 'stat', stat: 'mp', value: 10 }],
-    }
-    envelope.save.equipment.armor = {
-      id: 'runtime-gate-armor', name: '验收青云甲', kind: 'equip', rarity: 2,
-      sourceType: 'zbfj', sourceUser: '悟空',
-      effects: [{ type: 'stat', stat: 'def', value: 5 }, { type: 'stat', stat: 'hp', value: 20 }],
-    }
     envelope.save.skills.schools[0] = { level: 1, learned: [{ skillName: 'slz', level: 1 }] }
     envelope.save.skills.bindings.Y = 'slz'
     localStorage.setItem(key, JSON.stringify(envelope))
@@ -159,11 +149,11 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
   assert.equal(initial.level.id, 'sl11')
   assert.equal(initial.level.cleared, false)
   assert.deepEqual(initial.heroEquipment, {
-    weaponItemId: 'runtime-gate-staff',
-    armorItemId: 'runtime-gate-armor',
-    weaponShowId: 1,
+    weaponItemId: null,
+    armorItemId: null,
+    weaponShowId: 0,
   })
-  assert.equal(initial.heroSkill.maxMp, 60)
+  assert.equal(initial.heroSkill.maxMp, 50)
 
   const proof = await page.evaluate(() => {
     const runtime = window.__battleRuntime
@@ -224,7 +214,7 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
   assert.match(proof.finalHash, /^[0-9a-f]{8}$/)
   assert(proof.events.some((event) => event.type === 'attack-started'))
   assert(proof.events.some((event) => event.type === 'skill-cast' && event.skillId === 'slz'))
-  assert.equal(proof.heroSkill.mp, 24)
+  assert.equal(proof.heroSkill.mp, 14)
   assert(proof.events.some((event) => event.type === 'actor-defeated'))
   assert(proof.events.some((event) => event.type === 'door-revealed'))
   assert(proof.events.some((event) => event.type === 'stage-cleared'))
@@ -265,7 +255,45 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
   )
   await page.evaluate(() => window.__battleRuntime.setManualMode(true))
   const sl12Initial = await page.evaluate(() => window.__battleRuntime.getSnapshot())
-  assert.equal(sl12Initial.heroEquipment.weaponShowId, 1)
+  assert.equal(sl12Initial.heroEquipment.weaponShowId, 0)
+  await page.keyboard.press('b')
+  const backpackFile = path.join(artifactDir, 'sl12-backpack-before-equip.png')
+  await page.screenshot({ path: backpackFile })
+  assertNonBlankScreenshot(backpackFile)
+  const equipped = await page.evaluate(() => {
+    const runtime = window.__battleRuntime
+    const before = runtime.getSnapshot()
+    const weapon = runtime.equipItem('ptdxzg')
+    const armor = runtime.equipItem('ptdxzf')
+    const after = runtime.getSnapshot()
+    const save = JSON.parse(localStorage.getItem('zmxy3-remake.slot.v1.0')).save
+    const quantity = (itemId) => save.inventory.stacks
+      .filter((stack) => stack.item.id === itemId)
+      .reduce((sum, stack) => sum + stack.qty, 0)
+    return {
+      weapon,
+      armor,
+      before,
+      after,
+      weaponTexture: runtime.getWeaponTexture(),
+      savedEquipment: save.equipment,
+      remainingWeapon: quantity('ptdxzg'),
+      remainingArmor: quantity('ptdxzf'),
+    }
+  })
+  assert.equal(equipped.weapon, true)
+  assert.equal(equipped.armor, true)
+  assert.equal(equipped.after.heroEquipment.weaponItemId, 'ptdxzg')
+  assert.equal(equipped.after.heroEquipment.armorItemId, 'ptdxzf')
+  assert.equal(equipped.after.heroEquipment.weaponShowId, 1)
+  assert(equipped.after.heroLoadout.atk > equipped.before.heroLoadout.atk)
+  assert(equipped.after.heroLoadout.def > equipped.before.heroLoadout.def)
+  assert.equal(equipped.weaponTexture, 'runtime-role1-equip1')
+  assert.equal(equipped.savedEquipment.weapon.id, 'ptdxzg')
+  assert.equal(equipped.savedEquipment.armor.id, 'ptdxzf')
+  assert.equal(equipped.remainingWeapon, sl11Loot.staff - 1)
+  assert.equal(equipped.remainingArmor, sl11Loot.armor - 1)
+  await page.keyboard.press('b')
   const sl12Proof = await page.evaluate(() => {
     const runtime = window.__battleRuntime
     let sequence = 0

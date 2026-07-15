@@ -68,6 +68,7 @@ import type {
   BattleCommandRejectionReason,
   BattleDefinition,
   BattleEvent,
+  BattleHeroLoadout,
   BattleMonsterDefinition,
   BattleSnapshot,
 } from './types'
@@ -148,6 +149,7 @@ export interface BattleRuntimeState {
   heroSimulation: HeroState
   heroCombat: HeroCombatModel
   heroSkill: BattleSkillState
+  heroLoadout: BattleHeroLoadout
   actors: ReturnType<BattleActorRegistry['exportState']>
   encounter: BattleEncounterState
   projectiles: BattleProjectile[]
@@ -168,6 +170,7 @@ export class BattleRuntime {
   private readonly heroState: HeroState
   private readonly heroCombat: HeroCombatModel
   private readonly heroSkill: BattleSkillState
+  private heroLoadout: BattleHeroLoadout
   private readonly actors: BattleActorRegistry
   private readonly monsterConfigs = new Map<ActorId, MonsterConfig>()
   private readonly encounter: BattleEncounterState
@@ -200,6 +203,7 @@ export class BattleRuntime {
       hurtDurationMs: this.definition.hero.hurtDurationMs,
       respawnDelayMs: this.definition.hero.respawnDelayMs,
     }
+    this.heroLoadout = restored?.heroLoadout ?? this.loadoutFromDefinition()
     if (restored) {
       this.assertRestoredState(restored)
       this.heroState = restored.heroSimulation
@@ -351,7 +355,8 @@ export class BattleRuntime {
         cooldownUntilTick: this.heroSkill.cooldownUntilTick,
         activeSkillId: this.heroSkill.active?.skillId ?? null,
       },
-      heroEquipment: this.definition.hero.equipment,
+      heroLoadout: this.heroLoadout,
+      heroEquipment: this.heroLoadout.equipment,
       actors,
       projectiles: this.projectiles,
       loot: this.loot,
@@ -371,6 +376,69 @@ export class BattleRuntime {
     return new BattleRuntime(state.definition, state)
   }
 
+  private loadoutFromDefinition(): BattleHeroLoadout {
+    const hero = this.definition.hero
+    return cloneSerializable({
+      maxHp: hero.maxHp,
+      atk: hero.atk,
+      def: hero.def,
+      magicDefenseFraction: hero.magicDefenseFraction,
+      critChance: hero.critChance,
+      maxMp: hero.maxMp,
+      equipment: hero.equipment,
+      skills: hero.skills,
+    })
+  }
+
+  private isValidHeroLoadout(loadout: BattleHeroLoadout): boolean {
+    try {
+      validateBattleDefinition({
+        ...this.definition,
+        hero: { ...this.definition.hero, ...loadout },
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private applyHeroLoadout(transactionId: string, loadout: BattleHeroLoadout, events: BattleEvent[]): void {
+    const hpBefore = this.heroCombat.hp
+    const maxHpBefore = this.heroCombat.maxHp
+    const mpBefore = this.heroSkill.mp
+    const maxMpBefore = this.heroSkill.maxMp
+    const maxHpDelta = loadout.maxHp - maxHpBefore
+    const maxMpDelta = loadout.maxMp - maxMpBefore
+
+    this.heroCombat.maxHp = loadout.maxHp
+    this.heroCombatConfig.maxHp = loadout.maxHp
+    this.heroSkill.maxMp = loadout.maxMp
+    if (this.heroCombat.state !== 'dead') {
+      this.heroCombat.hp = maxHpDelta > 0
+        ? Math.min(loadout.maxHp, hpBefore + maxHpDelta)
+        : Math.min(hpBefore, loadout.maxHp)
+    }
+    this.heroSkill.mp = maxMpDelta > 0
+      ? Math.min(loadout.maxMp, mpBefore + maxMpDelta)
+      : Math.min(mpBefore, loadout.maxMp)
+    this.heroLoadout = cloneSerializable(loadout)
+
+    events.push({
+      type: 'hero-loadout-applied',
+      tick: this.currentTick,
+      transactionId,
+      equipment: cloneSerializable(loadout.equipment),
+      hpBefore,
+      hpAfter: this.heroCombat.hp,
+      maxHpBefore,
+      maxHpAfter: this.heroCombat.maxHp,
+      mpBefore,
+      mpAfter: this.heroSkill.mp,
+      maxMpBefore,
+      maxMpAfter: this.heroSkill.maxMp,
+    })
+  }
+
   private captureState(): BattleRuntimeState {
     return {
       version: 1,
@@ -380,6 +448,7 @@ export class BattleRuntime {
       heroSimulation: this.heroState,
       heroCombat: this.heroCombat,
       heroSkill: this.heroSkill,
+      heroLoadout: this.heroLoadout,
       actors: this.actors.exportState(),
       encounter: this.encounter,
       projectiles: this.projectiles,
@@ -422,13 +491,18 @@ export class BattleRuntime {
     edges: HeroEdges,
     events: BattleEvent[],
   ): BattleCommandRejectionReason | null {
-    const expectedActorId = command.type === 'resolve-loot-pickup'
+    const expectedActorId = command.type === 'resolve-loot-pickup' || command.type === 'apply-hero-loadout'
       ? BATTLE_AUTHORITY_ID
       : this.definition.hero.id
     if (command.actorId !== expectedActorId) return 'unknown-actor'
     const lastSeenSequence = this.lastSeenSequenceByActor.get(command.actorId) ?? -1
     if (command.sequence <= lastSeenSequence) return 'stale-sequence'
     this.lastSeenSequenceByActor.set(command.actorId, command.sequence)
+    if (command.type === 'apply-hero-loadout') {
+      if (!this.isValidHeroLoadout(command.loadout)) return 'invalid-hero-loadout'
+      this.applyHeroLoadout(command.transactionId, command.loadout, events)
+      return null
+    }
     if (command.type === 'resolve-loot-pickup') {
       const entity = this.loot.find((loot) => loot.id === command.lootEntityId)
       if (!entity) return 'unknown-loot'
@@ -474,7 +548,7 @@ export class BattleRuntime {
     }
     if (this.heroCombat.state === 'dead') return 'dead'
     if (command.type === 'press-skill') {
-      const definition = this.definition.hero.skills[command.skillId]
+      const definition = this.heroLoadout.skills[command.skillId]
       if (!definition) return 'unknown-skill'
       if (this.heroState.attacking) return 'busy'
       const attackId = this.heroState.attackId + 1
@@ -533,7 +607,7 @@ export class BattleRuntime {
       this.definition.hero.collisionOffset,
     )
     const heroAction = this.heroState.action as NormalAttackHit
-    const skillDefinition = skillHit ? this.definition.hero.skills[skillHit.skillId] : undefined
+    const skillDefinition = skillHit ? this.heroLoadout.skills[skillHit.skillId] : undefined
     const normalAttackSpec = this.heroCombat.state !== 'dead' && this.heroState.attacking
       ? this.definition.hero.normalAttacks[heroAction]
       : undefined
@@ -547,8 +621,8 @@ export class BattleRuntime {
     const heroAttackId = skillHit?.attackId ?? this.heroState.attackId
     const heroAttackKind = skillDefinition?.attackKind ?? 'physics'
     const heroRawPower = skillDefinition?.damage ?? (normalAttackSpec
-      ? Math.max(1, Math.round(calculateNormalAttackPower(heroAction, this.definition.hero.atk, {
-          critChance: this.definition.hero.critChance,
+      ? Math.max(1, Math.round(calculateNormalAttackPower(heroAction, this.heroLoadout.atk, {
+          critChance: this.heroLoadout.critChance,
           random: () => this.random.next(),
         })))
       : null)
@@ -761,8 +835,8 @@ export class BattleRuntime {
     if (isHeroDamageInvulnerable(this.heroCombat, timeMs)) return
 
     const mitigated = definition.attackKind === 'physics'
-      ? applyPhysicsDefense(definition.attackPower, this.definition.hero.def)
-      : applyMagicDefense(definition.attackPower, this.definition.hero.magicDefenseFraction)
+      ? applyPhysicsDefense(definition.attackPower, this.heroLoadout.def)
+      : applyMagicDefense(definition.attackPower, this.heroLoadout.magicDefenseFraction)
     const amount = Math.max(1, Math.round(mitigated))
     const hpBefore = this.heroCombat.hp
     const attackId = record.attackId + 1
@@ -790,8 +864,8 @@ export class BattleRuntime {
       attackId,
       rawPower: definition.attackPower,
       defense: definition.attackKind === 'physics'
-        ? this.definition.hero.def
-        : this.definition.hero.magicDefenseFraction,
+        ? this.heroLoadout.def
+        : this.heroLoadout.magicDefenseFraction,
       amount: hpBefore - this.heroCombat.hp,
       remainingHp: this.heroCombat.hp,
     })
@@ -835,11 +909,11 @@ export class BattleRuntime {
     const timeMs = this.currentTick * TICK_MS
     if (isHeroDamageInvulnerable(this.heroCombat, timeMs)) return
     const defense = hit.attackKind === 'physics'
-      ? this.definition.hero.def
-      : this.definition.hero.magicDefenseFraction
+      ? this.heroLoadout.def
+      : this.heroLoadout.magicDefenseFraction
     const mitigated = hit.attackKind === 'physics'
-      ? applyPhysicsDefense(hit.damage, this.definition.hero.def)
-      : applyMagicDefense(hit.damage, this.definition.hero.magicDefenseFraction)
+      ? applyPhysicsDefense(hit.damage, this.heroLoadout.def)
+      : applyMagicDefense(hit.damage, this.heroLoadout.magicDefenseFraction)
     const hpBefore = this.heroCombat.hp
     const heroEvents = applyHeroDamage(this.heroCombat, {
       sourceId: hit.sourceId,

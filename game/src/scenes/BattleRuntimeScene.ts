@@ -19,6 +19,13 @@ import {
   type BattleRuntimePickupPlan,
 } from '../adapters/battleRuntimeInventory'
 import { resolveBattleLootPayload } from '../adapters/battleRuntimeLoot'
+import {
+  commitBattleRuntimeEquipment,
+  planBattleRuntimeEquip,
+  planBattleRuntimeUnequip,
+  type BattleRuntimeEquipmentPlan,
+  type BattleRuntimeEquipmentPlanResult,
+} from '../adapters/battleRuntimeEquipment'
 import { compileBattleRuntimeProfile, type CompiledBattleRuntimeProfile } from '../adapters/battleRuntimeProfile'
 import {
   presentationForActor,
@@ -40,10 +47,17 @@ import monster8Raw from '../data/monsters/monster8.json'
 import monster30Raw from '../data/monsters/monster30.json'
 import role1Raw from '../data/roles/role1.json'
 import { registerRoleAnimations } from '../presentation/registerRoleAnimations'
+import { computeCombatPower } from '../systems/combatPower'
+import type { EquipSlot } from '../systems/equipment'
+import { createHeroIdentity, heroBaseStats } from '../systems/heroIdentity'
+import { listStacks } from '../systems/inventory'
+import type { Item } from '../systems/items'
 import type { RoleData } from '../systems/roleData'
 import { restoreGameState, type LoadedGameState } from '../systems/save'
-import { asSlotId, type SlotId } from '../systems/saveSlots'
+import { asSlotId, heroName, type SlotId } from '../systems/saveSlots'
 import { readSlot } from '../systems/saveSlots'
+import { createSoulPurse, sellCommonEquipment, sellEquipmentItem } from '../systems/soulPurse'
+import { BackpackWindow } from '../ui/hud/BackpackWindow'
 import { RoleInfoHud } from '../ui/hud/RoleInfoHud'
 import { SkillBarHud } from '../ui/hud/SkillBarHud'
 import {
@@ -96,6 +110,9 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private readonly projectileViews = new Map<string, Phaser.GameObjects.Image>()
   private readonly lootViews = new Map<string, Phaser.GameObjects.Container>()
   private readonly pendingLootPlans = new Map<string, BattleRuntimePickupPlan>()
+  private readonly pendingEquipmentPlans = new Map<string, BattleRuntimeEquipmentPlan>()
+  private authoritySequence = 0
+  private equipmentTransactionOrdinal = 0
   private keys!: Record<
     'left' | 'right' | 'jump' | 'attack' | 'interact' | 'skillY' | 'skillU' | 'skillI' | 'skillO' | 'skillL',
     Phaser.Input.Keyboard.Key
@@ -104,6 +121,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private portal?: Phaser.GameObjects.Container
   private heroHud!: RoleInfoHud
   private skillBar!: SkillBarHud
+  private backpack!: BackpackWindow
   private status!: Phaser.GameObjects.Text
   private respawnNotice?: Phaser.GameObjects.Text
   private skillEffect?: Phaser.GameObjects.Sprite
@@ -129,6 +147,9 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.projectileViews.clear()
     this.lootViews.clear()
     this.pendingLootPlans.clear()
+    this.pendingEquipmentPlans.clear()
+    this.authoritySequence = 0
+    this.equipmentTransactionOrdinal = 0
     this.portal = undefined
     this.respawnNotice = undefined
     this.skillEffect = undefined
@@ -148,8 +169,20 @@ export class BattleRuntimeScene extends Phaser.Scene {
       frameWidth: roleData.sheet.cellW,
       frameHeight: roleData.sheet.cellH,
     })
+    if (!this.textures.exists('role1_0')) {
+      this.load.spritesheet('role1_0', 'assets/extracted/role1_0.png', {
+        frameWidth: roleData.sheet.cellW,
+        frameHeight: roleData.sheet.cellH,
+      })
+    }
     for (const showId of WEAPON_SHOW_IDS) {
       this.load.spritesheet(`runtime-role1-equip${showId}`, `assets/extracted/role1_equip${showId}.png`, {
+        frameWidth: roleData.sheet.cellW,
+        frameHeight: roleData.sheet.cellH,
+      })
+    }
+    if (!this.textures.exists('role1_equip0')) {
+      this.load.spritesheet('role1_equip0', 'assets/extracted/role1_equip0.png', {
         frameWidth: roleData.sheet.cellW,
         frameHeight: roleData.sheet.cellH,
       })
@@ -208,6 +241,10 @@ export class BattleRuntimeScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     if (this.manualMode) return
+    if (this.backpack.isOpen) {
+      this.accumulatorMs = 0
+      return
+    }
     this.accumulatorMs += Math.min(deltaMs, TICK_MS * 8)
     while (this.accumulatorMs >= TICK_MS) {
       this.accumulatorMs -= TICK_MS
@@ -311,7 +348,12 @@ export class BattleRuntimeScene extends Phaser.Scene {
 
     this.weapon = this.add.sprite(0, 0, this.weaponTexture()).setScale(1.5).setDepth(11)
     this.heroHud = new RoleInfoHud(this, 12, 10, { scale: 1.05 })
-    this.skillBar = new SkillBarHud(this, 2, 366, { scale: 1.2 })
+    this.skillBar = new SkillBarHud(this, 2, 366, {
+      scale: 1.2,
+      onIconClick: (icon) => {
+        if (icon === 'beibao') this.toggleBackpack()
+      },
+    })
     this.skillBar.setSlots((['Y', 'U', 'I', 'O', 'L'] as const).map((hotkey) => ({
       hotkey,
       skillId: this.runtimeProfile?.hud.bindings[hotkey] ?? undefined,
@@ -321,6 +363,14 @@ export class BattleRuntimeScene extends Phaser.Scene {
       fontFamily: 'monospace', fontSize: '13px', color: '#fff7df',
       stroke: '#2c1b13', strokeThickness: 4,
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(100)
+    this.backpack = new BackpackWindow(this, {
+      iconKeyFor: (item) => this.textures.exists(`icon_${item.id}`) ? `icon_${item.id}` : ICON_FALLBACK_KEY,
+      onClose: () => this.backpack.close(),
+      onEquip: (item) => this.doEquip(item),
+      onUnequip: (slot) => this.doUnequip(slot),
+      onSellItem: (item) => this.doSellEquipmentItem(item),
+      onSell: () => this.doSellCommonEquipment(),
+    })
   }
 
   private bindInput(): void {
@@ -336,6 +386,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
       skillO: Phaser.Input.Keyboard.KeyCodes.O,
       skillL: Phaser.Input.Keyboard.KeyCodes.L,
     }) as typeof this.keys
+    this.input.keyboard!.on('keydown-B', this.toggleBackpack, this)
   }
 
   private renderSnapshot(): void {
@@ -364,12 +415,12 @@ export class BattleRuntimeScene extends Phaser.Scene {
       maxMp: this.snapshot.heroSkill.maxMp,
       exp: this.runtimeProfile?.hud.exp ?? 0,
       expToNext: this.runtimeProfile?.hud.expToNext ?? 1,
-      atk: this.definition.hero.atk,
+      atk: this.snapshot.heroLoadout.atk,
       weaponName: this.runtimeProfile?.hud.weaponName ?? '行者棍',
     })
     this.status.setText(`${this.definition.level.id}  tick ${this.snapshot.tick}\n${stableHash(this.runtime.getDeterministicState())}`)
     const active = this.snapshot.heroSkill.activeSkillId
-    const definition = active ? this.definition.hero.skills[active] : undefined
+    const definition = active ? this.snapshot.heroLoadout.skills[active] : undefined
     const remaining = Math.max(0, this.snapshot.heroSkill.cooldownUntilTick - this.snapshot.tick)
     const cooldownFrac = definition && definition.cooldownTicks > 0 ? remaining / definition.cooldownTicks : 0
     const bindings = this.runtimeProfile?.hud.bindings
@@ -521,8 +572,13 @@ export class BattleRuntimeScene extends Phaser.Scene {
         this.planLootPickup(event)
       } else if (event.type === 'loot-pickup-resolved') {
         this.commitLootPickup(event)
+      } else if (event.type === 'hero-loadout-applied') {
+        this.commitEquipmentPlan(event.transactionId)
       } else if (event.type === 'command-rejected' && event.command.type === 'resolve-loot-pickup') {
         this.pendingLootPlans.delete(event.command.requestId)
+      } else if (event.type === 'command-rejected' && event.command.type === 'apply-hero-loadout') {
+        this.pendingEquipmentPlans.delete(event.command.transactionId)
+        this.showPickupNotice('装备变更失败', '#ff8a6b')
       } else if (event.type === 'hero-resource-restored') {
         const hp = Math.round(event.hpAfter - event.hpBefore)
         const mp = Math.round(event.mpAfter - event.mpBefore)
@@ -534,6 +590,132 @@ export class BattleRuntimeScene extends Phaser.Scene {
     }
   }
 
+  private toggleBackpack(): void {
+    if (this.backpack.isOpen) {
+      this.backpack.close()
+      return
+    }
+    this.refreshBackpackData()
+    this.backpack.open()
+  }
+
+  private refreshBackpackData(): void {
+    if (!this.loadedState) return
+    const hero = this.snapshot.actors[0]
+    const loadout = this.snapshot.heroLoadout
+    const identity = createHeroIdentity(
+      this.loadedState.progression.heroId,
+      this.loadedState.progression.level,
+    )
+    const equipAtkBonus = Math.max(0, loadout.atk - heroBaseStats(identity).atk)
+    this.backpack.setHeroStats({
+      name: heroName(this.loadedState.progression.heroId),
+      level: this.loadedState.progression.level,
+      combatPower: computeCombatPower(this.loadedState.progression.level, equipAtkBonus),
+      hp: hero.hp,
+      maxHp: hero.maxHp,
+      mp: this.snapshot.heroSkill.mp,
+      maxMp: this.snapshot.heroSkill.maxMp,
+      atk: loadout.atk,
+      def: loadout.def,
+      luck: 0,
+      magicDefPct: loadout.magicDefenseFraction * 100,
+      critPct: loadout.critChance * 100,
+      dodgePct: 0,
+      hpRegen: 0,
+      mpRegen: 0,
+      exp: this.loadedState.progression.exp,
+      expToNext: this.loadedState.progression.expToNext,
+      soul: this.loadedState.soul,
+    })
+    this.backpack.setEquipment(this.loadedState.equipment)
+    this.backpack.setInventory(listStacks(this.loadedState.inventory))
+  }
+
+  private doEquip(item: Item): void {
+    if (!this.loadedState || this.pendingEquipmentPlans.size > 0) return
+    const transactionId = `equipment:${++this.equipmentTransactionOrdinal}`
+    this.submitEquipmentPlan(planBattleRuntimeEquip(
+      this.loadedState,
+      this.definition,
+      transactionId,
+      item,
+    ))
+  }
+
+  private doUnequip(slot: EquipSlot): void {
+    if (!this.loadedState || this.pendingEquipmentPlans.size > 0) return
+    const transactionId = `equipment:${++this.equipmentTransactionOrdinal}`
+    this.submitEquipmentPlan(planBattleRuntimeUnequip(
+      this.loadedState,
+      this.definition,
+      transactionId,
+      slot,
+    ))
+  }
+
+  private submitEquipmentPlan(result: BattleRuntimeEquipmentPlanResult): void {
+    if (!result.ok) {
+      const message = result.reason === 'wrong_role' ? '悟空无法穿戴其他角色的装备'
+        : result.reason === 'unsupported_slot' || result.reason === 'missing_type' ? '当前只支持武器和防具'
+          : result.reason === 'inventory_full' ? '背包已满，无法更换装备'
+            : '无法更换这件装备'
+      this.showPickupNotice(message, '#ff8a6b')
+      return
+    }
+    const plan = result.plan
+    this.pendingEquipmentPlans.set(plan.transactionId, plan)
+    this.runtime.enqueue({
+      type: 'apply-hero-loadout',
+      transactionId: plan.transactionId,
+      actorId: BATTLE_AUTHORITY_ID,
+      sequence: ++this.authoritySequence,
+      atTick: this.snapshot.tick + 1,
+      loadout: plan.loadout,
+    })
+    this.advanceRuntime()
+  }
+
+  private commitEquipmentPlan(transactionId: string): void {
+    const plan = this.pendingEquipmentPlans.get(transactionId)
+    this.pendingEquipmentPlans.delete(transactionId)
+    if (!plan || !this.loadedState) return
+    commitBattleRuntimeEquipment(this.loadedState, plan)
+    this.runtimeProfile = compileBattleRuntimeProfile(this.loadedState)
+    persistBattleRuntimeState(shellStorage(), this.activeSlot, this.loadedState, this.playtimeSec)
+    this.refreshBackpackData()
+    const verb = plan.kind === 'equip' ? '装备' : '卸下'
+    this.showPickupNotice(`${verb}【${plan.itemName}】`, '#ffe39a')
+  }
+
+  private doSellEquipmentItem(item: Item): void {
+    if (!this.loadedState) return
+    const purse = createSoulPurse(this.loadedState.soul)
+    const result = sellEquipmentItem(this.loadedState.inventory, purse, item)
+    if (!result.sold) {
+      this.showPickupNotice('这件物品无法出售', '#ff8a6b')
+      return
+    }
+    this.loadedState.soul = purse.value
+    persistBattleRuntimeState(shellStorage(), this.activeSlot, this.loadedState, this.playtimeSec)
+    this.refreshBackpackData()
+    this.showPickupNotice(`卖出【${item.name}】，灵魂 +${result.soulGained}`, '#d8b4ff')
+  }
+
+  private doSellCommonEquipment(): void {
+    if (!this.loadedState) return
+    const purse = createSoulPurse(this.loadedState.soul)
+    const result = sellCommonEquipment(this.loadedState.inventory, purse)
+    if (result.soldCount === 0) {
+      this.showPickupNotice('没有可出售的白装', '#ff8a6b')
+      return
+    }
+    this.loadedState.soul = purse.value
+    persistBattleRuntimeState(shellStorage(), this.activeSlot, this.loadedState, this.playtimeSec)
+    this.refreshBackpackData()
+    this.showPickupNotice(`出售 ${result.soldCount} 件白装，灵魂 +${result.soulGained}`, '#d8b4ff')
+  }
+
   private planLootPickup(event: Extract<BattleEvent, { type: 'loot-pickup-requested' }>): void {
     if (!this.loadedState) return
     const plan = planBattleRuntimePickup(this.loadedState, event, this.runtime.getSnapshot())
@@ -541,7 +723,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.runtime.enqueue({
       type: 'resolve-loot-pickup',
       actorId: BATTLE_AUTHORITY_ID,
-      sequence: this.inputAdapter.nextSequence(),
+      sequence: ++this.authoritySequence,
       atTick: this.runtime.getSnapshot().tick + 1,
       lootEntityId: plan.lootEntityId,
       requestId: plan.requestId,
@@ -638,6 +820,14 @@ export class BattleRuntimeScene extends Phaser.Scene {
       enqueue: (command) => this.runtime.enqueue(command as BattleCommand),
       setManualMode: (enabled) => { this.manualMode = enabled },
       step: (ticks = 1) => structuredClone(this.advanceRuntime(ticks)),
+      equipItem: (itemId) => {
+        const item = this.loadedState?.inventory.stacks.find((stack) => stack.item.id === itemId)?.item
+        if (!item) return false
+        this.doEquip(item)
+        return this.snapshot.heroEquipment.weaponItemId === itemId
+          || this.snapshot.heroEquipment.armorItemId === itemId
+      },
+      getWeaponTexture: () => this.weapon.texture.key,
     }
   }
 
@@ -669,6 +859,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
 
   private shutdown(): void {
     delete window.__battleRuntime
+    this.input.keyboard?.off('keydown-B', this.toggleBackpack, this)
     this.portal?.destroy(true)
     this.respawnNotice?.destroy()
     this.skillEffect?.destroy()
@@ -676,5 +867,6 @@ export class BattleRuntimeScene extends Phaser.Scene {
     for (const view of this.lootViews.values()) view.destroy(true)
     this.heroHud.container.destroy(true)
     this.skillBar.container.destroy(true)
+    this.backpack.container.destroy(true)
   }
 }
