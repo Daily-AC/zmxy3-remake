@@ -1,12 +1,15 @@
 import type { BattleDefinition } from '@zaixu/game-core'
-import { compileSl11BattleDefinition } from './sl11BattleDefinition'
+import { compileSl11BattleDefinition, type Sl11BattleProfile } from './sl11BattleDefinition'
 
 /**
  * Browser-gate fixture: keep the production runtime and command path while
  * shortening the encounter so CI can prove the complete host lifecycle.
  */
-export function compileSl11RuntimeGateDefinition(seed: number): BattleDefinition {
-  const definition = compileSl11BattleDefinition(seed)
+export function compileSl11RuntimeGateDefinition(
+  seed: number,
+  profile: Partial<Sl11BattleProfile> = {},
+): BattleDefinition {
+  const definition = compileSl11BattleDefinition(seed, profile)
   const encounter = definition.level.encounters[0]
   if (encounter.kind !== 'continuous') throw new Error('sl11 gate expects a continuous encounter')
   const { x, y } = definition.level.heroSpawn

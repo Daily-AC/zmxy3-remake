@@ -78,6 +78,11 @@ export interface BattleLevelDefinition {
 export type BattleHeroDefinition = HeroCombatDefinition & {
   maxMp: number
   skills: Record<string, BattleSkillDefinition>
+  equipment: {
+    weaponItemId: string | null
+    armorItemId: string | null
+    weaponShowId: number
+  }
 }
 
 export interface BattleDefinition {
@@ -136,6 +141,7 @@ export interface BattleSnapshot {
   randomState: number
   level: { id: string; doorVisible: boolean; cleared: boolean }
   heroSkill: Pick<BattleSkillState, 'mp' | 'maxMp' | 'cooldownUntilTick'> & { activeSkillId: string | null }
+  heroEquipment: BattleHeroDefinition['equipment']
   actors: readonly CombatActorSnapshot[]
   projectiles: readonly BattleProjectile[]
 }

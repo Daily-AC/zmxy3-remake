@@ -62,6 +62,11 @@ const SkillDefinitionSchema = z.object({
 const BattleHeroDefinitionSchema = HeroCombatDefinitionBaseSchema.extend({
   maxMp: finite.nonnegative(),
   skills: z.record(stableId, SkillDefinitionSchema),
+  equipment: z.object({
+    weaponItemId: stableId.nullable(),
+    armorItemId: stableId.nullable(),
+    weaponShowId: nonNegativeInteger,
+  }).strict(),
 }).superRefine(refineHeroCombatBounds)
 const TimedSpawnSchema = z.object({
   speciesId: stableId,

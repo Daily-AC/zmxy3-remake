@@ -117,6 +117,23 @@ function gameUrl(origin, query, npcServer, socialServer) {
 async function runProductionRuntime(page, origin, npcServer, socialServer, errors) {
   await page.goto(gameUrl(origin, 'battleRuntime=1&runtimeDebug=gate', npcServer, socialServer))
   await enterWorldMap(page)
+  await page.evaluate(() => {
+    const key = 'zmxy3-remake.slot.v1.0'
+    const envelope = JSON.parse(localStorage.getItem(key))
+    envelope.save.equipment.weapon = {
+      id: 'runtime-gate-staff', name: '验收青云棍', kind: 'equip', rarity: 2,
+      sourceType: 'zbwq', sourceUser: '悟空', sourceShowId: 1,
+      effects: [{ type: 'stat', stat: 'atk', value: 7 }, { type: 'stat', stat: 'mp', value: 10 }],
+    }
+    envelope.save.equipment.armor = {
+      id: 'runtime-gate-armor', name: '验收青云甲', kind: 'equip', rarity: 2,
+      sourceType: 'zbfj', sourceUser: '悟空',
+      effects: [{ type: 'stat', stat: 'def', value: 5 }, { type: 'stat', stat: 'hp', value: 20 }],
+    }
+    envelope.save.skills.schools[0] = { level: 1, learned: [{ skillName: 'slz', level: 1 }] }
+    envelope.save.skills.bindings.Y = 'slz'
+    localStorage.setItem(key, JSON.stringify(envelope))
+  })
   const mapFile = path.join(artifactDir, 'world-map.png')
   await page.screenshot({ path: mapFile })
   assertNonBlankScreenshot(mapFile)
@@ -141,6 +158,12 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
   const initial = await page.evaluate(() => window.__battleRuntime.getSnapshot())
   assert.equal(initial.level.id, 'sl11')
   assert.equal(initial.level.cleared, false)
+  assert.deepEqual(initial.heroEquipment, {
+    weaponItemId: 'runtime-gate-staff',
+    armorItemId: 'runtime-gate-armor',
+    weaponShowId: 1,
+  })
+  assert.equal(initial.heroSkill.maxMp, 60)
 
   const proof = await page.evaluate(() => {
     const runtime = window.__battleRuntime
@@ -188,6 +211,7 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
       hashBeforeClear,
       finalHash: runtime.getHash(),
       events: runtime.getEvents(),
+      heroSkill: snapshot().heroSkill,
       storedFrontier: localStorage.getItem('zmxy3-remake.slot.v1.0.level'),
     }
   })
@@ -200,6 +224,7 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
   assert.match(proof.finalHash, /^[0-9a-f]{8}$/)
   assert(proof.events.some((event) => event.type === 'attack-started'))
   assert(proof.events.some((event) => event.type === 'skill-cast' && event.skillId === 'slz'))
+  assert.equal(proof.heroSkill.mp, 24)
   assert(proof.events.some((event) => event.type === 'actor-defeated'))
   assert(proof.events.some((event) => event.type === 'door-revealed'))
   assert(proof.events.some((event) => event.type === 'stage-cleared'))
