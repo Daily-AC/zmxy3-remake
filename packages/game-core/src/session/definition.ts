@@ -2,6 +2,7 @@ import { ContentIdSchema, RuleProvenanceSchema } from '@zaixu/content'
 import { z } from 'zod'
 import { cloneSerializable } from './snapshot'
 import type { CombatSessionDefinition } from './types'
+import { assertPlainData } from './plainData'
 
 const finiteNumber = z.number().finite()
 const nonNegativeNumber = finiteNumber.nonnegative()
@@ -48,7 +49,7 @@ const NormalAttacksSchema = z.object({
   }
 })
 
-const HeroCombatDefinitionSchema = z.object({
+export const HeroCombatDefinitionSchema = z.object({
   id: actorId,
   contentId: ContentIdSchema,
   spawn: PointSchema,
@@ -83,7 +84,7 @@ const MonsterStatsSchema = z.object({
   mDef: probability.optional(),
 }).strict()
 
-const MonsterCombatDefinitionSchema = z.object({
+export const MonsterCombatDefinitionBaseSchema = z.object({
   id: actorId,
   contentId: ContentIdSchema,
   spawn: PointSchema,
@@ -102,7 +103,12 @@ const MonsterCombatDefinitionSchema = z.object({
   hurtbox: BoxSizeSchema,
   targetOffsetX: finiteNumber,
   selfOffsetX: finiteNumber,
-}).strict().superRefine((monster, context) => {
+}).strict()
+
+export function refineMonsterPatrolBounds(
+  monster: { patrolMin: number; patrolMax: number },
+  context: z.RefinementCtx,
+): void {
   if (monster.patrolMin > monster.patrolMax) {
     context.addIssue({
       code: 'custom',
@@ -110,7 +116,9 @@ const MonsterCombatDefinitionSchema = z.object({
       path: ['patrolMax'],
     })
   }
-})
+}
+
+export const MonsterCombatDefinitionSchema = MonsterCombatDefinitionBaseSchema.superRefine(refineMonsterPatrolBounds)
 
 const ProvenanceSchema = RuleProvenanceSchema.superRefine((entry, context) => {
   if (entry.ruleId.trim().length === 0) {
@@ -139,60 +147,7 @@ export const CombatSessionDefinitionSchema = z.object({
   })
 })
 
-function assertPlainData(input: unknown): void {
-  const ancestors = new WeakSet<object>()
-  const visitDataProperty = (owner: object, key: PropertyKey): void => {
-    const descriptor = Object.getOwnPropertyDescriptor(owner, key)
-    if (!descriptor) throw new TypeError('combat session definition contains an invalid property')
-    if ('get' in descriptor || 'set' in descriptor) {
-      throw new TypeError('combat session definition must not contain accessors')
-    }
-    if (!descriptor.enumerable) {
-      throw new TypeError('combat session definition must not contain non-enumerable properties')
-    }
-    visit(descriptor.value)
-  }
-  const visit = (value: unknown): void => {
-    if (value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') return
-    if (typeof value !== 'object') throw new TypeError('combat session definition must contain only plain data')
-    if (ancestors.has(value)) throw new TypeError('combat session definition must not contain cycles')
-    ancestors.add(value)
-    try {
-      if (Array.isArray(value)) {
-        if (Object.getPrototypeOf(value) !== Array.prototype) {
-          throw new TypeError('combat session definition must contain only plain arrays')
-        }
-        for (const key of Reflect.ownKeys(value)) {
-          if (typeof key === 'symbol') {
-            throw new TypeError('combat session definition arrays must not contain symbol keys')
-          }
-          if (key === 'length') continue
-          const index = Number(key)
-          if (!Number.isInteger(index) || index < 0 || index >= value.length || String(index) !== key) {
-            throw new TypeError('combat session definition arrays may contain only indexes and length')
-          }
-          visitDataProperty(value, key)
-        }
-        return
-      }
-      const prototype = Object.getPrototypeOf(value)
-      if (prototype !== Object.prototype && prototype !== null) {
-        throw new TypeError('combat session definition must contain only plain objects')
-      }
-      for (const key of Reflect.ownKeys(value)) {
-        if (typeof key === 'symbol') {
-          throw new TypeError('combat session definition objects must not contain symbol keys')
-        }
-        visitDataProperty(value, key)
-      }
-    } finally {
-      ancestors.delete(value)
-    }
-  }
-  visit(input)
-}
-
 export function validateCombatSessionDefinition(input: unknown): CombatSessionDefinition {
-  assertPlainData(input)
+  assertPlainData(input, 'combat session definition')
   return cloneSerializable(CombatSessionDefinitionSchema.parse(input))
 }
