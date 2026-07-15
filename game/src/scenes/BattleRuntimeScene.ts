@@ -9,6 +9,7 @@ import {
   type CombatActorSnapshot,
 } from '@zaixu/game-core'
 import { BattleRuntimeInput } from '../adapters/battleRuntimeInput'
+import { persistBattleRuntimeClear } from '../adapters/battleRuntimeSettlement'
 import {
   presentationForActor,
   snapshotAction,
@@ -20,9 +21,10 @@ import monster30Raw from '../data/monsters/monster30.json'
 import role1Raw from '../data/roles/role1.json'
 import { registerRoleAnimations } from '../presentation/registerRoleAnimations'
 import type { RoleData } from '../systems/roleData'
+import { asSlotId } from '../systems/saveSlots'
 import { RoleInfoHud } from '../ui/hud/RoleInfoHud'
 import type { BattleData } from './BattleLoadingScene'
-import { SCENE } from './shellShared'
+import { REG, SCENE, shellStorage } from './shellShared'
 
 export const BATTLE_RUNTIME_READY_EVENT = 'battle-runtime-ready'
 
@@ -56,18 +58,25 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private portal?: Phaser.GameObjects.Container
   private heroHud!: RoleInfoHud
   private status!: Phaser.GameObjects.Text
+  private respawnNotice?: Phaser.GameObjects.Text
   private eventLog: BattleEvent[] = []
+  private campaignIndex = 0
+  private clearTransitionScheduled = false
 
   constructor() {
     super(SCENE.battleRuntime)
   }
 
-  init(_data?: BattleData): void {
+  init(data?: BattleData): void {
     this.inputAdapter = new BattleRuntimeInput()
     this.accumulatorMs = 0
     this.eventLog = []
     this.actorViews.clear()
     this.projectileViews.clear()
+    this.portal = undefined
+    this.respawnNotice = undefined
+    this.campaignIndex = data?.campaignIndex ?? 0
+    this.clearTransitionScheduled = false
   }
 
   preload(): void {
@@ -305,12 +314,36 @@ export class BattleRuntimeScene extends Phaser.Scene {
         this.sound.play(key, { volume: 0.7 })
       } else if (event.type === 'damage-applied' && event.sourceId === HERO_ID) {
         this.sound.play('runtime-mon-hurt', { volume: 0.6 })
+      } else if (event.type === 'actor-defeated' && event.actorId === HERO_ID) {
+        this.showRespawnNotice()
+      } else if (event.type === 'actor-respawned' && event.actorId === HERO_ID) {
+        this.respawnNotice?.destroy()
+        this.respawnNotice = undefined
       } else if (event.type === 'stage-cleared') {
-        this.add.text(480, 170, '九重天 · 通关', {
-          fontSize: '48px', color: '#fff1b0', stroke: '#5a250f', strokeThickness: 7,
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(200)
+        this.finishStage()
       }
     }
+  }
+
+  private showRespawnNotice(): void {
+    if (this.respawnNotice) return
+    this.respawnNotice = this.add.text(480, 174, '魂归原位', {
+      fontSize: '42px', color: '#f4e5ca', stroke: '#361b16', strokeThickness: 7,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(200)
+  }
+
+  private finishStage(): void {
+    if (this.clearTransitionScheduled) return
+    this.clearTransitionScheduled = true
+    persistBattleRuntimeClear(
+      shellStorage(),
+      asSlotId(this.registry.get(REG.activeSlot)),
+      this.campaignIndex,
+    )
+    this.add.text(480, 170, '九重天 · 通关', {
+      fontSize: '48px', color: '#fff1b0', stroke: '#5a250f', strokeThickness: 7,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(200)
+    this.time.delayedCall(900, () => this.scene.start(SCENE.worldMap))
   }
 
   private installObservationHook(): void {
@@ -330,6 +363,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private shutdown(): void {
     delete window.__battleRuntime
     this.portal?.destroy(true)
+    this.respawnNotice?.destroy()
     this.heroHud.container.destroy(true)
   }
 }
