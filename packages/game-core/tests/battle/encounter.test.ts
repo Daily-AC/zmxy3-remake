@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   advanceEncounter,
   createEncounterState,
+  stopPointBarrierX,
   type EncounterAdvanceContext,
 } from '../../src/battle/encounter'
 import { makeBattleDefinition } from './fixtures'
@@ -86,5 +87,47 @@ describe('sl11 encounter state', () => {
       interactPressed: true,
     }))).toEqual([{ type: 'stage-cleared' }])
     expect(state.phase).toBe('cleared')
+  })
+})
+
+describe('horizontal stop-point encounters', () => {
+  it('holds the current air wall, schedules every spawn, then advances in source order', () => {
+    const level = makeBattleDefinition().level
+    level.encounters = [
+      {
+        kind: 'stop-point', id: 'stop-0', stopX: 200, boss: false,
+        spawns: [{ speciesId: 'monster30', x: 250, y: 400, delayTicks: 2, intervalTicks: 3, quantity: 2 }],
+      },
+      {
+        kind: 'stop-point', id: 'stop-1', stopX: 500, boss: true,
+        spawns: [{ speciesId: 'monster30', x: 550, y: 400, delayTicks: 0, intervalTicks: 1, quantity: 1 }],
+      },
+    ]
+    level.door = { x: 700, y: 350, width: 100, height: 100 }
+    const state = createEncounterState(level)
+
+    expect(stopPointBarrierX(state, level)).toBe(200)
+    expect(advanceEncounter(state, level, context({ tick: 1, hero: { x: 199, y: 400 } }))).toEqual([])
+    expect(advanceEncounter(state, level, context({ tick: 2, hero: { x: 200, y: 400 } }))).toEqual([])
+    expect(state.phase).toBe('stop-active')
+    expect(advanceEncounter(state, level, context({ tick: 3, hero: { x: 200, y: 400 } }))).toEqual([])
+    expect(advanceEncounter(state, level, context({ tick: 4, hero: { x: 200, y: 400 } }))).toEqual([
+      { type: 'spawn-monster', encounterId: 'stop-0', speciesId: 'monster30', x: 250, y: 400, boss: false },
+    ])
+    expect(advanceEncounter(state, level, context({
+      tick: 5, hero: { x: 200, y: 400 }, livingByEncounter: () => 1,
+    }))).toEqual([])
+    expect(advanceEncounter(state, level, context({ tick: 7, hero: { x: 200, y: 400 } }))).toHaveLength(1)
+    expect(advanceEncounter(state, level, context({ tick: 8, hero: { x: 200, y: 400 } }))).toEqual([])
+    expect(stopPointBarrierX(state, level)).toBe(500)
+
+    expect(advanceEncounter(state, level, context({ tick: 9, hero: { x: 500, y: 400 } }))).toEqual([
+      { type: 'spawn-monster', encounterId: 'stop-1', speciesId: 'monster30', x: 550, y: 400, boss: true },
+    ])
+    expect(advanceEncounter(state, level, context({ tick: 10, hero: { x: 500, y: 400 } }))).toEqual([
+      { type: 'reveal-door' },
+    ])
+    expect(stopPointBarrierX(state, level)).toBeNull()
+    expect(state.doorVisible).toBe(true)
   })
 })

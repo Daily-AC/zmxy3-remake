@@ -108,6 +108,21 @@ describe('BattleRuntime', () => {
     expect(runtime.getSnapshot().actors[0].x).toBe(110)
   })
 
+  it('clamps horizontal movement at the active stop-point air wall', () => {
+    const definition = makeBattleDefinition()
+    definition.level.encounters = [{
+      kind: 'stop-point', id: 'stop-0', stopX: 220, boss: false,
+      spawns: [{ speciesId: 'monster30', x: 300, y: 400, delayTicks: 30, intervalTicks: 1, quantity: 1 }],
+    }]
+    definition.level.door = { x: 700, y: 350, width: 100, height: 100 }
+    const runtime = new BattleRuntime(definition)
+    runtime.enqueue({ type: 'press-right', actorId: 'hero-1', sequence: 1, atTick: 1 })
+
+    runtime.step(30)
+
+    expect(runtime.getSnapshot().actors[0].x).toBe(220)
+  })
+
   it('defeats the triggered boss, reveals the door, and clears through interact', () => {
     const definition = makeBattleDefinition()
     definition.monsters.monster30.stats.hp = 1

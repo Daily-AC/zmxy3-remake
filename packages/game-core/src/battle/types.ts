@@ -61,6 +61,7 @@ export interface StopPointEncounterDefinition {
   kind: 'stop-point'
   id: string
   stopX: number
+  boss: boolean
   spawns: TimedSpawnDefinition[]
 }
 

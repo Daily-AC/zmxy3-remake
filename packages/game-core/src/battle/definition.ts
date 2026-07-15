@@ -94,6 +94,7 @@ const StopPointEncounterSchema = z.object({
   kind: z.literal('stop-point'),
   id: stableId,
   stopX: finite,
+  boss: z.boolean(),
   spawns: z.array(TimedSpawnSchema).min(1),
 }).strict()
 const EncounterSchema = z.discriminatedUnion('kind', [ContinuousEncounterSchema, StopPointEncounterSchema])

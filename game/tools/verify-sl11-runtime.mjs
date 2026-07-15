@@ -241,12 +241,86 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
   const settled = await page.evaluate(() => window.__shellMapState())
   assert.equal(settled.currentIndex, 1)
 
+  assert.equal(await page.evaluate(() => window.__shellMapEnterLevel(1)), true)
+  await page.waitForFunction(
+    () => window.__battleRuntime?.getSnapshot().level.id === 'sl12',
+    undefined,
+    { timeout: timeoutMs },
+  )
+  await page.evaluate(() => window.__battleRuntime.setManualMode(true))
+  const sl12Initial = await page.evaluate(() => window.__battleRuntime.getSnapshot())
+  assert.equal(sl12Initial.heroEquipment.weaponShowId, 1)
+  const sl12Proof = await page.evaluate(() => {
+    const runtime = window.__battleRuntime
+    let sequence = 0
+    const snapshot = () => runtime.getSnapshot()
+    const enqueue = (type, skillId) => runtime.enqueue({
+      type,
+      ...(skillId ? { skillId } : {}),
+      actorId: 'hero-1',
+      sequence: ++sequence,
+      atTick: snapshot().tick + 1,
+    })
+    const livingMonsters = () => snapshot().actors.filter((actor) =>
+      actor.kind === 'monster' && actor.lifeState !== 'dead' && actor.lifeState !== 'removed')
+
+    const stops = []
+    for (let wave = 0; wave < 5; wave += 1) {
+      enqueue('press-right')
+      let guard = 0
+      while (livingMonsters().length === 0 && guard++ < 220) runtime.step(10)
+      if (livingMonsters().length === 0) throw new Error(`sl12 wave ${wave} did not spawn`)
+      stops.push({ wave, x: snapshot().actors[0].x, monsters: livingMonsters().length })
+      if (wave === 4) enqueue('release-right')
+      if (wave === 0) enqueue('press-skill', 'slz')
+      else enqueue('press-attack')
+      let attackGuard = 0
+      while (livingMonsters().length > 0 && attackGuard++ < 8) {
+        runtime.step(30)
+        if (livingMonsters().length > 0 && !snapshot().actors[0].attacking) enqueue('press-attack')
+      }
+      if (livingMonsters().length > 0) throw new Error(`sl12 wave ${wave} did not clear`)
+      runtime.step(2)
+    }
+    const beforeDoor = snapshot()
+    enqueue('press-interact')
+    runtime.step(1)
+    return {
+      stops,
+      beforeDoor,
+      final: snapshot(),
+      events: runtime.getEvents(),
+      finalHash: runtime.getHash(),
+    }
+  })
+
+  expectStopPositions(sl12Proof.stops)
+  assert.equal(sl12Proof.beforeDoor.level.doorVisible, true)
+  assert.equal(sl12Proof.final.level.cleared, true)
+  assert(sl12Proof.events.some((event) => event.type === 'skill-cast'))
+  assert(sl12Proof.events.some((event) => event.type === 'stage-cleared'))
+  const sl12File = path.join(artifactDir, 'sl12-stage-cleared.png')
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: sl12File })
+  assertNonBlankScreenshot(sl12File)
+
   return {
     storedFrontier: await page.evaluate(() => localStorage.getItem('zmxy3-remake.slot.v1.0.level')),
     hashBeforeClear: proof.hashBeforeClear,
     finalHash: proof.finalHash,
     eventCount: proof.events.length,
+    sl12FinalHash: sl12Proof.finalHash,
+    sl12EventCount: sl12Proof.events.length,
   }
+}
+
+function expectStopPositions(stops) {
+  const expected = [1147.4, 1809.7, 2813.95, 3790.2, 4661.55]
+  assert.equal(stops.length, expected.length)
+  stops.forEach((stop, index) => {
+    assert(Math.abs(stop.x - expected[index]) < 0.01, `sl12 stop ${index} resolved at ${stop.x}`)
+    assert(stop.monsters > 0, `sl12 stop ${index} spawned no monsters`)
+  })
 }
 
 async function runLegacyFallback(page, origin, npcServer, socialServer) {
