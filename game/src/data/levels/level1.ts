@@ -13,18 +13,18 @@
 //     `isBoss=true` on `gc.curStage==1 && gc.curLevel==1`).
 //   - Stage 12: 5 StopPoints and 13 MonsterAppearPoints recovered from the
 //     official stageInfo scene. The final stop contains 千里眼(M4)+顺风耳(M2).
-//   - Stage 13 roster: grunts Monster8/7, Monster30 swarm + 巨灵神(M5).
-// sl13 remains available as deferred 南天门 data; it is not fused into L1/L2.
+//   - Stage 13: 5 StopPoints and 14 MonsterAppearPoints; literal scene fields
+//     include Monster8/7/3, a Monster30 swarm, and 巨灵神(M5).
+// sl13 is the third independent chapter-one level; it is not fused into L1/L2.
 //
-// Active L1/L2 stats are recovered verbatim from the official stageInfo
+// Active chapter-one stats are recovered verbatim from the official stageInfo
 // export.monster.MonsterN constructors:
 //   grunts:  Monster8 hp80/def2, Monster7 hp150/def4 (hit2 is the known
 //            out-of-bounds-row original bug — see monster7.json), Monster30
 //            hp1/def0/mDef0.5/speed8 (a one-shot swarm imp).
 //   minibs:  千里眼 M4 hp1000/def8, 顺风耳 M2 hp1800/def10.
 //   boss:    巫鹰 M3 hp160/def6, attacks hit1 phys 14 / hit2 magic 7.
-// Monster5 belongs only to the deferred sl13 data and keeps its separately
-// recovered tuning; it is not part of the active two-level campaign.
+// Monster5 belongs only to sl13 and keeps its separately recovered tuning.
 //
 // BALANCE CAVEAT: same as level2/3/4 — these are original magnitudes; the hero
 // damage/skill formulas are being switched to the original coord in parallel,
@@ -72,10 +72,6 @@ export const LEVEL1_MONSTER_NAMES: Record<string, string> = {
 
 function unit(species: string): MonsterSpawnSpec {
   return { species, stats: LEVEL1_MONSTER_STATS[species] }
-}
-
-function wave(...species: string[]): WaveSpec {
-  return { roster: species.map(unit) }
 }
 
 function appearPoint(
@@ -175,9 +171,66 @@ const SL12_WAVES: WaveSpec[] = [
   },
 ]
 
+// Coordinates join the 14 MonsterAppearPoint placements recovered from
+// symbol211 with the literal properties in export.gameSence.sl13.as. The
+// StageListener13 registration list omits Monster3 even though the scene's
+// actual enemyType fields use it repeatedly; runtime spawning follows the
+// scene fields because those are the authoritative per-instance instructions.
 const SL13_WAVES: WaveSpec[] = [
-  wave('monster8', 'monster7', 'monster30', 'monster30'),
-  wave('monster5'), // 巨灵神
+  {
+    stopX: 1088.1,
+    stopY: 196.05,
+    betweenRandL: 1150,
+    isBoss: false,
+    roster: [
+      appearPoint('monster8', 172.65, 304, 2, 2, 3),
+      appearPoint('monster7', 565.2, 286.45, 2, 2, 3),
+      appearPoint('monster3', 933.75, 318.5, 2, 2, 3),
+    ],
+  },
+  {
+    stopX: 1839.65,
+    stopY: 189.35,
+    betweenRandL: 1150,
+    isBoss: false,
+    roster: [
+      appearPoint('monster3', 1166.05, 334.5, 2, 1, 5),
+      appearPoint('monster7', 1734.9, 334.5, 2, 1, 5),
+    ],
+  },
+  {
+    stopX: 2843.9,
+    stopY: 170.15,
+    betweenRandL: 1150,
+    isBoss: false,
+    roster: [
+      appearPoint('monster7', 1927.25, 334.5, 6, 1, 4),
+      appearPoint('monster7', 2684.3, 334.5, 6, 1, 4),
+      appearPoint('monster3', 2295.75, 334.5, 2, 1, 4),
+    ],
+  },
+  {
+    stopX: 3572.05,
+    stopY: 239.15,
+    betweenRandL: 1150,
+    isBoss: false,
+    roster: [
+      appearPoint('monster7', 2926.75, 334.5, 6, 1, 4),
+      appearPoint('monster3', 3491.55, 334.5, 6, 1, 5),
+      appearPoint('monster3', 3227.2, 334.5, 2, 1, 4),
+    ],
+  },
+  {
+    stopX: 4315.75,
+    stopY: 258.7,
+    betweenRandL: 940,
+    isBoss: true,
+    roster: [
+      appearPoint('monster5', 4148.65, 340, 2, 1, 1),
+      appearPoint('monster30', 3842, 334.5, 5, 4, 30),
+      appearPoint('monster30', 4224.15, 336, 5, 4, 30),
+    ],
+  },
 ]
 
 export const LEVEL_1_SL12: LevelDef = {
@@ -273,7 +326,6 @@ export const LEVEL_2_TIANGONGDAO: SubStageChainDef = {
   ],
 }
 
-/** Deferred stage-one level 3 data; kept out of the active two-level campaign. */
 export const LEVEL_3_NANTIANMEN: SubStageChainDef = {
   id: 'level-3-nantianmen',
   name: '南天门',

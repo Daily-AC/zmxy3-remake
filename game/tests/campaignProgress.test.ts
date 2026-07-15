@@ -43,10 +43,8 @@ describe('campaignProgress', () => {
     expect(campaignLevelKey(0)).not.toBe(campaignLevelKey(1))
   })
 
-  // Clamp ceiling is ACTIVE_CAMPAIGN_LENGTH-1 (1, i.e. L2), not
-  // CAMPAIGN_LENGTH-1 (3) -- the 2026-07-08 L1+L2 scope cut caps every index
-  // this module hands out, independent of BattleScene's own (still 4-long,
-  // data untouched) CAMPAIGN array. See ACTIVE_CAMPAIGN_LENGTH doc comment.
+  // Clamp ceiling is ACTIVE_CAMPAIGN_LENGTH-1 (2, i.e. chapter-one SL13),
+  // not CAMPAIGN_LENGTH-1. Later campaign data remains outside this slice.
   it('clamps an out-of-range write into [0, ACTIVE_CAMPAIGN_LENGTH-1]', () => {
     const storage = memoryStorage()
     writeCampaignIndex(storage, 0, 99)
@@ -81,17 +79,12 @@ describe('campaignProgress', () => {
     expect(campaignNodeVisualState(2, 1)).toBe('locked')
   })
 
-  // L3/L4 scope cut (worldmapNodes.ts s1_3/s2_1, campaignIndex 2/3): a save
-  // written back when CAMPAIGN_LENGTH (4) was still the live ceiling (or any
-  // hand-edited/out-of-range value) must read back clamped to
-  // ACTIVE_CAMPAIGN_LENGTH-1, so the currentIndex WorldMapScene actually uses
-  // can never make these two nodes resolve to anything but 'locked'.
-  it('a pre-scope-cut or corrupted saved index reads back capped, keeping L3/L4 locked', () => {
+  it('an old or corrupted saved index reads back capped at 南天门', () => {
     const storage = memoryStorage()
-    storage.setItem(campaignLevelKey(0), String(CAMPAIGN_LENGTH - 1)) // old save, index 3
+    storage.setItem(campaignLevelKey(0), String(CAMPAIGN_LENGTH - 1))
     const currentIndex = readCampaignIndex(storage, 0)
     expect(currentIndex).toBe(ACTIVE_CAMPAIGN_LENGTH - 1)
-    expect(campaignNodeVisualState(2, currentIndex)).toBe('locked')
+    expect(campaignNodeVisualState(2, currentIndex)).toBe('current')
     expect(campaignNodeVisualState(3, currentIndex)).toBe('locked')
   })
 
@@ -104,7 +97,7 @@ describe('campaignProgress', () => {
       expect(advanceCampaignFrontier(0, 1)).toBe(1)
     })
 
-    it('clamps at the last valid index (L2 cleared -- scope cut ceiling, not CAMPAIGN_LENGTH-1)', () => {
+    it('clamps at the last valid chapter-one index', () => {
       expect(advanceCampaignFrontier(ACTIVE_CAMPAIGN_LENGTH - 1, ACTIVE_CAMPAIGN_LENGTH - 1)).toBe(
         ACTIVE_CAMPAIGN_LENGTH - 1,
       )
@@ -115,7 +108,7 @@ describe('campaignProgress', () => {
       expect(advanceCampaignFrontier(0, -5)).toBe(1)
     })
 
-    it('never advances past L2 even if BattleScene passes a cleared index from the still-4-long CAMPAIGN array (defense in depth for the scope cut)', () => {
+    it('never advances past 南天门 when passed a later campaign index', () => {
       expect(advanceCampaignFrontier(CAMPAIGN_LENGTH - 1, 0)).toBe(ACTIVE_CAMPAIGN_LENGTH - 1)
     })
   })

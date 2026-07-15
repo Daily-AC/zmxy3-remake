@@ -129,6 +129,36 @@ describe('Stage 1 campaign levels recovered from AS3 stage/level coordinates', (
     ])
   })
 
+  it('preserves all five 南天门 StopPoints and fourteen source MonsterAppearPoints', () => {
+    expect(LEVEL_1_SL13.stopPoints.map((point) => point.stopX)).toEqual([
+      1088.1,
+      1839.65,
+      2843.9,
+      3572.05,
+      4315.75,
+    ])
+    const points = LEVEL_1_SL13.stopPoints.flatMap((point) => point.roster)
+    expect(points).toHaveLength(14)
+    expect(points.map(({ species, x, delayMs, intervalMs, quantity }) => ({
+      species, x, delayMs, intervalMs, quantity,
+    }))).toEqual([
+      { species: 'monster8', x: 172.65, delayMs: 2000, intervalMs: 2000, quantity: 3 },
+      { species: 'monster7', x: 565.2, delayMs: 2000, intervalMs: 2000, quantity: 3 },
+      { species: 'monster3', x: 933.75, delayMs: 2000, intervalMs: 2000, quantity: 3 },
+      { species: 'monster3', x: 1166.05, delayMs: 2000, intervalMs: 1000, quantity: 5 },
+      { species: 'monster7', x: 1734.9, delayMs: 2000, intervalMs: 1000, quantity: 5 },
+      { species: 'monster7', x: 1927.25, delayMs: 6000, intervalMs: 1000, quantity: 4 },
+      { species: 'monster7', x: 2684.3, delayMs: 6000, intervalMs: 1000, quantity: 4 },
+      { species: 'monster3', x: 2295.75, delayMs: 2000, intervalMs: 1000, quantity: 4 },
+      { species: 'monster7', x: 2926.75, delayMs: 6000, intervalMs: 1000, quantity: 4 },
+      { species: 'monster3', x: 3491.55, delayMs: 6000, intervalMs: 1000, quantity: 5 },
+      { species: 'monster3', x: 3227.2, delayMs: 2000, intervalMs: 1000, quantity: 4 },
+      { species: 'monster5', x: 4148.65, delayMs: 2000, intervalMs: 1000, quantity: 1 },
+      { species: 'monster30', x: 3842, delayMs: 5000, intervalMs: 4000, quantity: 30 },
+      { species: 'monster30', x: 4224.15, delayMs: 5000, intervalMs: 4000, quantity: 30 },
+    ])
+  })
+
   it('limits horizontal movement to the current StopPoint until its wave clears', () => {
     const state = createLevelState(LEVEL_1_SL12)
     expect(horizontalProgressMaxX(state, LEVEL_1_SL12.arenaBounds.right)).toBe(1147.4)
@@ -206,8 +236,8 @@ describe('Stage 1 campaign levels recovered from AS3 stage/level coordinates', (
     const sl13Waves = LEVEL_1_SL13.stopPoints.map((sp) => sp.roster.map((r) => r.species))
 
     expect(sl12Waves.at(-1)).toEqual(['monster4', 'monster2'])
-    expect(sl13Waves).toContainEqual(['monster5'])
-    expect([...sl12Waves.flat(), ...sl13Waves.flat()]).not.toContain('monster3')
+    expect(sl13Waves.at(-1)).toEqual(['monster5', 'monster30', 'monster30'])
+    expect(sl12Waves.flat()).not.toContain('monster3')
     expect(LEVEL_1_WUYING.subStages[0].continuousSpawner!.heightTrigger!.boss.species).toBe('monster3')
   })
 })

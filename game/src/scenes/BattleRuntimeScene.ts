@@ -21,9 +21,12 @@ import { compileSl11BattleDefinition } from '../adapters/sl11BattleDefinition'
 import { compileSl11RuntimeGateDefinition, useSl11RuntimeGate } from '../adapters/sl11RuntimeGateDefinition'
 import { compileSl12BattleDefinition } from '../adapters/sl12BattleDefinition'
 import { compileSl12RuntimeGateDefinition } from '../adapters/sl12RuntimeGateDefinition'
+import { compileSl13BattleDefinition } from '../adapters/sl13BattleDefinition'
+import { compileSl13RuntimeGateDefinition } from '../adapters/sl13RuntimeGateDefinition'
 import monster2Raw from '../data/monsters/monster2.json'
 import monster3Raw from '../data/monsters/monster3.json'
 import monster4Raw from '../data/monsters/monster4.json'
+import monster5Raw from '../data/monsters/monster5.json'
 import monster7Raw from '../data/monsters/monster7.json'
 import monster8Raw from '../data/monsters/monster8.json'
 import monster30Raw from '../data/monsters/monster30.json'
@@ -53,6 +56,7 @@ const monsterData: Record<string, RoleData> = {
   monster2: monster2Raw as RoleData,
   monster3: monster3Raw as RoleData,
   monster4: monster4Raw as RoleData,
+  monster5: monster5Raw as RoleData,
   monster7: monster7Raw as RoleData,
   monster8: monster8Raw as RoleData,
   monster30: monster30Raw as RoleData,
@@ -145,6 +149,8 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.load.image('runtime-floor-bg', 'assets/extracted/level1/floorBg1.png')
     this.load.image('runtime-sl12-foreground', 'assets/extracted/level1/bg12.png')
     this.load.image('runtime-sl12-floor', 'assets/extracted/level1/online_floor12_full.png')
+    this.load.image('runtime-sl13-foreground', 'assets/extracted/level1/bg13.webp')
+    this.load.image('runtime-sl13-floor', 'assets/extracted/level1/online_floor13.webp')
     this.load.image('runtime-projectile', 'assets/extracted/level1/hit1-effects/Monster30Bullet1/01.png')
     for (let frame = 1; frame <= TRANSFER_FRAME_COUNT; frame += 1) {
       this.load.image(`runtime-transfer-${frame}`, `assets/extracted/effects/transferwind_${frame}.png`)
@@ -235,14 +241,17 @@ export class BattleRuntimeScene extends Phaser.Scene {
       bounds.right - bounds.left,
       bounds.bottom - bounds.top + cameraBottomPadding,
     )
-    if (this.definition.level.id === 'sl12') {
+    if (this.definition.level.id === 'sl12' || this.definition.level.id === 'sl13') {
+      const isSl13 = this.definition.level.id === 'sl13'
       const base = this.add.tileSprite(
         bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top,
         'runtime-floor-bg',
       ).setOrigin(0).setDepth(-30)
       base.setTileScale(540 / 690)
-      this.add.image(0, -56, 'runtime-sl12-foreground').setOrigin(0).setDepth(-10)
-      this.add.image(-200, 405, 'runtime-sl12-floor').setOrigin(0).setDepth(2)
+      this.add.image(0, -56, isSl13 ? 'runtime-sl13-foreground' : 'runtime-sl12-foreground')
+        .setOrigin(0).setDepth(-10)
+      this.add.image(isSl13 ? 0 : -200, 405, isSl13 ? 'runtime-sl13-floor' : 'runtime-sl12-floor')
+        .setOrigin(0).setDepth(2)
     } else {
       const background = this.add.tileSprite(
       bounds.left,
@@ -479,7 +488,9 @@ export class BattleRuntimeScene extends Phaser.Scene {
       this.activeSlot,
       this.campaignIndex,
     )
-    this.add.text(480, 170, `${this.definition.level.id === 'sl12' ? '天宫道' : '九重天'} · 通关`, {
+    const stageName = this.definition.level.id === 'sl13' ? '南天门'
+      : this.definition.level.id === 'sl12' ? '天宫道' : '九重天'
+    this.add.text(480, 170, `${stageName} · 通关`, {
       fontSize: '48px', color: '#fff1b0', stroke: '#5a250f', strokeThickness: 7,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(200)
     this.time.delayedCall(900, () => this.scene.start(SCENE.worldMap))
@@ -498,6 +509,11 @@ export class BattleRuntimeScene extends Phaser.Scene {
   }
 
   private compileDefinition(): BattleDefinition {
+    if (this.campaignIndex === 2) {
+      return useSl11RuntimeGate(window.location.search)
+        ? compileSl13RuntimeGateDefinition(0x5a17, this.runtimeProfile?.combat)
+        : compileSl13BattleDefinition(0x5a17, this.runtimeProfile?.combat)
+    }
     if (this.campaignIndex === 1) {
       return useSl11RuntimeGate(window.location.search)
         ? compileSl12RuntimeGateDefinition(0x5a17, this.runtimeProfile?.combat)

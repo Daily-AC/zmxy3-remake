@@ -9,7 +9,7 @@ import {
 const source = () => readFileSync(new URL('../src/scenes/BattleLoadingScene.ts', import.meta.url), 'utf8')
 
 describe('BattleLoadingScene', () => {
-  it('maps the first two campaign indices to exact level and context copy', () => {
+  it('maps all three chapter-one campaign indices to exact level and context copy', () => {
     expect(battleLoadingContext(0)).toMatchObject({
       name: '九重天',
       label: '第 1 关 · 九重天',
@@ -19,6 +19,11 @@ describe('BattleLoadingScene', () => {
       name: '天宫道',
       label: '第 2 关 · 天宫道',
       context: '正在推演天宫道',
+    })
+    expect(battleLoadingContext(2)).toMatchObject({
+      name: '南天门',
+      label: '第 3 关 · 南天门',
+      context: '正在推演南天门',
     })
   })
 
@@ -41,12 +46,16 @@ describe('BattleLoadingScene', () => {
     }
   })
 
-  it('maps L1 and L2 to warm plush key art matching the home screen', () => {
+  it('maps all chapter-one levels to warm plush key art matching the home screen', () => {
     expect(battleLoadingBackground(0)).toEqual({
       key: 'loading_nine_heavens',
       url: 'assets/generated/loading-nine-heavens.webp',
     })
     expect(battleLoadingBackground(1)).toEqual({
+      key: 'loading_heavenly_palace',
+      url: 'assets/generated/loading-heavenly-palace.webp',
+    })
+    expect(battleLoadingBackground(2)).toEqual({
       key: 'loading_heavenly_palace',
       url: 'assets/generated/loading-heavenly-palace.webp',
     })
