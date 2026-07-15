@@ -22,6 +22,8 @@ import { actionDurationMs, type RoleData } from '../systems/roleData'
 import { calculateRealSkillDamage } from '../systems/skillDamageReal'
 import { TICK_MS } from '../systems/tick'
 import { buildCombatCoreSliceDefinition } from './combatCoreDefinition'
+import { compileChapterOneLoot } from './battleRuntimeLoot'
+import type { DropRollContext } from '../systems/dropRoll'
 
 const SCALE = 1.5
 const HITBOX_REFERENCE_CELL = 200
@@ -63,6 +65,7 @@ export function battleTicks(ms: number): number {
 export function compileChapterOneMonster(
   species: ChapterOneMonsterId,
   bounds: BattleDefinition['level']['bounds'],
+  dropContext: DropRollContext,
 ): BattleMonsterDefinition {
   const data = monsterData[species]
   const stats = LEVEL1_MONSTER_STATS[species]
@@ -95,6 +98,7 @@ export function compileChapterOneMonster(
     },
     targetOffsetX: roleData.offset.x * SCALE,
     selfOffsetX: data.offset.x * SCALE,
+    loot: compileChapterOneLoot(species, dropContext),
     ...(species === 'monster30'
       ? {
           behavior: {

@@ -240,6 +240,22 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
   )
   const settled = await page.evaluate(() => window.__shellMapState())
   assert.equal(settled.currentIndex, 1)
+  const sl11Loot = await page.evaluate(() => {
+    const save = JSON.parse(localStorage.getItem('zmxy3-remake.slot.v1.0')).save
+    const quantity = (itemId) => save.inventory.stacks
+      .filter((stack) => stack.item.id === itemId)
+      .reduce((sum, stack) => sum + stack.qty, 0)
+    return {
+      soul: save.soul,
+      timber: quantity('wptm'),
+      staff: quantity('ptdxzg'),
+      armor: quantity('ptdxzf'),
+    }
+  })
+  assert(sl11Loot.soul >= 8, `sl11 soul pickup was not persisted: ${sl11Loot.soul}`)
+  assert(sl11Loot.timber >= 3, `sl11 starter timber was not persisted: ${sl11Loot.timber}`)
+  assert(sl11Loot.staff >= 1, `sl11 starter weapon was not persisted: ${sl11Loot.staff}`)
+  assert(sl11Loot.armor >= 1, `sl11 starter armor was not persisted: ${sl11Loot.armor}`)
 
   assert.equal(await page.evaluate(() => window.__shellMapEnterLevel(1)), true)
   await page.waitForFunction(
@@ -381,6 +397,7 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
     hashBeforeClear: proof.hashBeforeClear,
     finalHash: proof.finalHash,
     eventCount: proof.events.length,
+    sl11Loot,
     sl12FinalHash: sl12Proof.finalHash,
     sl12EventCount: sl12Proof.events.length,
     sl13FinalHash: sl13Proof.finalHash,

@@ -34,6 +34,8 @@ describe('validateBattleDefinition', () => {
     ['inverted spawn range', (value) => { value.level.encounters[0].spawnOffset.x.max = -200 }, 'level.encounters.0.spawnOffset.x.max'],
     ['door outside bounds', (value) => { value.level.door.x = 1001 }, 'level.door.x'],
     ['hero spawn outside bounds', (value) => { value.level.heroSpawn.y = 501 }, 'level.heroSpawn.y'],
+    ['invalid loot chance', (value) => { value.monsters.monster30.loot = [{ chance: 2, choices: [{ lootId: 'ore', weight: 1, quantity: { min: 1, max: 1 } }] }] }, 'monsters.monster30.loot.0.chance'],
+    ['inverted loot quantity', (value) => { value.monsters.monster30.loot = [{ chance: 1, choices: [{ lootId: 'ore', weight: 1, quantity: { min: 2, max: 1 } }] }] }, 'monsters.monster30.loot.0.choices.0.quantity.max'],
   ]
 
   it.each(invalidCases)('rejects %s', (_name, mutate, expectedPath) => {

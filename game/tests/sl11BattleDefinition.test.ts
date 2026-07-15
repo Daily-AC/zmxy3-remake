@@ -53,4 +53,13 @@ describe('compileSl11BattleDefinition', () => {
     expect(first.provenance).toContainEqual(expect.objectContaining({ ruleId: 'role1.skill.slz', origin: 'canonical' }))
     expect(validateBattleDefinition(first)).toEqual(first)
   })
+
+  it('compiles original loot tables and pickup physics into production content', () => {
+    const definition = compileSl11BattleDefinition(7)
+    expect(definition.level.lootPhysics).toMatchObject({ pickupRadius: 70, retryDelayTicks: 30 })
+    expect(definition.monsters.monster3.loot?.some((table) =>
+      table.choices.some((choice) => choice.lootId === 'item.original.ptdxzg'))).toBe(true)
+    expect(definition.monsters.monster30.loot?.some((table) =>
+      table.choices.some((choice) => choice.lootId === 'currency.soul'))).toBe(true)
+  })
 })

@@ -8,6 +8,7 @@ import {
   type ChapterOneBattleProfile,
   type ChapterOneMonsterId,
 } from './chapterOneBattleCompiler'
+import { CHAPTER_ONE_LOOT_PHYSICS } from './battleRuntimeLoot'
 
 interface GeometryFile {
   subStages: { id: string; walls: BattleDefinition['level']['walls'] }[]
@@ -38,11 +39,12 @@ export function compileSl13BattleDefinition(
       { ruleId: 'sl13.enemy-type-3', origin: 'canonical', source: 'sl13.as fields override StageListener13 registration mismatch' },
       { ruleId: 'role1.combat', origin: 'canonical', source: 'game/src/adapters/combatCoreDefinition.ts' },
       { ruleId: 'role1.skill.slz', origin: 'canonical', source: 'game/src/systems/skillDamageReal.ts' },
+      { ruleId: 'chapter1.loot', origin: 'canonical', source: 'game/src/data/original/monster-drops.json' },
     ],
     hero: compileWukongBattleHero(source.heroStart, bounds, profile),
     monsters: Object.fromEntries(SL13_MONSTERS.map((species) => [
       species,
-      compileChapterOneMonster(species, bounds),
+      compileChapterOneMonster(species, bounds, { stage: 1, level: 3 }),
     ])),
     level: {
       id: source.id,
@@ -64,6 +66,7 @@ export function compileSl13BattleDefinition(
         })),
       })),
       door: { ...source.door },
+      lootPhysics: { ...CHAPTER_ONE_LOOT_PHYSICS },
     },
   })
 }

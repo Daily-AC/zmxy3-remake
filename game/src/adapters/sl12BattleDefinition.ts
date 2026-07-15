@@ -7,6 +7,7 @@ import {
   compileWukongBattleHero,
   type ChapterOneBattleProfile,
 } from './chapterOneBattleCompiler'
+import { CHAPTER_ONE_LOOT_PHYSICS } from './battleRuntimeLoot'
 
 interface GeometryFile {
   subStages: { id: string; walls: BattleDefinition['level']['walls'] }[]
@@ -32,13 +33,14 @@ export function compileSl12BattleDefinition(
       { ruleId: 'sl12.stop-points', origin: 'canonical', source: 'game/src/data/levels/level1.ts' },
       { ruleId: 'role1.combat', origin: 'canonical', source: 'game/src/adapters/combatCoreDefinition.ts' },
       { ruleId: 'role1.skill.slz', origin: 'canonical', source: 'game/src/systems/skillDamageReal.ts' },
+      { ruleId: 'chapter1.loot', origin: 'canonical', source: 'game/src/data/original/monster-drops.json' },
     ],
     hero: compileWukongBattleHero(source.heroStart, bounds, profile),
     monsters: {
-      monster8: compileChapterOneMonster('monster8', bounds),
-      monster7: compileChapterOneMonster('monster7', bounds),
-      monster4: compileChapterOneMonster('monster4', bounds),
-      monster2: compileChapterOneMonster('monster2', bounds),
+      monster8: compileChapterOneMonster('monster8', bounds, { stage: 1, level: 2 }),
+      monster7: compileChapterOneMonster('monster7', bounds, { stage: 1, level: 2 }),
+      monster4: compileChapterOneMonster('monster4', bounds, { stage: 1, level: 2 }),
+      monster2: compileChapterOneMonster('monster2', bounds, { stage: 1, level: 2 }),
     },
     level: {
       id: source.id,
@@ -60,6 +62,7 @@ export function compileSl12BattleDefinition(
         })),
       })),
       door: { ...source.door },
+      lootPhysics: { ...CHAPTER_ONE_LOOT_PHYSICS },
     },
   })
 }
