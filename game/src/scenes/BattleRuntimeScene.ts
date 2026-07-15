@@ -3,6 +3,7 @@ import {
   BattleRuntime,
   TICK_MS,
   stableHash,
+  type BattleCommand,
   type BattleDefinition,
   type BattleEvent,
   type BattleSnapshot,
@@ -16,12 +17,13 @@ import {
   speciesForActor,
 } from '../adapters/battleRuntimePresentation'
 import { compileSl11BattleDefinition } from '../adapters/sl11BattleDefinition'
+import { compileSl11RuntimeGateDefinition, useSl11RuntimeGate } from '../adapters/sl11RuntimeGateDefinition'
 import monster3Raw from '../data/monsters/monster3.json'
 import monster30Raw from '../data/monsters/monster30.json'
 import role1Raw from '../data/roles/role1.json'
 import { registerRoleAnimations } from '../presentation/registerRoleAnimations'
 import type { RoleData } from '../systems/roleData'
-import { asSlotId } from '../systems/saveSlots'
+import { asSlotId, type SlotId } from '../systems/saveSlots'
 import { RoleInfoHud } from '../ui/hud/RoleInfoHud'
 import type { BattleData } from './BattleLoadingScene'
 import { REG, SCENE, shellStorage } from './shellShared'
@@ -61,7 +63,9 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private respawnNotice?: Phaser.GameObjects.Text
   private eventLog: BattleEvent[] = []
   private campaignIndex = 0
+  private activeSlot: SlotId | null = null
   private clearTransitionScheduled = false
+  private manualMode = false
 
   constructor() {
     super(SCENE.battleRuntime)
@@ -76,7 +80,9 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.portal = undefined
     this.respawnNotice = undefined
     this.campaignIndex = data?.campaignIndex ?? 0
+    this.activeSlot = data?.activeSlot ?? asSlotId(this.registry.get(REG.activeSlot))
     this.clearTransitionScheduled = false
+    this.manualMode = false
   }
 
   preload(): void {
@@ -110,7 +116,9 @@ export class BattleRuntimeScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.definition = compileSl11BattleDefinition(0x5a17)
+    this.definition = useSl11RuntimeGate(window.location.search)
+      ? compileSl11RuntimeGateDefinition(0x5a17)
+      : compileSl11BattleDefinition(0x5a17)
     this.runtime = new BattleRuntime(this.definition)
     this.snapshot = this.runtime.getSnapshot()
     this.registerAnimations()
@@ -123,6 +131,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
   }
 
   update(_time: number, deltaMs: number): void {
+    if (this.manualMode) return
     this.accumulatorMs += Math.min(deltaMs, TICK_MS * 8)
     while (this.accumulatorMs >= TICK_MS) {
       this.accumulatorMs -= TICK_MS
@@ -134,12 +143,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
         attack: this.keys.attack.isDown,
         interact: this.keys.interact.isDown,
       })) this.runtime.enqueue(command)
-      const events = this.runtime.step()
-      this.eventLog.push(...events)
-      if (this.eventLog.length > 300) this.eventLog.splice(0, this.eventLog.length - 300)
-      this.presentEvents(events)
-      this.snapshot = this.runtime.getSnapshot()
-      this.renderSnapshot()
+      this.advanceRuntime()
     }
   }
 
@@ -337,7 +341,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.clearTransitionScheduled = true
     persistBattleRuntimeClear(
       shellStorage(),
-      asSlotId(this.registry.get(REG.activeSlot)),
+      this.activeSlot,
       this.campaignIndex,
     )
     this.add.text(480, 170, '九重天 · 通关', {
@@ -347,17 +351,25 @@ export class BattleRuntimeScene extends Phaser.Scene {
   }
 
   private installObservationHook(): void {
+    if (!useSl11RuntimeGate(window.location.search)) return
     window.__battleRuntime = {
       getSnapshot: () => structuredClone(this.runtime.getSnapshot()),
       getEvents: () => structuredClone(this.eventLog),
       getHash: () => stableHash(this.runtime.getDeterministicState()),
-      step: (ticks = 1) => {
-        this.eventLog.push(...this.runtime.step(ticks))
-        this.snapshot = this.runtime.getSnapshot()
-        this.renderSnapshot()
-        return structuredClone(this.snapshot)
-      },
+      enqueue: (command) => this.runtime.enqueue(command as BattleCommand),
+      setManualMode: (enabled) => { this.manualMode = enabled },
+      step: (ticks = 1) => structuredClone(this.advanceRuntime(ticks)),
     }
+  }
+
+  private advanceRuntime(ticks = 1): BattleSnapshot {
+    const events = this.runtime.step(ticks)
+    this.eventLog.push(...events)
+    if (this.eventLog.length > 300) this.eventLog.splice(0, this.eventLog.length - 300)
+    this.presentEvents(events)
+    this.snapshot = this.runtime.getSnapshot()
+    this.renderSnapshot()
+    return this.snapshot
   }
 
   private shutdown(): void {
