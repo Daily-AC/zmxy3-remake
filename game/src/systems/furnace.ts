@@ -292,3 +292,33 @@ export function refundMaterials(inv: Inventory, tx: CraftTransaction): boolean {
   tx.status = 'refunded'
   return true
 }
+
+export type CraftSettlement =
+  | { ok: true; item: Item; totalCost: number }
+  | { ok: false; reason: 'over_budget' | 'bag_full' | 'stale_transaction' }
+
+/**
+ * Settle one server-authored forge response atomically. A product is inserted
+ * before the locked materials are finalized; if validation or insertion fails,
+ * every locked lot is refunded. This is the shared authority boundary used by
+ * both map and legacy battle hosts.
+ */
+export function settleCraftTransaction(
+  inventory: Inventory,
+  tx: CraftTransaction,
+  rawItem: unknown,
+  budget: AttributeBudget,
+): CraftSettlement {
+  if (tx.status !== 'pending') return { ok: false, reason: 'stale_transaction' }
+  const validation = validateCraftedEquipment(rawItem, budget)
+  if (!validation.ok) {
+    refundMaterials(inventory, tx)
+    return { ok: false, reason: 'over_budget' }
+  }
+  if (!addItem(inventory, validation.item, 1).ok) {
+    refundMaterials(inventory, tx)
+    return { ok: false, reason: 'bag_full' }
+  }
+  consumeMaterials(tx)
+  return { ok: true, item: validation.item, totalCost: validation.totalCost }
+}

@@ -15,7 +15,6 @@ import type { LoadedGameState } from '../systems/save'
 import { listStacks, addItem } from '../systems/inventory'
 import {
   canCraft as canCraftRecipe,
-  craft as craftRecipe,
   equipmentItemByFillName,
   listRecipes as listFurnaceRecipes,
   type CraftCheck,
@@ -23,9 +22,8 @@ import {
 import {
   buildCraftRequest,
   lockMaterials,
-  consumeMaterials,
   refundMaterials,
-  validateCraftedEquipment,
+  settleCraftTransaction,
   computeBudget,
 } from '../systems/furnace'
 import type { MaterialLot, CraftTransaction, AttributeBudget } from '../systems/furnace'
@@ -41,6 +39,7 @@ import { BATTLE_LOADING_BACKGROUNDS } from './battleLoadingContent'
 import { battleRuntimeForCampaign } from '../adapters/battleRuntimeRoute'
 import { LAOJUN_PORTRAIT_TEX } from '../ui/hud/furnaceRecipeLayout'
 import { resolveLaojunGift } from '../systems/npcGift'
+import { commitBattleRuntimeCraft, planBattleRuntimeCraft } from '../adapters/battleRuntimeCrafting'
 
 // S1 世界地图 hub. Everything below the map art (nodes/decorations/buttons +
 // coordinates) is data-driven from data/worldmapNodes.ts, which is
@@ -380,10 +379,14 @@ export class WorldMapScene extends Phaser.Scene {
       this.furnaceRecipeView.refresh()
       return
     }
-    const result = craftRecipe(this.loaded.inventory, this.loaded.soul, bookFillName)
+    const result = planBattleRuntimeCraft(
+      this.loaded,
+      `recipe:${++this.craftSeq}`,
+      bookFillName,
+    )
     if (result.ok) {
-      this.loaded.soul = result.newSoul
-      this.toastUi.show(`炼成【${result.item.name}】`, '#ffd873')
+      commitBattleRuntimeCraft(this.loaded, result.plan)
+      this.toastUi.show(`炼成【${result.plan.item.name}】`, '#ffd873')
       this.persistSlot()
     } else {
       this.toastUi.show(this.recipeFailureText(result), '#e0b060')
@@ -456,16 +459,16 @@ export class WorldMapScene extends Phaser.Scene {
   private onCraftResult(item: CraftedItem, flavor: string, requestId: string): void {
     const pending = this.craftPending
     if (!pending || pending.requestId !== requestId) return
-    const validation = validateCraftedEquipment(item, pending.budget)
-    if (validation.ok) {
-      consumeMaterials(pending.tx)
-      addItem(this.loaded.inventory, validation.item, 1)
-      this.furnacePanel.setResult(validation.item)
-      this.toastUi.show(`炼成【${validation.item.name}】`, '#ffd873')
+    const settlement = settleCraftTransaction(this.loaded.inventory, pending.tx, item, pending.budget)
+    if (settlement.ok) {
+      this.furnacePanel.setResult(settlement.item)
+      this.toastUi.show(`炼成【${settlement.item.name}】`, '#ffd873')
       this.persistSlot()
     } else {
-      refundMaterials(this.loaded.inventory, pending.tx)
-      this.toastUi.show(flavor || '此宝虚影溃散，材料尚不足以定形。', '#e0b060')
+      const message = settlement.reason === 'bag_full'
+        ? '背包已满，产物未入包，材料已退回'
+        : flavor || '此宝虚影溃散，材料尚不足以定形。'
+      this.toastUi.show(message, '#e0b060')
     }
     this.clearCraftPending()
   }
@@ -568,6 +571,13 @@ export class WorldMapScene extends Phaser.Scene {
     w.__giveSoul = (amount: number): void => {
       this.loaded.soul += Math.max(0, Math.floor(amount))
       this.furnaceRecipeView?.refresh()
+    }
+    w.__shellMapCraftRecipe = (recipeId: string) => {
+      this.submitRecipeCraft(recipeId)
+      return {
+        soul: this.loaded.soul,
+        inventory: listStacks(this.loaded.inventory).map((stack) => ({ id: stack.item.id, qty: stack.qty })),
+      }
     }
     w.__shellMapRecipeState = () => ({
       soul: this.loaded.soul,

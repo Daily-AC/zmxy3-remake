@@ -8,6 +8,7 @@ import {
   lockMaterials,
   consumeMaterials,
   refundMaterials,
+  settleCraftTransaction,
   type MaterialLot,
 } from '../src/systems/furnace'
 import { createInventory, addItem, countItem } from '../src/systems/inventory'
@@ -208,5 +209,36 @@ describe('material transaction — lock / consume / refund (材料事务)', () =
     expect(countItem(inv, 'silver_ore')).toBe(1)
     // And a second consume is a no-op too.
     expect(consumeMaterials(tx)).toBe(false)
+  })
+
+  it('settles a valid server result as one material-to-product transaction', () => {
+    const inv = bagWithMaterials()
+    const lots = [{ item: silverOre, qty: 2 }]
+    const tx = lockMaterials(inv, 'req-settle', lots)!
+    const result = settleCraftTransaction(inv, tx, {
+      id: 'forged-staff', name: '试炉棍', rarity: 2,
+      effects: [{ type: 'stat', stat: 'atk', value: 4 }],
+    }, computeBudget(lots))
+
+    expect(result).toMatchObject({ ok: true, item: { id: 'forged-staff' } })
+    expect(tx.status).toBe('consumed')
+    expect(countItem(inv, 'silver_ore')).toBe(1)
+    expect(countItem(inv, 'forged-staff')).toBe(1)
+  })
+
+  it('refunds locked materials when the product cannot fit in the bag', () => {
+    const inv = createInventory(1)
+    addItem(inv, silverOre, 2)
+    const lots = [{ item: silverOre, qty: 1 }]
+    const tx = lockMaterials(inv, 'req-full', lots)!
+    const result = settleCraftTransaction(inv, tx, {
+      id: 'forged-staff', name: '试炉棍', rarity: 2,
+      effects: [{ type: 'stat', stat: 'atk', value: 2 }],
+    }, computeBudget(lots))
+
+    expect(result).toEqual({ ok: false, reason: 'bag_full' })
+    expect(tx.status).toBe('refunded')
+    expect(countItem(inv, 'silver_ore')).toBe(2)
+    expect(countItem(inv, 'forged-staff')).toBe(0)
   })
 })
