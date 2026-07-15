@@ -6,6 +6,7 @@ import type {
   MonsterCombatDefinition,
 } from '../session/types'
 import type { CombatCommand } from '../session/commands'
+import type { CommandRejectionReason } from '../session/commands'
 import type { CombatEvent } from '../session/events'
 import type { BattleWall } from './platform'
 
@@ -83,7 +84,8 @@ export type BattleCommand = CombatCommand | {
   atTick: number
 }
 
-export type BattleEvent = CombatEvent
+export type BattleEvent = Exclude<CombatEvent, { type: 'command-rejected' }>
+  | { type: 'command-rejected'; tick: number; command: BattleCommand; reason: CommandRejectionReason }
   | { type: 'actor-spawned'; tick: number; actorId: ActorId; encounterId: string; contentId: string }
   | { type: 'door-revealed'; tick: number; levelId: string }
   | { type: 'stage-cleared'; tick: number; levelId: string }

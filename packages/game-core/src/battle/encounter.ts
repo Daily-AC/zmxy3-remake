@@ -100,7 +100,7 @@ export function advanceEncounter(
   const effects: EncounterEffect[] = []
   for (const encounter of continuousEncounters(level)) {
     if (context.hero.y <= encounter.trigger.atOrAboveY) {
-      const bossEncounterId = `${encounter.id}:boss`
+      const bossEncounterId = `${encounter.id}-boss`
       state.phase = 'boss-active'
       state.bossEncounterId = bossEncounterId
       return [{
