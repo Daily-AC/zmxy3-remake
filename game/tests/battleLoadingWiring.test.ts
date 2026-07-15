@@ -4,19 +4,21 @@ import { describe, expect, it } from 'vitest'
 const read = (relativePath: string) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 
 describe('battle loading wiring', () => {
-  it('adds and registers BattleLoadingScene immediately before BattleScene', () => {
+  it('registers legacy and production battle scenes behind BattleLoadingScene', () => {
     const shared = read('../src/scenes/shellShared.ts')
     const main = read('../src/main.ts')
     expect(shared).toMatch(/battleLoading: 'battle-loading'/)
     expect(main).toMatch(/import \{ BattleLoadingScene \} from '\.\/scenes\/BattleLoadingScene'/)
     expect(main).toMatch(/SkillTreeScene, BattleLoadingScene, BattleScene/)
+    expect(shared).toMatch(/battleRuntime: 'battle-runtime'/)
+    expect(main).toMatch(/BattleScene, BattleRuntimeScene/)
   })
 
   it('routes solo campaign entry through loading with nested battleData', () => {
     const worldMap = read('../src/scenes/WorldMapScene.ts')
     expect(worldMap).toMatch(/BATTLE_LOADING_BACKGROUNDS/)
     expect(worldMap).toMatch(
-      /this\.scene\.start\(SCENE\.battleLoading, \{ battleData: \{ campaignIndex \} \}\)/,
+      /this\.scene\.start\(SCENE\.battleLoading, \{ battleData: \{ campaignIndex, runtime \} \}\)/,
     )
     expect(worldMap).not.toMatch(/this\.scene\.start\(SCENE\.battle, \{ campaignIndex \}\)/)
   })

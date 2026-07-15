@@ -4,6 +4,14 @@ declare const __GAME_VERSION__: string
 
 interface Window {
   __combatCoreSlice?: CombatCoreSliceObservation
+  __battleRuntime?: BattleRuntimeObservation
+}
+
+interface BattleRuntimeObservation {
+  getSnapshot(): unknown
+  getEvents(): unknown
+  getHash(): string
+  step(ticks?: number): unknown
 }
 
 interface CombatCoreSliceObservation {

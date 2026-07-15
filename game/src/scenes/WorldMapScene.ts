@@ -38,6 +38,7 @@ import { FurnaceRecipeView } from '../ui/hud/FurnaceRecipeView'
 import { HUD_TEXTURES, HUD_ICONS, ICON_FALLBACK_KEY } from '../ui/hud/hudTheme'
 import { Toast } from '../ui/hud/Toast'
 import { BATTLE_LOADING_BACKGROUNDS } from './battleLoadingContent'
+import { battleRuntimeForCampaign } from '../adapters/battleRuntimeRoute'
 import { LAOJUN_PORTRAIT_TEX } from '../ui/hud/furnaceRecipeLayout'
 import { resolveLaojunGift } from '../systems/npcGift'
 
@@ -273,7 +274,8 @@ export class WorldMapScene extends Phaser.Scene {
   private tryEnterLevel(campaignIndex: number): boolean {
     if (!isCampaignLevelUnlocked(campaignIndex, this.currentIndex)) return false
     this.npcClient?.dispose()
-    this.scene.start(SCENE.battleLoading, { battleData: { campaignIndex } })
+    const runtime = battleRuntimeForCampaign(campaignIndex, window.location.search)
+    this.scene.start(SCENE.battleLoading, { battleData: { campaignIndex, runtime } })
     return true
   }
 

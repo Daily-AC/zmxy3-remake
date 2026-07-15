@@ -16,6 +16,7 @@ export const SCENE = {
   coopLobby: 'cooplobby',
   battleLoading: 'battle-loading',
   battle: 'battle',
+  battleRuntime: 'battle-runtime',
   skillTree: 'skilltree',
 } as const
 
