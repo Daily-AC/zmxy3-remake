@@ -135,6 +135,7 @@ import {
 import {
   LEVEL_1_WUYING,
   LEVEL_2_TIANGONGDAO,
+  LEVEL_3_NANTIANMEN,
   LEVEL1_MONSTER_NAMES,
   LEVEL1_MONSTER_STATS,
 } from '../data/levels/level1'
@@ -650,8 +651,14 @@ function isSubStageCampaign(def: CampaignEntry): def is SubStageChainDef {
   return 'subStages' in def
 }
 
-/** Active L1/L2 are the separate AS3 sl11 九重天 and sl12 天宫道 levels. */
-const CAMPAIGN: CampaignEntry[] = [LEVEL_1_WUYING, LEVEL_2_TIANGONGDAO, LEVEL_3_ERLANGSHEN, LEVEL_4_XIENIAN]
+/** Chapter one preserves AS3 sl11/sl12/sl13 as three separate map levels. */
+const CAMPAIGN: CampaignEntry[] = [
+  LEVEL_1_WUYING,
+  LEVEL_2_TIANGONGDAO,
+  LEVEL_3_NANTIANMEN,
+  LEVEL_3_ERLANGSHEN,
+  LEVEL_4_XIENIAN,
+]
 
 /** One live monster: its sim state + config, its sprite, and the render/combat
  * facts (data table, per-monster elemental status, attack power). */
@@ -3787,7 +3794,8 @@ export class BattleScene extends Phaser.Scene {
   private dropRollContext(): DropRollContext {
     if (this.campaignIndex === 0) return { stage: 1, level: 1 }
     if (this.campaignIndex === 1) return { stage: 1, level: 2 }
-    return { stage: this.campaignIndex + 1, level: 1 }
+    if (this.campaignIndex === 2) return { stage: 1, level: 3 }
+    return { stage: this.campaignIndex, level: 1 }
   }
 
   // Item drops use the original-style cue: larger bare icon plus rarity-colored

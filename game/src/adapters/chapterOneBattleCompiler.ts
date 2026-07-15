@@ -10,6 +10,7 @@ import { monsterAttackPower } from '../data/monsterAttackPower'
 import monster2Raw from '../data/monsters/monster2.json'
 import monster3Raw from '../data/monsters/monster3.json'
 import monster4Raw from '../data/monsters/monster4.json'
+import monster5Raw from '../data/monsters/monster5.json'
 import monster7Raw from '../data/monsters/monster7.json'
 import monster8Raw from '../data/monsters/monster8.json'
 import monster30Raw from '../data/monsters/monster30.json'
@@ -29,12 +30,13 @@ const MONSTER30_BULLET = {
   kind: 'Monster30Bullet1', speedPxPerSecond: 620, radius: 58, ttlMs: 900,
 } as const
 
-export type ChapterOneMonsterId = 'monster2' | 'monster3' | 'monster4' | 'monster7' | 'monster8' | 'monster30'
+export type ChapterOneMonsterId = 'monster2' | 'monster3' | 'monster4' | 'monster5' | 'monster7' | 'monster8' | 'monster30'
 
 const monsterData: Record<ChapterOneMonsterId, RoleData> = {
   monster2: monster2Raw as RoleData,
   monster3: monster3Raw as RoleData,
   monster4: monster4Raw as RoleData,
+  monster5: monster5Raw as RoleData,
   monster7: monster7Raw as RoleData,
   monster8: monster8Raw as RoleData,
   monster30: monster30Raw as RoleData,

@@ -15,7 +15,7 @@ export const BATTLE_LOADING_BACKGROUNDS = [
   { key: 'loading_heavenly_palace', url: 'assets/generated/loading-heavenly-palace.webp' },
 ] as const satisfies readonly BattleLoadingBackground[]
 
-const CAMPAIGN_NAMES = ['九重天', '天宫道', '二郎神关', '邪念之境'] as const
+const CAMPAIGN_NAMES = ['九重天', '天宫道', '南天门', '二郎神关', '邪念之境'] as const
 const DOTS = ['', '.', '..', '...'] as const
 
 export function battleLoadingContext(index: number): BattleLoadingContext {
@@ -36,5 +36,5 @@ export function battleLoadingStatusFrames(coop: boolean): readonly string[] {
 }
 
 export function battleLoadingBackground(index: number): BattleLoadingBackground {
-  return BATTLE_LOADING_BACKGROUNDS[index === 1 ? 1 : 0]
+  return BATTLE_LOADING_BACKGROUNDS[index === 1 || index === 2 ? 1 : 0]
 }

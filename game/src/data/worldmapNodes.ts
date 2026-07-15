@@ -31,8 +31,8 @@ export interface WorldMapNode {
   textureHover?: string
 }
 
-/** The 12 node slots export.SelectPLace declares (s1_1..s4_3). Our shipped
- * CAMPAIGN chain only has 4 levels, so the first 4 nodes in the AS3's own
+/** The 12 node slots export.SelectPLace declares (s1_1..s4_3). The first four
+ * available node visuals in the AS3's own
  * stage-major/level-minor order (s1_1 -> s1_2 -> s1_3 -> s2_1, the order
  * `added()` walks and unlocks in) map onto CAMPAIGN[0..3]; the remaining
  * s2_2/s2_3/s3_1-3 render as locked decoration (real xfl position + real art,
@@ -61,16 +61,9 @@ export const WORLDMAP_NODES: WorldMapNode[] = [
     textureCurrent: 'wm_node_s1_2_current',
     textureHover: 'wm_node_s1_2_hover',
   },
-  // s1_3/s2_1 (campaignIndex 2/3 -- L3/L4): kept `kind: 'campaign'` and real
-  // art/position (not converted to `kind: 'locked'` decoration) because the
-  // scope cut is an ENTRY-POINT cap, not a "this content doesn't exist"
-  // removal -- level3.ts/level4.ts and BattleScene's CAMPAIGN[2]/[3] stay in
-  // the codebase per the user's "留库" instruction. The lock is enforced
-  // upstream in systems/campaignProgress.ts (ACTIVE_CAMPAIGN_LENGTH=2 caps
-  // every index this module hands out), so these two nodes' currentIndex can
-  // structurally never reach 2, and campaignNodeVisualState() always resolves
-  // them to 'locked' -- same grey-tint render path as s2_2/s2_3/s3_1-3 below,
-  // zero changes needed here or in WorldMapScene's rendering.
+  // s1_3 is the third active chapter-one level (南天门). s2_1 retains the
+  // next campaign entry's real art and position but stays locked until the
+  // active campaign ceiling expands beyond the first chapter.
   {
     id: 's1_3',
     x: 525.45,

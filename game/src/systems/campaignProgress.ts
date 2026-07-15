@@ -18,25 +18,24 @@ import type { SlotId } from './saveSlots'
 /** BattleScene's CAMPAIGN chain length (LEVEL_1_WUYING..LEVEL_4_XIENIAN). Kept
  * as a constant here (not re-imported from BattleScene, which is Phaser-bound)
  * so this module stays Phaser-free; BattleScene's own CAMPAIGN.length is the
- * source of truth and must stay in sync with this value. Left at 4 (not
+ * source of truth and must stay in sync with this value. Left at 5 (not
  * shrunk to match ACTIVE_CAMPAIGN_LENGTH below) because BattleScene's own
  * array/level data (level3.ts/level4.ts) is untouched -- "留库" per the scope
  * cut, only the map entry point is capped. */
-export const CAMPAIGN_LENGTH = 4
+export const CAMPAIGN_LENGTH = 5
 
 /**
- * User scope cut (CLAUDE.md 总纲 item 2, 2026-07-08 拍板): this build only
- * ships L1+L2 (campaignIndex 0/1 -- worldmapNodes.ts s1_1/s1_2). L3/L4
- * (s1_3/s2_1, campaignIndex 2/3) keep their code and level data in the repo
- * but are pulled from the reachable entry point -- capping every index this
+ * The formal chapter-one slice ships sl11/sl12/sl13 (campaignIndex 0..2).
+ * Later chapter content keeps its code and level data in the repo but is
+ * pulled from the reachable entry point -- capping every index this
  * module hands out (read/write/frontier-advance) at ACTIVE_CAMPAIGN_LENGTH-1
  * means `isCampaignLevelUnlocked`/`campaignNodeVisualState` can never resolve
- * those two map nodes to anything but 'locked', with zero changes needed in
+ * later map nodes to anything but 'locked', with zero changes needed in
  * WorldMapScene's rendering (same grey-tint path it already uses for
  * never-unlockable decoration nodes) or in worldmapNodes.ts's node `kind`.
- * Bump this back to CAMPAIGN_LENGTH if/when L3/L4 come back into scope.
+ * Bump this as later chapters enter production scope.
  */
-export const ACTIVE_CAMPAIGN_LENGTH = 2
+export const ACTIVE_CAMPAIGN_LENGTH = 3
 
 /** Same key BattleScene has always used for its per-slot level side-channel
  * (save.ts's GameSaveV1 has no level field -- see save.ts header). Moved here

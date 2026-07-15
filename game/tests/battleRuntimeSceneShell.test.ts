@@ -6,10 +6,11 @@ import { BattleRuntimeInput } from '../src/adapters/battleRuntimeInput'
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8')
 
 describe('BattleRuntimeScene shell boundary', () => {
-  it('opts only sl11 into the production runtime behind an explicit query flag', () => {
+  it('opts all three chapter-one levels into production behind an explicit query flag', () => {
     expect(battleRuntimeForCampaign(0, '?battleRuntime=1')).toBe('production')
     expect(battleRuntimeForCampaign(1, '?battleRuntime=1')).toBe('production')
-    expect(battleRuntimeForCampaign(2, '?battleRuntime=1')).toBe('legacy')
+    expect(battleRuntimeForCampaign(2, '?battleRuntime=1')).toBe('production')
+    expect(battleRuntimeForCampaign(3, '?battleRuntime=1')).toBe('legacy')
     expect(battleRuntimeForCampaign(0, '')).toBe('legacy')
   })
 

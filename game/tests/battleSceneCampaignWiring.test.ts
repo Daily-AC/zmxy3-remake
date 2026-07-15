@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest'
 const source = readFileSync(new URL('../src/scenes/BattleScene.ts', import.meta.url), 'utf8')
 
 describe('BattleScene stage-one campaign wiring', () => {
-  it('uses 九重天 and 天宫道 as the first two active campaign entries', () => {
-    expect(source).toMatch(/const CAMPAIGN: CampaignEntry\[\] = \[LEVEL_1_WUYING, LEVEL_2_TIANGONGDAO,/)
+  it('uses 九重天, 天宫道 and 南天门 as the first three active campaign entries', () => {
+    expect(source).toMatch(/LEVEL_1_WUYING,\s*LEVEL_2_TIANGONGDAO,\s*LEVEL_3_NANTIANMEN,/)
     expect(source).not.toMatch(/const CAMPAIGN: CampaignEntry\[\] = \[LEVEL_1_WUYING, LEVEL_2_TIANWANG,/)
   })
 
@@ -26,9 +26,10 @@ describe('BattleScene stage-one campaign wiring', () => {
     expect(source).toMatch(/const isL1SubStageDoor = Boolean\(hasFollowingSubStage\)/)
   })
 
-  it('maps the first two campaign entries to AS3 stage 1 levels 1 and 2', () => {
+  it('maps the three chapter-one entries to AS3 stage 1 levels 1 through 3', () => {
     expect(source).toMatch(/if \(this\.campaignIndex === 0\) return \{ stage: 1, level: 1 \}/)
     expect(source).toMatch(/if \(this\.campaignIndex === 1\) return \{ stage: 1, level: 2 \}/)
+    expect(source).toMatch(/if \(this\.campaignIndex === 2\) return \{ stage: 1, level: 3 \}/)
   })
 
   it('renders horizontal stage image layers as opaque far base, official foreground and world-locked floor', () => {

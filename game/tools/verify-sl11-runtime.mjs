@@ -294,7 +294,7 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
     }
   })
 
-  expectStopPositions(sl12Proof.stops)
+  expectStopPositions('sl12', sl12Proof.stops, [1147.4, 1809.7, 2813.95, 3790.2, 4661.55])
   assert.equal(sl12Proof.beforeDoor.level.doorVisible, true)
   assert.equal(sl12Proof.final.level.cleared, true)
   assert(sl12Proof.events.some((event) => event.type === 'skill-cast'))
@@ -304,6 +304,78 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
   await page.screenshot({ path: sl12File })
   assertNonBlankScreenshot(sl12File)
 
+  await page.waitForFunction(
+    () => typeof window.__shellMapState === 'function' && window.__shellMapState().currentIndex === 2,
+    undefined,
+    { timeout: timeoutMs },
+  )
+  assert.equal(await page.evaluate(() => window.__shellMapEnterLevel(2)), true)
+  await page.waitForFunction(
+    () => window.__battleRuntime?.getSnapshot().level.id === 'sl13',
+    undefined,
+    { timeout: timeoutMs },
+  )
+  await page.evaluate(() => window.__battleRuntime.setManualMode(true))
+  const sl13Initial = await page.evaluate(() => window.__battleRuntime.getSnapshot())
+  assert.equal(sl13Initial.heroEquipment.weaponShowId, 1)
+  const sl13Proof = await page.evaluate(() => {
+    const runtime = window.__battleRuntime
+    let sequence = 0
+    const snapshot = () => runtime.getSnapshot()
+    const enqueue = (type, skillId) => runtime.enqueue({
+      type,
+      ...(skillId ? { skillId } : {}),
+      actorId: 'hero-1',
+      sequence: ++sequence,
+      atTick: snapshot().tick + 1,
+    })
+    const livingMonsters = () => snapshot().actors.filter((actor) =>
+      actor.kind === 'monster' && actor.lifeState !== 'dead' && actor.lifeState !== 'removed')
+
+    const stops = []
+    for (let wave = 0; wave < 5; wave += 1) {
+      enqueue('press-right')
+      let guard = 0
+      while (livingMonsters().length === 0 && guard++ < 220) runtime.step(10)
+      if (livingMonsters().length === 0) throw new Error(`sl13 wave ${wave} did not spawn`)
+      stops.push({ wave, x: snapshot().actors[0].x, monsters: livingMonsters().length })
+      if (wave === 4) enqueue('release-right')
+      if (wave === 0) enqueue('press-skill', 'slz')
+      else enqueue('press-attack')
+      let attackGuard = 0
+      while (livingMonsters().length > 0 && attackGuard++ < 8) {
+        runtime.step(30)
+        if (livingMonsters().length > 0 && !snapshot().actors[0].attacking) enqueue('press-attack')
+      }
+      if (livingMonsters().length > 0) throw new Error(`sl13 wave ${wave} did not clear`)
+      runtime.step(2)
+    }
+    const beforeDoor = snapshot()
+    enqueue('press-left')
+    runtime.step(16)
+    enqueue('release-left')
+    runtime.step(1)
+    enqueue('press-interact')
+    runtime.step(1)
+    return {
+      stops,
+      beforeDoor,
+      final: snapshot(),
+      events: runtime.getEvents(),
+      finalHash: runtime.getHash(),
+    }
+  })
+
+  expectStopPositions('sl13', sl13Proof.stops, [1088.1, 1839.65, 2843.9, 3572.05, 4315.75])
+  assert.equal(sl13Proof.beforeDoor.level.doorVisible, true)
+  assert.equal(sl13Proof.final.level.cleared, true)
+  assert(sl13Proof.events.some((event) => event.type === 'skill-cast'))
+  assert(sl13Proof.events.some((event) => event.type === 'stage-cleared'))
+  const sl13File = path.join(artifactDir, 'sl13-stage-cleared.png')
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: sl13File })
+  assertNonBlankScreenshot(sl13File)
+
   return {
     storedFrontier: await page.evaluate(() => localStorage.getItem('zmxy3-remake.slot.v1.0.level')),
     hashBeforeClear: proof.hashBeforeClear,
@@ -311,15 +383,16 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
     eventCount: proof.events.length,
     sl12FinalHash: sl12Proof.finalHash,
     sl12EventCount: sl12Proof.events.length,
+    sl13FinalHash: sl13Proof.finalHash,
+    sl13EventCount: sl13Proof.events.length,
   }
 }
 
-function expectStopPositions(stops) {
-  const expected = [1147.4, 1809.7, 2813.95, 3790.2, 4661.55]
+function expectStopPositions(levelId, stops, expected) {
   assert.equal(stops.length, expected.length)
   stops.forEach((stop, index) => {
-    assert(Math.abs(stop.x - expected[index]) < 0.01, `sl12 stop ${index} resolved at ${stop.x}`)
-    assert(stop.monsters > 0, `sl12 stop ${index} spawned no monsters`)
+    assert(Math.abs(stop.x - expected[index]) < 0.01, `${levelId} stop ${index} resolved at ${stop.x}`)
+    assert(stop.monsters > 0, `${levelId} stop ${index} spawned no monsters`)
   })
 }
 
