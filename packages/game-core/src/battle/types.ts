@@ -10,6 +10,7 @@ import type { CombatCommand } from '../session/commands'
 import type { CommandRejectionReason } from '../session/commands'
 import type { CombatEvent } from '../session/events'
 import type { BattleWall } from './platform'
+import type { BattleProjectile } from './projectile'
 
 export interface BattleBounds {
   left: number
@@ -95,6 +96,8 @@ export type BattleEvent = Exclude<CombatEvent, { type: 'command-rejected' }>
   | { type: 'actor-spawned'; tick: number; actorId: ActorId; encounterId: string; contentId: string }
   | { type: 'door-revealed'; tick: number; levelId: string }
   | { type: 'stage-cleared'; tick: number; levelId: string }
+  | { type: 'projectile-spawned'; tick: number; projectile: BattleProjectile }
+  | { type: 'projectile-removed'; tick: number; projectileId: string }
 
 export interface BattleSnapshot {
   version: 1
@@ -103,4 +106,5 @@ export interface BattleSnapshot {
   randomState: number
   level: { id: string; doorVisible: boolean; cleared: boolean }
   actors: readonly CombatActorSnapshot[]
+  projectiles: readonly BattleProjectile[]
 }

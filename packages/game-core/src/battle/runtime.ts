@@ -37,6 +37,12 @@ import { createBattleCheckpoint, decodeBattleCheckpoint, type BattleCheckpoint }
 import { validateBattleDefinition } from './definition'
 import { advanceEncounter, createEncounterState, type BattleEncounterState, type EncounterEffect } from './encounter'
 import { resolveHorizontalMotion, resolveVerticalMotion } from './platform'
+import {
+  spawnBattleProjectile,
+  stepBattleProjectiles,
+  type BattleProjectile,
+  type BattleProjectileHit,
+} from './projectile'
 import type {
   BattleCommand,
   BattleDefinition,
@@ -122,6 +128,8 @@ export interface BattleRuntimeState {
   heroCombat: HeroCombatModel
   actors: ReturnType<BattleActorRegistry['exportState']>
   encounter: BattleEncounterState
+  projectiles: BattleProjectile[]
+  nextProjectileOrdinal: number
   queuedCommands: BattleCommand[]
   lastSeenSequences: { actorId: ActorId; sequence: number }[]
 }
@@ -138,6 +146,8 @@ export class BattleRuntime {
   private readonly actors: BattleActorRegistry
   private readonly monsterConfigs = new Map<ActorId, MonsterConfig>()
   private readonly encounter: BattleEncounterState
+  private projectiles: BattleProjectile[] = []
+  private nextProjectileOrdinal = 0
   private currentTick = 0
 
   constructor(input: BattleDefinition, restored?: BattleRuntimeState) {
@@ -165,6 +175,8 @@ export class BattleRuntime {
       this.heroCombat = restored.heroCombat
       this.actors = BattleActorRegistry.restore(restored.actors)
       this.encounter = restored.encounter
+      this.projectiles = restored.projectiles
+      this.nextProjectileOrdinal = restored.nextProjectileOrdinal
       this.currentTick = restored.tick
       this.queuedCommands.push(...restored.queuedCommands)
       for (const entry of restored.lastSeenSequences) {
@@ -297,6 +309,7 @@ export class BattleRuntime {
         cleared: this.encounter.cleared,
       },
       actors,
+      projectiles: this.projectiles,
     })
   }
 
@@ -323,6 +336,8 @@ export class BattleRuntime {
       heroCombat: this.heroCombat,
       actors: this.actors.exportState(),
       encounter: this.encounter,
+      projectiles: this.projectiles,
+      nextProjectileOrdinal: this.nextProjectileOrdinal,
       queuedCommands: this.queuedCommands,
       lastSeenSequences: [...this.lastSeenSequenceByActor]
         .sort(([left], [right]) => left.localeCompare(right))
@@ -335,6 +350,9 @@ export class BattleRuntime {
     if (!Number.isSafeInteger(state.tick) || state.tick < 0) throw new TypeError('battle runtime tick is invalid')
     if (!Number.isInteger(state.randomState) || state.randomState < 0 || state.randomState > 0xffffffff) {
       throw new TypeError('battle runtime random state is invalid')
+    }
+    if (!Number.isSafeInteger(state.nextProjectileOrdinal) || state.nextProjectileOrdinal < 0) {
+      throw new TypeError('battle runtime projectile ordinal is invalid')
     }
     for (const command of state.queuedCommands) {
       if (!Number.isSafeInteger(command.atTick) || command.atTick <= state.tick) {
@@ -475,7 +493,26 @@ export class BattleRuntime {
             airborne: false,
           })
         } else if (monsterEvent.type === 'attack-frame') {
-          pendingHeroHits.push(record.id)
+          if (!definition.behavior?.rangedAttack) pendingHeroHits.push(record.id)
+        } else if (monsterEvent.type === 'projectile-spawn') {
+          const projectile = spawnBattleProjectile({
+            id: `${record.id}:projectile:${String(this.nextProjectileOrdinal++).padStart(4, '0')}`,
+            kind: monsterEvent.projectile.kind,
+            sourceId: record.id,
+            attackId: record.swingEventId,
+            x: monsterEvent.x,
+            y: monsterEvent.y,
+            targetX: monsterEvent.targetX,
+            targetY: monsterEvent.targetY,
+            facing: monsterEvent.facing,
+            speedPxPerSecond: monsterEvent.projectile.speedPxPerSecond,
+            radius: monsterEvent.projectile.radius,
+            ttlMs: monsterEvent.projectile.ttlMs,
+            damage: definition.attackPower,
+            attackKind: definition.attackKind,
+          })
+          this.projectiles.push(projectile)
+          events.push({ type: 'projectile-spawned', tick: this.currentTick, projectile: cloneSerializable(projectile) })
         } else if (monsterEvent.type === 'death') {
           events.push({ type: 'actor-removed', tick: this.currentTick, actorId: record.id })
         }
@@ -483,6 +520,7 @@ export class BattleRuntime {
     }
 
     for (const actorId of pendingHeroHits) this.resolveMonsterHit(actorId, events)
+    this.resolveProjectileTick(events)
 
     const heroCombatEvents = updateHeroCombat(
       this.heroCombat,
@@ -571,6 +609,77 @@ export class BattleRuntime {
           tick: this.currentTick,
           actorId: this.definition.hero.id,
           sourceId: record.id,
+        })
+      }
+    }
+  }
+
+  private resolveProjectileTick(events: BattleEvent[]): void {
+    const heroCenter = actorCenter(
+      { x: this.heroState.x, y: this.heroState.vertical.y },
+      this.definition.hero.collisionOffset,
+    )
+    const result = stepBattleProjectiles(this.projectiles, {
+      ...heroCenter,
+      alive: this.heroCombat.state !== 'dead',
+    }, TICK_MS)
+    this.projectiles = result.remaining
+    for (const hit of result.hits) this.applyProjectileHit(hit, events)
+    for (const projectileId of result.removedIds) {
+      events.push({ type: 'projectile-removed', tick: this.currentTick, projectileId })
+    }
+  }
+
+  private applyProjectileHit(hit: BattleProjectileHit, events: BattleEvent[]): void {
+    const timeMs = this.currentTick * TICK_MS
+    if (isHeroDamageInvulnerable(this.heroCombat, timeMs)) return
+    const defense = hit.attackKind === 'physics'
+      ? this.definition.hero.def
+      : this.definition.hero.magicDefenseFraction
+    const mitigated = hit.attackKind === 'physics'
+      ? applyPhysicsDefense(hit.damage, this.definition.hero.def)
+      : applyMagicDefense(hit.damage, this.definition.hero.magicDefenseFraction)
+    const hpBefore = this.heroCombat.hp
+    const heroEvents = applyHeroDamage(this.heroCombat, {
+      sourceId: hit.sourceId,
+      attackId: hit.attackId,
+      damage: Math.max(1, Math.round(mitigated)),
+      knockbackX: 0,
+    }, timeMs, this.heroCombatConfig)
+    if (this.heroCombat.hp >= hpBefore) return
+    events.push({
+      type: 'hit-confirmed',
+      tick: this.currentTick,
+      sourceId: hit.sourceId,
+      targetId: this.definition.hero.id,
+      attackId: hit.attackId,
+    })
+    events.push({
+      type: 'damage-applied',
+      tick: this.currentTick,
+      sourceId: hit.sourceId,
+      targetId: this.definition.hero.id,
+      attackId: hit.attackId,
+      rawPower: hit.damage,
+      defense,
+      amount: hpBefore - this.heroCombat.hp,
+      remainingHp: this.heroCombat.hp,
+    })
+    for (const event of heroEvents) {
+      if (event.type === 'hurt') {
+        events.push({
+          type: 'actor-staggered',
+          tick: this.currentTick,
+          actorId: this.definition.hero.id,
+          untilTick: this.currentTick + Math.ceil(this.definition.hero.hurtDurationMs / TICK_MS),
+        })
+      } else if (event.type === 'death') {
+        this.stopHeroSimulationForDefeat()
+        events.push({
+          type: 'actor-defeated',
+          tick: this.currentTick,
+          actorId: this.definition.hero.id,
+          sourceId: hit.sourceId,
         })
       }
     }
