@@ -247,6 +247,30 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
   assert(sl11Loot.staff >= 1, `sl11 starter weapon was not persisted: ${sl11Loot.staff}`)
   assert(sl11Loot.armor >= 1, `sl11 starter armor was not persisted: ${sl11Loot.armor}`)
 
+  const crafted = await page.evaluate(() => {
+    window.__giveSoul(12)
+    return window.__shellMapCraftRecipe('starter_whg')
+  })
+  const craftedQuantity = crafted.inventory
+    .filter((stack) => stack.id === 'whg')
+    .reduce((sum, stack) => sum + stack.qty, 0)
+  const timberAfterCraft = crafted.inventory
+    .filter((stack) => stack.id === 'wptm')
+    .reduce((sum, stack) => sum + stack.qty, 0)
+  assert.equal(crafted.soul, 0, 'starter forge did not deduct 20 soul')
+  assert.equal(timberAfterCraft, sl11Loot.timber - 3, 'starter forge did not deduct three timber')
+  assert.equal(craftedQuantity, 1, 'starter forge product did not enter the bag')
+  const persistedCraft = await page.evaluate(() => {
+    const save = JSON.parse(localStorage.getItem('zmxy3-remake.slot.v1.0')).save
+    return {
+      soul: save.soul,
+      whg: save.inventory.stacks
+        .filter((stack) => stack.item.id === 'whg')
+        .reduce((sum, stack) => sum + stack.qty, 0),
+    }
+  })
+  assert.deepEqual(persistedCraft, { soul: 0, whg: 1 })
+
   assert.equal(await page.evaluate(() => window.__shellMapEnterLevel(1)), true)
   await page.waitForFunction(
     () => window.__battleRuntime?.getSnapshot().level.id === 'sl12',
@@ -426,6 +450,7 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
     finalHash: proof.finalHash,
     eventCount: proof.events.length,
     sl11Loot,
+    crafted: persistedCraft,
     sl12FinalHash: sl12Proof.finalHash,
     sl12EventCount: sl12Proof.events.length,
     sl13FinalHash: sl13Proof.finalHash,
