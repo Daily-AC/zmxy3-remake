@@ -56,7 +56,7 @@ describe('sl11 encounter state', () => {
     expect(advanceEncounter(state, level, context({ tick: 90, hero: { x: 100, y: -1900 } }))).toEqual([
       {
         type: 'activate-boss',
-        encounterId: 'continuous-0:boss',
+        encounterId: 'continuous-0-boss',
         speciesId: 'monster30',
         x: 750,
         y: -1872.45,
