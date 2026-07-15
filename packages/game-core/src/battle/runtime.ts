@@ -27,7 +27,6 @@ import {
 } from '../hero/heroSim'
 import { advanceMonster, initMonster, type MonsterConfig, type MonsterState } from '../monster/monsterSim'
 import { SeededRandom } from '../random/seededRandom'
-import type { CommandRejectionReason } from '../session/commands'
 import { toDeterministicValue, type DeterministicValue } from '../session/checkpoint'
 import { cloneSerializable } from '../session/snapshot'
 import type { ActorId, ActorLifeState, CombatActorSnapshot } from '../session/types'
@@ -43,8 +42,17 @@ import {
   type BattleProjectile,
   type BattleProjectileHit,
 } from './projectile'
+import {
+  castBattleSkill,
+  consumeBattleSkillHit,
+  createBattleSkillState,
+  finishExpiredBattleSkill,
+  type ActiveBattleSkill,
+  type BattleSkillState,
+} from './skill'
 import type {
   BattleCommand,
+  BattleCommandRejectionReason,
   BattleDefinition,
   BattleEvent,
   BattleMonsterDefinition,
@@ -61,7 +69,7 @@ const edgeForCommand: Partial<Record<BattleCommand['type'], Partial<HeroEdges>>>
 }
 
 function mergeCommandEdge(edges: HeroEdges, type: BattleCommand['type']): void {
-  if (type === 'press-interact') return
+  if (type === 'press-interact' || type === 'press-skill') return
   if (type === 'press-left' || type === 'release-left') {
     edges.pressLeft = false
     edges.releaseLeft = false
@@ -126,6 +134,7 @@ export interface BattleRuntimeState {
   randomState: number
   heroSimulation: HeroState
   heroCombat: HeroCombatModel
+  heroSkill: BattleSkillState
   actors: ReturnType<BattleActorRegistry['exportState']>
   encounter: BattleEncounterState
   projectiles: BattleProjectile[]
@@ -143,6 +152,7 @@ export class BattleRuntime {
   private readonly heroCombatConfig: HeroCombatConfig
   private readonly heroState: HeroState
   private readonly heroCombat: HeroCombatModel
+  private readonly heroSkill: BattleSkillState
   private readonly actors: BattleActorRegistry
   private readonly monsterConfigs = new Map<ActorId, MonsterConfig>()
   private readonly encounter: BattleEncounterState
@@ -173,6 +183,7 @@ export class BattleRuntime {
       this.assertRestoredState(restored)
       this.heroState = restored.heroSimulation
       this.heroCombat = restored.heroCombat
+      this.heroSkill = restored.heroSkill
       this.actors = BattleActorRegistry.restore(restored.actors)
       this.encounter = restored.encounter
       this.projectiles = restored.projectiles
@@ -194,6 +205,7 @@ export class BattleRuntime {
       this.heroState = initHeroState(this.heroConfig, this.definition.level.heroSpawn.x)
       this.heroState.vertical.y = this.definition.level.heroSpawn.y
       this.heroCombat = createHeroCombat(this.heroCombatConfig)
+      this.heroSkill = createBattleSkillState(this.definition.hero.maxMp)
       this.actors = new BattleActorRegistry()
       this.encounter = createEncounterState(this.definition.level)
     }
@@ -215,11 +227,12 @@ export class BattleRuntime {
     const events: BattleEvent[] = []
     for (let index = 0; index < ticks; index += 1) {
       this.currentTick += 1
+      finishExpiredBattleSkill(this.heroSkill, this.currentTick)
       const edges: HeroEdges = { ...NO_EDGES }
       let interactPressed = false
       while (this.queuedCommands[0]?.atTick === this.currentTick) {
         const command = this.queuedCommands.shift()!
-        const reason = this.applyCommand(command, edges)
+        const reason = this.applyCommand(command, edges, events)
         if (reason) {
           events.push({ type: 'command-rejected', tick: this.currentTick, command, reason })
         } else if (command.type === 'press-interact') {
@@ -227,7 +240,7 @@ export class BattleRuntime {
         }
       }
 
-      if (this.heroCombat.state !== 'dead') {
+      if (this.heroCombat.state !== 'dead' && !this.heroSkill.active) {
         const previousAttackId = this.heroState.attackId
         advanceHero(this.heroState, edges, TICK_MS, this.heroConfig)
         if (this.heroState.attackId !== previousAttackId) {
@@ -250,7 +263,7 @@ export class BattleRuntime {
         random: () => this.random.next(),
       })
       this.applyEncounterEffects(encounterEffects, events)
-      this.resolveCombatTick(events)
+      this.resolveCombatTick(events, consumeBattleSkillHit(this.heroSkill, this.currentTick))
     }
     return events
   }
@@ -263,15 +276,15 @@ export class BattleRuntime {
       x: this.heroState.x,
       y: this.heroState.vertical.y,
       facing: this.heroState.facing,
-      action: this.heroState.action,
+      action: this.heroSkill.active?.action ?? this.heroState.action,
       hp: this.heroCombat.hp,
       maxHp: this.heroCombat.maxHp,
       lifeState: this.heroCombat.state,
-      comboStage: this.heroState.combo.stage || null,
+      comboStage: this.heroSkill.active ? null : this.heroState.combo.stage || null,
       statuses: this.heroCombat.meterInvulnerableUntilMs === undefined ? [] : ['meter-invulnerable'],
       knockbackVelocityX: this.heroCombat.knockbackVelocityX,
       attackId: this.heroState.attackId,
-      attacking: this.heroState.attacking,
+      attacking: this.heroState.attacking || this.heroSkill.active !== null,
     }]
 
     for (const record of this.actors.records()) {
@@ -308,6 +321,12 @@ export class BattleRuntime {
         doorVisible: this.encounter.doorVisible,
         cleared: this.encounter.cleared,
       },
+      heroSkill: {
+        mp: this.heroSkill.mp,
+        maxMp: this.heroSkill.maxMp,
+        cooldownUntilTick: this.heroSkill.cooldownUntilTick,
+        activeSkillId: this.heroSkill.active?.skillId ?? null,
+      },
       actors,
       projectiles: this.projectiles,
     })
@@ -334,6 +353,7 @@ export class BattleRuntime {
       randomState: this.random.getState(),
       heroSimulation: this.heroState,
       heroCombat: this.heroCombat,
+      heroSkill: this.heroSkill,
       actors: this.actors.exportState(),
       encounter: this.encounter,
       projectiles: this.projectiles,
@@ -366,13 +386,39 @@ export class BattleRuntime {
     }
   }
 
-  private applyCommand(command: BattleCommand, edges: HeroEdges): CommandRejectionReason | null {
+  private applyCommand(
+    command: BattleCommand,
+    edges: HeroEdges,
+    events: BattleEvent[],
+  ): BattleCommandRejectionReason | null {
     if (command.actorId !== this.definition.hero.id) return 'unknown-actor'
     const lastSeenSequence = this.lastSeenSequenceByActor.get(command.actorId) ?? -1
     if (command.sequence <= lastSeenSequence) return 'stale-sequence'
     this.lastSeenSequenceByActor.set(command.actorId, command.sequence)
     if (this.heroCombat.state === 'dead') return 'dead'
-    if (command.type === 'press-attack' && this.heroState.attacking) return 'busy'
+    if (command.type === 'press-skill') {
+      const definition = this.definition.hero.skills[command.skillId]
+      if (!definition) return 'unknown-skill'
+      if (this.heroState.attacking) return 'busy'
+      const attackId = this.heroState.attackId + 1
+      const result = castBattleSkill(this.heroSkill, definition, this.currentTick, attackId)
+      if (!result.ok) return result.reason
+      this.heroState.attackId = attackId
+      clearHeroInputForLock(this.heroState)
+      events.push({
+        type: 'skill-cast',
+        tick: this.currentTick,
+        sourceId: this.definition.hero.id,
+        skillId: definition.id,
+        action: definition.action,
+        attackId,
+        mpBefore: result.mpBefore,
+        mpAfter: result.mpAfter,
+        cooldownUntilTick: this.heroSkill.cooldownUntilTick,
+      })
+      return null
+    }
+    if (command.type === 'press-attack' && (this.heroState.attacking || this.heroSkill.active)) return 'busy'
     mergeCommandEdge(edges, command.type)
     return null
   }
@@ -404,21 +450,31 @@ export class BattleRuntime {
     }
   }
 
-  private resolveCombatTick(events: BattleEvent[]): void {
+  private resolveCombatTick(events: BattleEvent[], skillHit: ActiveBattleSkill | null): void {
     const heroCenter = actorCenter(
       { x: this.heroState.x, y: this.heroState.vertical.y },
       this.definition.hero.collisionOffset,
     )
     const heroAction = this.heroState.action as NormalAttackHit
-    const heroAttackSpec = this.heroCombat.state !== 'dead' && this.heroState.attacking
+    const skillDefinition = skillHit ? this.definition.hero.skills[skillHit.skillId] : undefined
+    const normalAttackSpec = this.heroCombat.state !== 'dead' && this.heroState.attacking
       ? this.definition.hero.normalAttacks[heroAction]
       : undefined
-    const heroRawPower = heroAttackSpec
+    const heroAttackSpec = skillDefinition
+      ? {
+          action: skillDefinition.action,
+          hitFrameFractions: [0],
+          hitbox: skillDefinition.hitbox,
+        }
+      : normalAttackSpec
+    const heroAttackId = skillHit?.attackId ?? this.heroState.attackId
+    const heroAttackKind = skillDefinition?.attackKind ?? 'physics'
+    const heroRawPower = skillDefinition?.damage ?? (normalAttackSpec
       ? Math.max(1, Math.round(calculateNormalAttackPower(heroAction, this.definition.hero.atk, {
           critChance: this.definition.hero.critChance,
           random: () => this.random.next(),
         })))
-      : null
+      : null)
     const heroAttackBox = heroAttackSpec
       ? resolveAttackHitbox(heroAttackSpec, heroCenter, this.heroState.facing)
       : null
@@ -430,9 +486,14 @@ export class BattleRuntime {
       const monsterCenter = actorCenter(state, definition.collisionOffset)
       const incomingHit = state.mode !== 'dead' && state.mode !== 'gone'
         && heroAttackBox && heroRawPower !== null
-        && !state.resolvedAttackIds.includes(this.heroState.attackId)
+        && !state.resolvedAttackIds.includes(heroAttackId)
         && overlaps(heroAttackBox, hurtboxAt(monsterCenter, definition.hurtbox))
-        ? { attackId: this.heroState.attackId, damage: heroRawPower }
+        ? {
+            attackId: heroAttackId,
+            damage: heroAttackKind === 'physics'
+              ? heroRawPower
+              : applyMagicDefense(heroRawPower, definition.stats.mDef ?? 0) + definition.stats.def,
+          }
         : null
       const hpBefore = state.hp
       const modeBefore = state.mode
@@ -459,7 +520,9 @@ export class BattleRuntime {
           attackId: incomingHit.attackId,
           rawPower: heroRawPower!,
           defense: definition.stats.def,
-          amount: applyPhysicsDefense(heroRawPower!, definition.stats.def),
+          amount: heroAttackKind === 'physics'
+            ? applyPhysicsDefense(heroRawPower!, definition.stats.def)
+            : applyMagicDefense(heroRawPower!, definition.stats.mDef ?? 0),
           remainingHp: state.hp,
         })
         if (state.mode === 'dead' && modeBefore !== 'dead') {
@@ -691,6 +754,7 @@ export class BattleRuntime {
     this.heroState.combo.elapsedMs = 0
     this.heroState.airAttack = null
     this.heroState.attacking = false
+    this.heroSkill.active = null
     this.heroState.action = 'dead'
   }
 
@@ -700,5 +764,8 @@ export class BattleRuntime {
     fresh.vertical.y = this.definition.level.heroSpawn.y
     fresh.attackId = attackId
     Object.assign(this.heroState, fresh)
+    this.heroSkill.mp = this.heroSkill.maxMp
+    this.heroSkill.cooldownUntilTick = 0
+    this.heroSkill.active = null
   }
 }

@@ -13,6 +13,8 @@ export function makeBattleDefinition(): BattleDefinition {
     provenance: session.provenance,
     hero: {
       ...session.hero,
+      maxMp: 50,
+      skills: {},
       spawn: { x: 100, y: 400 },
       groundY: 400,
       minX: 0,

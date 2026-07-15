@@ -11,6 +11,8 @@ import type { CommandRejectionReason } from '../session/commands'
 import type { CombatEvent } from '../session/events'
 import type { BattleWall } from './platform'
 import type { BattleProjectile } from './projectile'
+import type { BattleSkillDefinition } from './skill'
+import type { BattleSkillState } from './skill'
 
 export interface BattleBounds {
   left: number
@@ -73,13 +75,18 @@ export interface BattleLevelDefinition {
   door: { x: number; y: number; width: number; height: number }
 }
 
+export type BattleHeroDefinition = HeroCombatDefinition & {
+  maxMp: number
+  skills: Record<string, BattleSkillDefinition>
+}
+
 export interface BattleDefinition {
   version: 1
   contentVersion: string
   tickRate: 30
   seed: number
   provenance: readonly RuleProvenance[]
-  hero: HeroCombatDefinition
+  hero: BattleHeroDefinition
   monsters: Record<string, BattleMonsterDefinition>
   level: BattleLevelDefinition
 }
@@ -89,10 +96,33 @@ export type BattleCommand = CombatCommand | {
   actorId: ActorId
   sequence: number
   atTick: number
+} | {
+  type: 'press-skill'
+  skillId: string
+  actorId: ActorId
+  sequence: number
+  atTick: number
 }
 
+export type BattleCommandRejectionReason = CommandRejectionReason
+  | 'unknown-skill'
+  | 'not-learned'
+  | 'insufficient-resource'
+  | 'cooldown'
+
 export type BattleEvent = Exclude<CombatEvent, { type: 'command-rejected' }>
-  | { type: 'command-rejected'; tick: number; command: BattleCommand; reason: CommandRejectionReason }
+  | { type: 'command-rejected'; tick: number; command: BattleCommand; reason: BattleCommandRejectionReason }
+  | {
+      type: 'skill-cast'
+      tick: number
+      sourceId: ActorId
+      skillId: string
+      action: string
+      attackId: number
+      mpBefore: number
+      mpAfter: number
+      cooldownUntilTick: number
+    }
   | { type: 'actor-spawned'; tick: number; actorId: ActorId; encounterId: string; contentId: string }
   | { type: 'door-revealed'; tick: number; levelId: string }
   | { type: 'stage-cleared'; tick: number; levelId: string }
@@ -105,6 +135,7 @@ export interface BattleSnapshot {
   tick: number
   randomState: number
   level: { id: string; doorVisible: boolean; cleared: boolean }
+  heroSkill: Pick<BattleSkillState, 'mp' | 'maxMp' | 'cooldownUntilTick'> & { activeSkillId: string | null }
   actors: readonly CombatActorSnapshot[]
   projectiles: readonly BattleProjectile[]
 }

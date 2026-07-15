@@ -36,6 +36,7 @@ const WEAPON_TEXTURE = 'runtime-role1-equip0'
 const LOOPING_ACTIONS = new Set(['wait', 'wait2', 'walk', 'run'])
 const MONSTER_LOOPING_ACTIONS = new Set(['wait', 'walk'])
 const TRANSFER_FRAME_COUNT = 10
+const SLZ_EFFECT_FRAME_COUNT = 6
 const roleData = role1Raw as RoleData
 const monsterData: Record<string, RoleData> = {
   monster3: monster3Raw as RoleData,
@@ -55,12 +56,13 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private accumulatorMs = 0
   private readonly actorViews = new Map<string, ActorView>()
   private readonly projectileViews = new Map<string, Phaser.GameObjects.Image>()
-  private keys!: Record<'left' | 'right' | 'jump' | 'attack' | 'interact', Phaser.Input.Keyboard.Key>
+  private keys!: Record<'left' | 'right' | 'jump' | 'attack' | 'interact' | 'skill1', Phaser.Input.Keyboard.Key>
   private weapon!: Phaser.GameObjects.Sprite
   private portal?: Phaser.GameObjects.Container
   private heroHud!: RoleInfoHud
   private status!: Phaser.GameObjects.Text
   private respawnNotice?: Phaser.GameObjects.Text
+  private skillEffect?: Phaser.GameObjects.Sprite
   private eventLog: BattleEvent[] = []
   private campaignIndex = 0
   private activeSlot: SlotId | null = null
@@ -79,6 +81,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.projectileViews.clear()
     this.portal = undefined
     this.respawnNotice = undefined
+    this.skillEffect = undefined
     this.campaignIndex = data?.campaignIndex ?? 0
     this.activeSlot = data?.activeSlot ?? asSlotId(this.registry.get(REG.activeSlot))
     this.clearTransitionScheduled = false
@@ -109,10 +112,15 @@ export class BattleRuntimeScene extends Phaser.Scene {
     for (let frame = 1; frame <= TRANSFER_FRAME_COUNT; frame += 1) {
       this.load.image(`runtime-transfer-${frame}`, `assets/extracted/effects/transferwind_${frame}.png`)
     }
+    for (let frame = 1; frame <= SLZ_EFFECT_FRAME_COUNT; frame += 1) {
+      const label = String(frame).padStart(2, '0')
+      this.load.image(`runtime-slz-${label}`, `assets/extracted/role1-effects/hit6/${label}.png`)
+    }
     this.load.audio('runtime-hit12', 'assets/audio/Role1_hit1AndHit2.mp3')
     this.load.audio('runtime-hit34', 'assets/audio/Role1_hit3AndHit4.mp3')
     this.load.audio('runtime-hit5', 'assets/audio/Role1_hit5.mp3')
     this.load.audio('runtime-mon-hurt', 'assets/audio/BeattackByRole1.mp3')
+    this.load.audio('runtime-slz-sound', 'assets/audio/Role1_hit6.mp3')
   }
 
   create(): void {
@@ -142,6 +150,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
         jump: this.keys.jump.isDown,
         attack: this.keys.attack.isDown,
         interact: this.keys.interact.isDown,
+        skillId: this.keys.skill1.isDown ? 'slz' : null,
       })) this.runtime.enqueue(command)
       this.advanceRuntime()
     }
@@ -159,6 +168,16 @@ export class BattleRuntimeScene extends Phaser.Scene {
         frames: Array.from({ length: TRANSFER_FRAME_COUNT }, (_, index) => ({ key: `runtime-transfer-${index + 1}` })),
         frameRate: 18,
         repeat: -1,
+      })
+    }
+    if (!this.anims.exists('runtime-slz-effect')) {
+      this.anims.create({
+        key: 'runtime-slz-effect',
+        frames: Array.from({ length: SLZ_EFFECT_FRAME_COUNT }, (_, index) => ({
+          key: `runtime-slz-${String(index + 1).padStart(2, '0')}`,
+        })),
+        frameRate: 24,
+        repeat: 0,
       })
     }
   }
@@ -215,6 +234,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
       jump: Phaser.Input.Keyboard.KeyCodes.K,
       attack: Phaser.Input.Keyboard.KeyCodes.J,
       interact: Phaser.Input.Keyboard.KeyCodes.UP,
+      skill1: Phaser.Input.Keyboard.KeyCodes.Y,
     }) as typeof this.keys
   }
 
@@ -232,14 +252,15 @@ export class BattleRuntimeScene extends Phaser.Scene {
       this.actorViews.delete(id)
     }
     this.renderProjectiles()
+    this.positionSkillEffect()
     this.renderPortal()
     const hero = this.snapshot.actors[0]
     this.heroHud.update({
       level: 1,
       hp: hero.hp,
       maxHp: hero.maxHp,
-      mp: 0,
-      maxMp: 1,
+      mp: this.snapshot.heroSkill.mp,
+      maxMp: this.snapshot.heroSkill.maxMp,
       exp: 0,
       expToNext: 1,
       atk: this.definition.hero.atk,
@@ -318,6 +339,8 @@ export class BattleRuntimeScene extends Phaser.Scene {
         this.sound.play(key, { volume: 0.7 })
       } else if (event.type === 'damage-applied' && event.sourceId === HERO_ID) {
         this.sound.play('runtime-mon-hurt', { volume: 0.6 })
+      } else if (event.type === 'skill-cast' && event.sourceId === HERO_ID) {
+        this.presentSkillCast(event.skillId)
       } else if (event.type === 'actor-defeated' && event.actorId === HERO_ID) {
         this.showRespawnNotice()
       } else if (event.type === 'actor-respawned' && event.actorId === HERO_ID) {
@@ -334,6 +357,30 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.respawnNotice = this.add.text(480, 174, '魂归原位', {
       fontSize: '42px', color: '#f4e5ca', stroke: '#361b16', strokeThickness: 7,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(200)
+  }
+
+  private presentSkillCast(skillId: string): void {
+    if (skillId !== 'slz') return
+    this.sound.play('runtime-slz-sound', { volume: 0.65 })
+    this.skillEffect?.destroy()
+    this.skillEffect = this.add.sprite(0, 0, 'runtime-slz-01').setDepth(14).play('runtime-slz-effect')
+    this.skillEffect.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      this.skillEffect?.destroy()
+      this.skillEffect = undefined
+    })
+    this.positionSkillEffect()
+  }
+
+  private positionSkillEffect(): void {
+    if (!this.skillEffect) return
+    const hero = this.snapshot.actors[0]
+    const facing = hero.facing
+    this.skillEffect
+      .setPosition(
+        hero.x + this.definition.hero.collisionOffset.x + facing * 30,
+        hero.y + this.definition.hero.collisionOffset.y + 40,
+      )
+      .setFlipX(facing === 1)
   }
 
   private finishStage(): void {
@@ -376,6 +423,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
     delete window.__battleRuntime
     this.portal?.destroy(true)
     this.respawnNotice?.destroy()
+    this.skillEffect?.destroy()
     this.heroHud.container.destroy(true)
   }
 }

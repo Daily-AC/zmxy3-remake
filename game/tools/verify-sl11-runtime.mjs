@@ -146,8 +146,14 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
     const runtime = window.__battleRuntime
     let sequence = 0
     const snapshot = () => runtime.getSnapshot()
-    const enqueue = (type) => {
-      runtime.enqueue({ type, actorId: 'hero-1', sequence: ++sequence, atTick: snapshot().tick + 1 })
+    const enqueue = (type, skillId) => {
+      runtime.enqueue({
+        type,
+        ...(skillId ? { skillId } : {}),
+        actorId: 'hero-1',
+        sequence: ++sequence,
+        atTick: snapshot().tick + 1,
+      })
     }
 
     runtime.step(1)
@@ -163,10 +169,10 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
     const jumpedY = snapshot().actors[0].y
     runtime.step(40)
 
-    for (let attempt = 0; attempt < 4 && !snapshot().level.doorVisible; attempt += 1) {
-      enqueue('press-attack')
-      runtime.step(30)
-    }
+    enqueue('press-skill', 'slz')
+    runtime.step(30)
+    enqueue('press-attack')
+    runtime.step(1)
     runtime.step(60)
     const beforeDoor = snapshot()
     const hashBeforeClear = runtime.getHash()
@@ -193,6 +199,7 @@ async function runProductionRuntime(page, origin, npcServer, socialServer, error
   assert.equal(proof.final.level.cleared, true)
   assert.match(proof.finalHash, /^[0-9a-f]{8}$/)
   assert(proof.events.some((event) => event.type === 'attack-started'))
+  assert(proof.events.some((event) => event.type === 'skill-cast' && event.skillId === 'slz'))
   assert(proof.events.some((event) => event.type === 'actor-defeated'))
   assert(proof.events.some((event) => event.type === 'door-revealed'))
   assert(proof.events.some((event) => event.type === 'stage-cleared'))

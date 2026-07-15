@@ -49,7 +49,7 @@ const NormalAttacksSchema = z.object({
   }
 })
 
-export const HeroCombatDefinitionSchema = z.object({
+export const HeroCombatDefinitionBaseSchema = z.object({
   id: actorId,
   contentId: ContentIdSchema,
   spawn: PointSchema,
@@ -68,11 +68,18 @@ export const HeroCombatDefinitionSchema = z.object({
   hurtbox: BoxSizeSchema,
   hurtDurationMs: nonNegativeNumber,
   respawnDelayMs: nonNegativeNumber,
-}).strict().superRefine((hero, context) => {
+}).strict()
+
+export function refineHeroCombatBounds(
+  hero: { minX: number; maxX: number },
+  context: z.RefinementCtx,
+): void {
   if (hero.minX > hero.maxX) {
     context.addIssue({ code: 'custom', message: 'maxX must be greater than or equal to minX', path: ['maxX'] })
   }
-})
+}
+
+export const HeroCombatDefinitionSchema = HeroCombatDefinitionBaseSchema.superRefine(refineHeroCombatBounds)
 
 const MonsterStatsSchema = z.object({
   hp: positiveNumber,

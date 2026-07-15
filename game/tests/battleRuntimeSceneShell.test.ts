@@ -14,15 +14,20 @@ describe('BattleRuntimeScene shell boundary', () => {
 
   it('maps keyboard edges to ordered future-tick battle commands', () => {
     const input = new BattleRuntimeInput()
-    expect(input.sample('hero-1', 4, { left: false, right: true, jump: false, attack: true, interact: false }))
+    expect(input.sample('hero-1', 4, {
+      left: false, right: true, jump: false, attack: true, interact: false, skillId: 'slz',
+    }))
       .toEqual([
         { actorId: 'hero-1', sequence: 1, atTick: 4, type: 'press-right' },
         { actorId: 'hero-1', sequence: 2, atTick: 4, type: 'press-attack' },
+        { actorId: 'hero-1', sequence: 3, atTick: 4, type: 'press-skill', skillId: 'slz' },
       ])
-    expect(input.sample('hero-1', 5, { left: false, right: false, jump: false, attack: false, interact: true }))
+    expect(input.sample('hero-1', 5, {
+      left: false, right: false, jump: false, attack: false, interact: true, skillId: null,
+    }))
       .toEqual([
-        { actorId: 'hero-1', sequence: 3, atTick: 5, type: 'release-right' },
-        { actorId: 'hero-1', sequence: 4, atTick: 5, type: 'press-interact' },
+        { actorId: 'hero-1', sequence: 4, atTick: 5, type: 'release-right' },
+        { actorId: 'hero-1', sequence: 5, atTick: 5, type: 'press-interact' },
       ])
   })
 
