@@ -56,6 +56,13 @@ import {
   type ActiveBattleSkill,
   type BattleSkillState,
 } from './skill'
+import {
+  createBattleLootEntity,
+  BATTLE_AUTHORITY_ID,
+  resolveBattleLootPickup,
+  stepBattleLoot,
+  type BattleLootEntity,
+} from './loot'
 import type {
   BattleCommand,
   BattleCommandRejectionReason,
@@ -145,6 +152,8 @@ export interface BattleRuntimeState {
   encounter: BattleEncounterState
   projectiles: BattleProjectile[]
   nextProjectileOrdinal: number
+  loot: BattleLootEntity[]
+  nextLootOrdinal: number
   queuedCommands: BattleCommand[]
   lastSeenSequences: { actorId: ActorId; sequence: number }[]
 }
@@ -164,6 +173,8 @@ export class BattleRuntime {
   private readonly encounter: BattleEncounterState
   private projectiles: BattleProjectile[] = []
   private nextProjectileOrdinal = 0
+  private loot: BattleLootEntity[] = []
+  private nextLootOrdinal = 0
   private currentTick = 0
 
   constructor(input: BattleDefinition, restored?: BattleRuntimeState) {
@@ -198,6 +209,8 @@ export class BattleRuntime {
       this.encounter = restored.encounter
       this.projectiles = restored.projectiles
       this.nextProjectileOrdinal = restored.nextProjectileOrdinal
+      this.loot = restored.loot
+      this.nextLootOrdinal = restored.nextLootOrdinal
       this.currentTick = restored.tick
       this.queuedCommands.push(...restored.queuedCommands)
       for (const entry of restored.lastSeenSequences) {
@@ -274,6 +287,7 @@ export class BattleRuntime {
       })
       this.applyEncounterEffects(encounterEffects, events)
       this.resolveCombatTick(events, consumeBattleSkillHit(this.heroSkill, this.currentTick))
+      this.resolveLootTick(events)
     }
     return events
   }
@@ -340,6 +354,7 @@ export class BattleRuntime {
       heroEquipment: this.definition.hero.equipment,
       actors,
       projectiles: this.projectiles,
+      loot: this.loot,
     })
   }
 
@@ -369,6 +384,8 @@ export class BattleRuntime {
       encounter: this.encounter,
       projectiles: this.projectiles,
       nextProjectileOrdinal: this.nextProjectileOrdinal,
+      loot: this.loot,
+      nextLootOrdinal: this.nextLootOrdinal,
       queuedCommands: this.queuedCommands,
       lastSeenSequences: [...this.lastSeenSequenceByActor]
         .sort(([left], [right]) => left.localeCompare(right))
@@ -384,6 +401,9 @@ export class BattleRuntime {
     }
     if (!Number.isSafeInteger(state.nextProjectileOrdinal) || state.nextProjectileOrdinal < 0) {
       throw new TypeError('battle runtime projectile ordinal is invalid')
+    }
+    if (!Number.isSafeInteger(state.nextLootOrdinal) || state.nextLootOrdinal < 0) {
+      throw new TypeError('battle runtime loot ordinal is invalid')
     }
     for (const command of state.queuedCommands) {
       if (!Number.isSafeInteger(command.atTick) || command.atTick <= state.tick) {
@@ -402,10 +422,56 @@ export class BattleRuntime {
     edges: HeroEdges,
     events: BattleEvent[],
   ): BattleCommandRejectionReason | null {
-    if (command.actorId !== this.definition.hero.id) return 'unknown-actor'
+    const expectedActorId = command.type === 'resolve-loot-pickup'
+      ? BATTLE_AUTHORITY_ID
+      : this.definition.hero.id
+    if (command.actorId !== expectedActorId) return 'unknown-actor'
     const lastSeenSequence = this.lastSeenSequenceByActor.get(command.actorId) ?? -1
     if (command.sequence <= lastSeenSequence) return 'stale-sequence'
     this.lastSeenSequenceByActor.set(command.actorId, command.sequence)
+    if (command.type === 'resolve-loot-pickup') {
+      const entity = this.loot.find((loot) => loot.id === command.lootEntityId)
+      if (!entity) return 'unknown-loot'
+      const restore = command.resourceRestore ?? { hp: 0, mp: 0 }
+      if (
+        !Number.isFinite(restore.hp) || restore.hp < 0
+        || !Number.isFinite(restore.mp) || restore.mp < 0
+        || (command.acceptedQuantity === 0 && (restore.hp > 0 || restore.mp > 0))
+      ) return 'invalid-loot-resolution'
+      const lootId = entity.lootId
+      const result = resolveBattleLootPickup(
+        this.loot,
+        command,
+        this.currentTick,
+        this.definition.level.lootPhysics?.retryDelayTicks ?? 1,
+      )
+      if (!result) return 'invalid-loot-resolution'
+      events.push({
+        type: 'loot-pickup-resolved',
+        tick: this.currentTick,
+        lootEntityId: command.lootEntityId,
+        requestId: command.requestId,
+        lootId,
+        acceptedQuantity: result.acceptedQuantity,
+        remainingQuantity: result.remainingQuantity,
+      })
+      if (restore.hp > 0 || restore.mp > 0) {
+        const hpBefore = this.heroCombat.hp
+        const mpBefore = this.heroSkill.mp
+        this.heroCombat.hp = Math.min(this.heroCombat.maxHp, this.heroCombat.hp + restore.hp)
+        this.heroSkill.mp = Math.min(this.heroSkill.maxMp, this.heroSkill.mp + restore.mp)
+        events.push({
+          type: 'hero-resource-restored',
+          tick: this.currentTick,
+          sourceLootEntityId: command.lootEntityId,
+          hpBefore,
+          hpAfter: this.heroCombat.hp,
+          mpBefore,
+          mpAfter: this.heroSkill.mp,
+        })
+      }
+      return null
+    }
     if (this.heroCombat.state === 'dead') return 'dead'
     if (command.type === 'press-skill') {
       const definition = this.definition.hero.skills[command.skillId]
@@ -543,6 +609,7 @@ export class BattleRuntime {
             actorId: record.id,
             sourceId: this.definition.hero.id,
           })
+          this.spawnLoot(record, definition, events)
         } else if (state.mode === 'hurt') {
           events.push({
             type: 'actor-staggered',
@@ -617,6 +684,66 @@ export class BattleRuntime {
     }
 
     for (const id of this.actors.removeGone()) this.monsterConfigs.delete(id)
+  }
+
+  private spawnLoot(
+    record: ReturnType<BattleActorRegistry['records']>[number],
+    definition: BattleMonsterDefinition,
+    events: BattleEvent[],
+  ): void {
+    const physics = this.definition.level.lootPhysics
+    if (!physics) return
+    for (const roll of definition.loot ?? []) {
+      if (this.random.next() >= roll.chance) continue
+      const totalWeight = roll.choices.reduce((sum, choice) => sum + choice.weight, 0)
+      let target = roll.choices.length === 1 ? 0 : this.random.next() * totalWeight
+      let choice = roll.choices[roll.choices.length - 1]
+      for (const candidate of roll.choices) {
+        target -= candidate.weight
+        if (target < 0) {
+          choice = candidate
+          break
+        }
+      }
+      const span = choice.quantity.max - choice.quantity.min + 1
+      const quantity = span === 1
+        ? choice.quantity.min
+        : choice.quantity.min + Math.floor(this.random.next() * span)
+      const loot = createBattleLootEntity({
+        id: `${this.definition.level.id}:loot:${String(this.nextLootOrdinal++).padStart(4, '0')}`,
+        lootId: choice.lootId,
+        sourceActorId: record.id,
+        quantity,
+        motion: choice.motion,
+        x: record.simulation.x,
+        y: record.simulation.y + physics.spawnOffsetY,
+      })
+      this.loot.push(loot)
+      events.push({ type: 'loot-spawned', tick: this.currentTick, loot: cloneSerializable(loot) })
+    }
+  }
+
+  private resolveLootTick(events: BattleEvent[]): void {
+    const physics = this.definition.level.lootPhysics
+    if (!physics || this.loot.length === 0) return
+    const requests = stepBattleLoot(
+      this.loot,
+      {
+        x: this.heroState.x,
+        y: this.heroState.vertical.y,
+        alive: this.heroCombat.state !== 'dead',
+      },
+      this.currentTick,
+      physics,
+      (query) => {
+        const hit = resolveVerticalMotion(this.definition.level.walls, query)
+        if (hit?.kind === 'land') return hit.y
+        return query.toY >= this.definition.hero.groundY ? this.definition.hero.groundY : null
+      },
+    )
+    for (const request of requests) {
+      events.push({ type: 'loot-pickup-requested', tick: this.currentTick, ...request })
+    }
   }
 
   private resolveMonsterHit(actorId: ActorId, events: BattleEvent[]): void {

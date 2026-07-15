@@ -13,6 +13,11 @@ import type { BattleWall } from './platform'
 import type { BattleProjectile } from './projectile'
 import type { BattleSkillDefinition } from './skill'
 import type { BattleSkillState } from './skill'
+import type {
+  BattleLootEntity,
+  BattleLootPhysicsDefinition,
+  BattleLootRollDefinition,
+} from './loot'
 
 export interface BattleBounds {
   left: number
@@ -31,6 +36,7 @@ export type BattleMonsterDefinition = Omit<MonsterCombatDefinition, 'id' | 'spaw
     verticalFollow?: VerticalFollowConfig
     rangedAttack?: RangedAttackConfig
   }
+  loot?: readonly BattleLootRollDefinition[]
 }
 
 export interface TimedSpawnDefinition {
@@ -74,6 +80,7 @@ export interface BattleLevelDefinition {
   walls: BattleWall[]
   encounters: BattleEncounterDefinition[]
   door: { x: number; y: number; width: number; height: number }
+  lootPhysics?: BattleLootPhysicsDefinition
 }
 
 export type BattleHeroDefinition = HeroCombatDefinition & {
@@ -108,6 +115,15 @@ export type BattleCommand = CombatCommand | {
   actorId: ActorId
   sequence: number
   atTick: number
+} | {
+  type: 'resolve-loot-pickup'
+  lootEntityId: string
+  requestId: string
+  acceptedQuantity: number
+  resourceRestore?: { hp: number; mp: number }
+  actorId: ActorId
+  sequence: number
+  atTick: number
 }
 
 export type BattleCommandRejectionReason = CommandRejectionReason
@@ -115,6 +131,8 @@ export type BattleCommandRejectionReason = CommandRejectionReason
   | 'not-learned'
   | 'insufficient-resource'
   | 'cooldown'
+  | 'unknown-loot'
+  | 'invalid-loot-resolution'
 
 export type BattleEvent = Exclude<CombatEvent, { type: 'command-rejected' }>
   | { type: 'command-rejected'; tick: number; command: BattleCommand; reason: BattleCommandRejectionReason }
@@ -134,6 +152,33 @@ export type BattleEvent = Exclude<CombatEvent, { type: 'command-rejected' }>
   | { type: 'stage-cleared'; tick: number; levelId: string }
   | { type: 'projectile-spawned'; tick: number; projectile: BattleProjectile }
   | { type: 'projectile-removed'; tick: number; projectileId: string }
+  | { type: 'loot-spawned'; tick: number; loot: BattleLootEntity }
+  | {
+      type: 'loot-pickup-requested'
+      tick: number
+      lootEntityId: string
+      requestId: string
+      lootId: string
+      quantity: number
+    }
+  | {
+      type: 'loot-pickup-resolved'
+      tick: number
+      lootEntityId: string
+      requestId: string
+      lootId: string
+      acceptedQuantity: number
+      remainingQuantity: number
+    }
+  | {
+      type: 'hero-resource-restored'
+      tick: number
+      sourceLootEntityId: string
+      hpBefore: number
+      hpAfter: number
+      mpBefore: number
+      mpAfter: number
+    }
 
 export interface BattleSnapshot {
   version: 1
@@ -145,4 +190,5 @@ export interface BattleSnapshot {
   heroEquipment: BattleHeroDefinition['equipment']
   actors: readonly CombatActorSnapshot[]
   projectiles: readonly BattleProjectile[]
+  loot: readonly BattleLootEntity[]
 }

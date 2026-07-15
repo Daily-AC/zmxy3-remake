@@ -10,6 +10,7 @@ import {
   compileWukongBattleHero,
   type ChapterOneBattleProfile,
 } from './chapterOneBattleCompiler'
+import { CHAPTER_ONE_LOOT_PHYSICS } from './battleRuntimeLoot'
 
 interface GeometryFile {
   subStages: { id: string; walls: BattleDefinition['level']['walls'] }[]
@@ -39,11 +40,12 @@ export function compileSl11BattleDefinition(
       { ruleId: 'role1.combat', origin: 'canonical', source: 'game/src/adapters/combatCoreDefinition.ts' },
       { ruleId: 'role1.skill.slz', origin: 'canonical', source: 'game/src/systems/skillDamageReal.ts' },
       { ruleId: 'monster30.flight', origin: 'adapted', source: 'game/src/scenes/BattleScene.ts#monsterConfigFor' },
+      { ruleId: 'chapter1.loot', origin: 'canonical', source: 'game/src/data/original/monster-drops.json' },
     ],
     hero,
     monsters: {
-      monster30: compileChapterOneMonster('monster30', bounds),
-      monster3: compileChapterOneMonster('monster3', bounds),
+      monster30: compileChapterOneMonster('monster30', bounds, { stage: 1, level: 1 }),
+      monster3: compileChapterOneMonster('monster3', bounds, { stage: 1, level: 1 }),
     },
     level: {
       id: source.id,
@@ -72,6 +74,7 @@ export function compileSl11BattleDefinition(
         },
       }],
       door: { ...source.door },
+      lootPhysics: { ...CHAPTER_ONE_LOOT_PHYSICS },
     },
   })
 }

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { persistBattleRuntimeClear } from '../src/adapters/battleRuntimeSettlement'
+import { persistBattleRuntimeClear, persistBattleRuntimeState } from '../src/adapters/battleRuntimeSettlement'
 import { campaignLevelKey } from '../src/systems/campaignProgress'
+import { createGameSave, restoreGameState } from '../src/systems/save'
+import { createProgression } from '../src/systems/progression'
+import { createEquipment } from '../src/systems/equipment'
+import { addItem, createInventory } from '../src/systems/inventory'
+import { equipmentItemByFillName } from '../src/systems/furnaceRecipe'
+import { readSlot } from '../src/systems/saveSlots'
 
 function memoryStorage(): Storage {
   const values = new Map<string, string>()
@@ -35,5 +41,24 @@ describe('persistBattleRuntimeClear', () => {
 
     expect(persistBattleRuntimeClear(storage, null, 0)).toBeNull()
     expect(storage.length).toBe(0)
+  })
+
+  it('persists runtime inventory and soul without losing slot playtime', () => {
+    const storage = memoryStorage()
+    const loaded = restoreGameState(createGameSave({
+      progression: createProgression(1),
+      equipment: createEquipment(),
+      inventory: createInventory(24),
+    }))
+    addItem(loaded.inventory, equipmentItemByFillName('wptm')!, 3)
+    loaded.soul = 8
+
+    expect(persistBattleRuntimeState(storage, 0, loaded, 42)).toBe(true)
+    const saved = readSlot(storage, 0)
+    expect(saved?.meta.playtimeSec).toBe(42)
+    expect(saved?.save.inventory.stacks).toEqual([
+      expect.objectContaining({ item: expect.objectContaining({ id: 'wptm' }), qty: 3 }),
+    ])
+    expect(saved?.save.soul).toBe(8)
   })
 })

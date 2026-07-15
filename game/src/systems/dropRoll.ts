@@ -94,21 +94,34 @@ function isCurrentMvpDrop(entry: OriginalFallListItem): boolean {
   return isSupportedEquipmentForHero(fallListItemToItem(entry), 1)
 }
 
+export interface ResolvedMonsterDropTable {
+  chance: number
+  choices: Item[]
+}
+
+export function resolvedMonsterDropTable(
+  monsterId: string,
+  context: DropRollContext = {},
+): ResolvedMonsterDropTable | undefined {
+  const monster = originalMonsterRecord(monsterId)
+  if (!monster) return undefined
+  const isBoss = resolveIsBoss(monster, context)
+  const chance = Math.min(1, resolveConditional(monster.probability, context, isBoss, 0) * (isBoss ? 1.5 : 1))
+  const choices = resolveConditional(monster.fallList, context, isBoss, [])
+    .filter(isCurrentMvpDrop)
+    .map(fallListItemToItem)
+  return chance > 0 && choices.length > 0 ? { chance, choices } : undefined
+}
+
 export function rollDrops(
   monsterId: string,
   rng: () => number,
   context: DropRollContext = {},
 ): { item: Item; qty: number }[] {
-  const monster = originalMonsterRecord(monsterId)
-  if (!monster) return []
-
-  const isBoss = resolveIsBoss(monster, context)
-  const probability = resolveConditional(monster.probability, context, isBoss, 0) * (isBoss ? 1.5 : 1)
-  const fallList = resolveConditional(monster.fallList, context, isBoss, []).filter(isCurrentMvpDrop)
-  if (probability <= 0 || fallList.length === 0 || rng() > probability) return []
-
-  const index = Math.max(0, Math.min(fallList.length - 1, Math.round(rng() * (fallList.length - 1))))
-  return [{ item: fallListItemToItem(fallList[index]), qty: 1 }]
+  const table = resolvedMonsterDropTable(monsterId, context)
+  if (!table || rng() > table.chance) return []
+  const index = Math.max(0, Math.min(table.choices.length - 1, Math.round(rng() * (table.choices.length - 1))))
+  return [{ item: table.choices[index], qty: 1 }]
 }
 
 export function monsterSoulDropAmount(monsterId: string, context: DropRollContext = {}): number {

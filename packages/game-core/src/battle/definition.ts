@@ -59,6 +59,25 @@ const SkillDefinitionSchema = z.object({
     context.addIssue({ code: 'custom', message: 'skill hit tick must occur before its end tick', path: ['hitTick'] })
   }
 })
+const LootRollSchema = z.object({
+  chance: finite.min(0).max(1),
+  choices: z.array(z.object({
+    lootId: stableId,
+    weight: finite.positive(),
+    motion: z.enum(['falling', 'homing']).optional(),
+    quantity: z.object({ min: positiveInteger, max: positiveInteger }).strict(),
+  }).strict()).min(1),
+}).strict().superRefine((roll, context) => {
+  roll.choices.forEach((choice, index) => {
+    if (choice.quantity.max < choice.quantity.min) {
+      context.addIssue({
+        code: 'custom',
+        message: 'max must be greater than or equal to min',
+        path: ['choices', index, 'quantity', 'max'],
+      })
+    }
+  })
+})
 const BattleHeroDefinitionSchema = HeroCombatDefinitionBaseSchema.extend({
   maxMp: finite.nonnegative(),
   skills: z.record(stableId, SkillDefinitionSchema),
@@ -116,6 +135,7 @@ const MonsterDefinitionSchema = MonsterCombatDefinitionBaseSchema
         spawnOffsetY: finite.optional(),
       }).strict().optional(),
     }).strict().optional(),
+    loot: z.array(LootRollSchema).optional(),
   })
   .superRefine(refineMonsterPatrolBounds)
 
@@ -134,6 +154,12 @@ export const BattleDefinitionSchema = z.object({
     walls: z.array(WallSchema).min(1),
     encounters: z.array(EncounterSchema).min(1),
     door: z.object({ x: finite, y: finite, width: finite.positive(), height: finite.positive() }).strict(),
+    lootPhysics: z.object({
+      gravityPerTick: finite.nonnegative(),
+      spawnOffsetY: finite,
+      pickupRadius: finite.positive(),
+      retryDelayTicks: positiveInteger,
+    }).strict().optional(),
   }).strict(),
 }).strict().superRefine((definition, context) => {
   const { bounds, door, heroSpawn, encounters } = definition.level

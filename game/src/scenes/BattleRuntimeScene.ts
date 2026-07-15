@@ -1,16 +1,24 @@
 import Phaser from 'phaser'
 import {
   BattleRuntime,
+  BATTLE_AUTHORITY_ID,
   TICK_MS,
   stableHash,
   type BattleCommand,
   type BattleDefinition,
   type BattleEvent,
+  type BattleLootEntity,
   type BattleSnapshot,
   type CombatActorSnapshot,
 } from '@zaixu/game-core'
 import { BattleRuntimeInput } from '../adapters/battleRuntimeInput'
-import { persistBattleRuntimeClear } from '../adapters/battleRuntimeSettlement'
+import { persistBattleRuntimeClear, persistBattleRuntimeState } from '../adapters/battleRuntimeSettlement'
+import {
+  commitBattleRuntimePickup,
+  planBattleRuntimePickup,
+  type BattleRuntimePickupPlan,
+} from '../adapters/battleRuntimeInventory'
+import { resolveBattleLootPayload } from '../adapters/battleRuntimeLoot'
 import { compileBattleRuntimeProfile, type CompiledBattleRuntimeProfile } from '../adapters/battleRuntimeProfile'
 import {
   presentationForActor,
@@ -33,12 +41,18 @@ import monster30Raw from '../data/monsters/monster30.json'
 import role1Raw from '../data/roles/role1.json'
 import { registerRoleAnimations } from '../presentation/registerRoleAnimations'
 import type { RoleData } from '../systems/roleData'
-import { restoreGameState } from '../systems/save'
+import { restoreGameState, type LoadedGameState } from '../systems/save'
 import { asSlotId, type SlotId } from '../systems/saveSlots'
 import { readSlot } from '../systems/saveSlots'
 import { RoleInfoHud } from '../ui/hud/RoleInfoHud'
 import { SkillBarHud } from '../ui/hud/SkillBarHud'
-import { HUD_ICONS, HUD_TEXTURES, ONLINE_TEXTURES } from '../ui/hud/hudTheme'
+import {
+  HUD_ICONS,
+  HUD_TEXTURES,
+  ICON_FALLBACK_KEY,
+  ONLINE_TEXTURES,
+  WORLD_DROP_ICONS,
+} from '../ui/hud/hudTheme'
 import type { BattleData } from './BattleLoadingScene'
 import { REG, SCENE, shellStorage } from './shellShared'
 
@@ -51,6 +65,11 @@ const LOOPING_ACTIONS = new Set(['wait', 'wait2', 'walk', 'run'])
 const MONSTER_LOOPING_ACTIONS = new Set(['wait', 'walk'])
 const TRANSFER_FRAME_COUNT = 10
 const SLZ_EFFECT_FRAME_COUNT = 6
+const CONSUMABLE_TEXTURES = {
+  smallHp: { key: 'drop_cure_small_hp', url: 'assets/generated/cure-small-hp.webp' },
+  bigHp: { key: 'drop_cure_big_hp', url: 'assets/generated/cure-big-hp.webp' },
+  smallMp: { key: 'drop_cure_small_mp', url: 'assets/generated/cure-small-mp.webp' },
+} as const
 const roleData = role1Raw as RoleData
 const monsterData: Record<string, RoleData> = {
   monster2: monster2Raw as RoleData,
@@ -75,6 +94,8 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private accumulatorMs = 0
   private readonly actorViews = new Map<string, ActorView>()
   private readonly projectileViews = new Map<string, Phaser.GameObjects.Image>()
+  private readonly lootViews = new Map<string, Phaser.GameObjects.Container>()
+  private readonly pendingLootPlans = new Map<string, BattleRuntimePickupPlan>()
   private keys!: Record<
     'left' | 'right' | 'jump' | 'attack' | 'interact' | 'skillY' | 'skillU' | 'skillI' | 'skillO' | 'skillL',
     Phaser.Input.Keyboard.Key
@@ -86,12 +107,15 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private status!: Phaser.GameObjects.Text
   private respawnNotice?: Phaser.GameObjects.Text
   private skillEffect?: Phaser.GameObjects.Sprite
+  private pickupNotice?: Phaser.GameObjects.Text
   private eventLog: BattleEvent[] = []
   private campaignIndex = 0
   private activeSlot: SlotId | null = null
   private clearTransitionScheduled = false
   private manualMode = false
   private runtimeProfile?: CompiledBattleRuntimeProfile
+  private loadedState?: LoadedGameState
+  private playtimeSec = 0
 
   constructor() {
     super(SCENE.battleRuntime)
@@ -103,13 +127,17 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.eventLog = []
     this.actorViews.clear()
     this.projectileViews.clear()
+    this.lootViews.clear()
+    this.pendingLootPlans.clear()
     this.portal = undefined
     this.respawnNotice = undefined
     this.skillEffect = undefined
     this.campaignIndex = data?.campaignIndex ?? 0
     this.activeSlot = data?.activeSlot ?? asSlotId(this.registry.get(REG.activeSlot))
     const saved = this.activeSlot === null ? undefined : readSlot(shellStorage(), this.activeSlot)
-    this.runtimeProfile = saved ? compileBattleRuntimeProfile(restoreGameState(saved.save)) : undefined
+    this.loadedState = saved ? restoreGameState(saved.save) : undefined
+    this.playtimeSec = saved?.meta.playtimeSec ?? 0
+    this.runtimeProfile = this.loadedState ? compileBattleRuntimeProfile(this.loadedState) : undefined
     this.definition = this.compileDefinition()
     this.clearTransitionScheduled = false
     this.manualMode = false
@@ -126,11 +154,10 @@ export class BattleRuntimeScene extends Phaser.Scene {
         frameHeight: roleData.sheet.cellH,
       })
     }
-    for (const asset of [...HUD_TEXTURES, ...HUD_ICONS, ...ONLINE_TEXTURES]) {
-      if (![
-        'hud_avatar_wukong', 'hud_ri_bg', 'hud_ri_head', 'hud_ri_hp', 'hud_ri_mp', 'hud_ri_exp',
-        'hud_ri_rage', 'skilldock', 'skill_slz',
-      ].includes(asset.key)) continue
+    for (const asset of [...HUD_TEXTURES, ...HUD_ICONS, ...WORLD_DROP_ICONS, ...ONLINE_TEXTURES]) {
+      if (!this.textures.exists(asset.key)) this.load.image(asset.key, asset.url)
+    }
+    for (const asset of Object.values(CONSUMABLE_TEXTURES)) {
       if (!this.textures.exists(asset.key)) this.load.image(asset.key, asset.url)
     }
     for (const species of Object.keys(this.definition.monsters)) {
@@ -164,6 +191,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.load.audio('runtime-hit5', 'assets/audio/Role1_hit5.mp3')
     this.load.audio('runtime-mon-hurt', 'assets/audio/BeattackByRole1.mp3')
     this.load.audio('runtime-slz-sound', 'assets/audio/Role1_hit6.mp3')
+    this.load.audio('runtime-pickup', 'assets/audio/pickup.mp3')
   }
 
   create(): void {
@@ -324,6 +352,7 @@ export class BattleRuntimeScene extends Phaser.Scene {
       this.actorViews.delete(id)
     }
     this.renderProjectiles()
+    this.renderLoot()
     this.positionSkillEffect()
     this.renderPortal()
     const hero = this.snapshot.actors[0]
@@ -411,6 +440,51 @@ export class BattleRuntimeScene extends Phaser.Scene {
     }
   }
 
+  private renderLoot(): void {
+    const seen = new Set<string>()
+    for (const loot of this.snapshot.loot) {
+      seen.add(loot.id)
+      const view = this.lootViews.get(loot.id) ?? this.createLootView(loot)
+      view.setPosition(loot.x, loot.y + (loot.motion === 'homing' ? 0 : -14))
+    }
+    for (const [id, view] of this.lootViews) {
+      if (seen.has(id)) continue
+      view.destroy(true)
+      this.lootViews.delete(id)
+    }
+  }
+
+  private createLootView(loot: BattleLootEntity): Phaser.GameObjects.Container {
+    const payload = resolveBattleLootPayload(loot.lootId)
+    let child: Phaser.GameObjects.GameObject
+    if (payload?.kind === 'soul') {
+      child = this.add.container(0, 0, [
+        this.add.circle(0, 0, 8, 0x9b59d0, 0.28),
+        this.add.circle(0, 0, 5, 0x8e4fd0, 0.95).setStrokeStyle(1.5, 0xd8b4ff, 0.9),
+        this.add.circle(-1.5, -1.5, 1.6, 0xf4e8ff, 0.9),
+      ])
+    } else if (payload?.kind === 'consumable') {
+      const key = CONSUMABLE_TEXTURES[payload.consumableId].key
+      const icon = this.add.image(0, 0, key)
+      const maxSize = payload.consumableId === 'bigHp' ? 40 : 34
+      icon.setScale(Math.min(1, maxSize / Math.max(icon.width, icon.height)))
+      child = icon
+    } else if (payload?.kind === 'item') {
+      const dropKey = `drop_icon_${payload.item.id}`
+      const iconKey = this.textures.exists(dropKey)
+        ? dropKey
+        : this.textures.exists(`icon_${payload.item.id}`) ? `icon_${payload.item.id}` : ICON_FALLBACK_KEY
+      const icon = this.add.image(0, 0, iconKey)
+      icon.setScale(Math.min(1, 44 / Math.max(icon.width, icon.height)))
+      child = icon
+    } else {
+      child = this.add.circle(0, 0, 7, 0xff4b4b, 0.9)
+    }
+    const view = this.add.container(loot.x, loot.y, [child]).setDepth(14)
+    this.lootViews.set(loot.id, view)
+    return view
+  }
+
   private renderPortal(): void {
     if (!this.snapshot.level.doorVisible) return
     const door = this.definition.level.door
@@ -443,10 +517,66 @@ export class BattleRuntimeScene extends Phaser.Scene {
       } else if (event.type === 'actor-respawned' && event.actorId === HERO_ID) {
         this.respawnNotice?.destroy()
         this.respawnNotice = undefined
+      } else if (event.type === 'loot-pickup-requested') {
+        this.planLootPickup(event)
+      } else if (event.type === 'loot-pickup-resolved') {
+        this.commitLootPickup(event)
+      } else if (event.type === 'command-rejected' && event.command.type === 'resolve-loot-pickup') {
+        this.pendingLootPlans.delete(event.command.requestId)
+      } else if (event.type === 'hero-resource-restored') {
+        const hp = Math.round(event.hpAfter - event.hpBefore)
+        const mp = Math.round(event.mpAfter - event.mpBefore)
+        if (hp > 0) this.showPickupNotice(`生命 +${hp}`, '#8cff96')
+        else if (mp > 0) this.showPickupNotice(`魔法 +${mp}`, '#8fcfff')
       } else if (event.type === 'stage-cleared') {
         this.finishStage()
       }
     }
+  }
+
+  private planLootPickup(event: Extract<BattleEvent, { type: 'loot-pickup-requested' }>): void {
+    if (!this.loadedState) return
+    const plan = planBattleRuntimePickup(this.loadedState, event, this.runtime.getSnapshot())
+    this.pendingLootPlans.set(plan.requestId, plan)
+    this.runtime.enqueue({
+      type: 'resolve-loot-pickup',
+      actorId: BATTLE_AUTHORITY_ID,
+      sequence: this.inputAdapter.nextSequence(),
+      atTick: this.runtime.getSnapshot().tick + 1,
+      lootEntityId: plan.lootEntityId,
+      requestId: plan.requestId,
+      acceptedQuantity: plan.acceptedQuantity,
+      ...(plan.resourceRestore ? { resourceRestore: plan.resourceRestore } : {}),
+    })
+  }
+
+  private commitLootPickup(event: Extract<BattleEvent, { type: 'loot-pickup-resolved' }>): void {
+    const plan = this.pendingLootPlans.get(event.requestId)
+    this.pendingLootPlans.delete(event.requestId)
+    if (!plan || !this.loadedState || plan.acceptedQuantity !== event.acceptedQuantity) return
+    if (!commitBattleRuntimePickup(this.loadedState, plan)) return
+    if (event.acceptedQuantity === 0) {
+      this.showPickupNotice('背包已满，物品留在地上', '#ff8a6b')
+      return
+    }
+    persistBattleRuntimeState(shellStorage(), this.activeSlot, this.loadedState, this.playtimeSec)
+    this.sound.play('runtime-pickup', { volume: 0.7 })
+    if (plan.payload?.kind === 'item') {
+      this.showPickupNotice(`${plan.payload.item.name} ×${event.acceptedQuantity}`, '#ffe39a')
+    } else if (plan.payload?.kind === 'soul') {
+      this.showPickupNotice(`灵魂 +${event.acceptedQuantity}`, '#d8b4ff')
+    }
+  }
+
+  private showPickupNotice(message: string, color: string): void {
+    this.pickupNotice?.destroy()
+    this.pickupNotice = this.add.text(480, 118, message, {
+      fontSize: '22px', color, stroke: '#2b1610', strokeThickness: 5,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(210)
+    this.time.delayedCall(900, () => {
+      this.pickupNotice?.destroy()
+      this.pickupNotice = undefined
+    })
   }
 
   private showRespawnNotice(): void {
@@ -483,6 +613,9 @@ export class BattleRuntimeScene extends Phaser.Scene {
   private finishStage(): void {
     if (this.clearTransitionScheduled) return
     this.clearTransitionScheduled = true
+    if (this.loadedState) {
+      persistBattleRuntimeState(shellStorage(), this.activeSlot, this.loadedState, this.playtimeSec)
+    }
     persistBattleRuntimeClear(
       shellStorage(),
       this.activeSlot,
@@ -528,8 +661,8 @@ export class BattleRuntimeScene extends Phaser.Scene {
     const events = this.runtime.step(ticks)
     this.eventLog.push(...events)
     if (this.eventLog.length > 300) this.eventLog.splice(0, this.eventLog.length - 300)
-    this.presentEvents(events)
     this.snapshot = this.runtime.getSnapshot()
+    this.presentEvents(events)
     this.renderSnapshot()
     return this.snapshot
   }
@@ -539,6 +672,8 @@ export class BattleRuntimeScene extends Phaser.Scene {
     this.portal?.destroy(true)
     this.respawnNotice?.destroy()
     this.skillEffect?.destroy()
+    this.pickupNotice?.destroy()
+    for (const view of this.lootViews.values()) view.destroy(true)
     this.heroHud.container.destroy(true)
     this.skillBar.container.destroy(true)
   }
