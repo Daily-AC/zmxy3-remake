@@ -40,6 +40,17 @@ node game/tools/verify-sl11-runtime.mjs
 npm run verify:combat-core
 ```
 
+Completion evidence must target the public acceptance deployment, not localhost:
+
+```bash
+RUNTIME_ORIGIN=https://zaixu-dev.qmledmq.cn:8443 \
+RUNTIME_NPC_SERVER=wss://zm-dev.qmledmq.cn:8443 \
+RUNTIME_SOCIAL_SERVER=https://zm-dev.qmledmq.cn:8443/social \
+node game/tools/verify-sl11-runtime.mjs
+```
+
+The self-hosted preview mode remains available for diagnosis, but does not count as final acceptance.
+
 The browser gate starts isolated preview, NPC, and social servers on reserved ports. It registers through the real shell, then proves the three independent world-map/loading routes, movement, jump, original chapter-one drops, capacity-aware pickup, persisted material/soul recipe crafting, backpack rendering, weapon/armor equip, hot combat-stat and weapon-sheet changes, skill MP consumption, all eleven encounter transitions, each door interaction, campaign frontier persistence, and the immutable legacy fallback. Any console error, page exception, failed request, blank screenshot, missing event, wrong StopPoint, failed transaction, or wrong frontier fails the command.
 
 Evidence is regenerated under `game/tmp/sl11-runtime/`:
