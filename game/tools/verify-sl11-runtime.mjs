@@ -12,6 +12,7 @@ const agentServerRoot = path.resolve(gameRoot, '../agent-server')
 const socialServerRoot = path.resolve(gameRoot, '../social-server')
 const artifactDir = path.join(gameRoot, 'tmp/sl11-runtime')
 const timeoutMs = 45_000
+const configuredOrigin = process.env.RUNTIME_ORIGIN?.replace(/\/+$/, '')
 
 async function reservePort() {
   const server = net.createServer()
@@ -484,32 +485,39 @@ let browser
 try {
   fs.rmSync(artifactDir, { recursive: true, force: true })
   fs.mkdirSync(artifactDir, { recursive: true })
-  const port = await reservePort()
-  const agentPort = await reservePort()
-  const socialPort = await reservePort()
-  agentServer = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['start'], {
-    cwd: agentServerRoot,
-    env: { ...process.env, AGENT_SERVER_PORT: String(agentPort) },
-    stdio: 'ignore',
-  })
-  await waitForPort(agentPort)
-  const npcServer = `ws://127.0.0.1:${agentPort}`
-  socialServer = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['start'], {
-    cwd: socialServerRoot,
-    env: {
-      ...process.env,
-      JWT_SECRET: 'sl11-runtime-browser-gate',
-      SOCIAL_SERVER_PORT: String(socialPort),
-      SOCIAL_DB_PATH: path.join(artifactDir, 'social.sqlite'),
-    },
-    stdio: 'ignore',
-  })
-  await waitForPort(socialPort)
-  const socialOrigin = `http://127.0.0.1:${socialPort}`
-  preview = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', [
-    'run', 'preview', '--', '--host', '127.0.0.1', '--port', String(port), '--strictPort',
-  ], { cwd: gameRoot, stdio: 'ignore' })
-  const origin = `http://127.0.0.1:${port}`
+  let origin = configuredOrigin
+  let npcServer = process.env.RUNTIME_NPC_SERVER
+  let socialOrigin = process.env.RUNTIME_SOCIAL_SERVER
+  if (!origin) {
+    const port = await reservePort()
+    const agentPort = await reservePort()
+    const socialPort = await reservePort()
+    agentServer = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['start'], {
+      cwd: agentServerRoot,
+      env: { ...process.env, AGENT_SERVER_PORT: String(agentPort) },
+      stdio: 'ignore',
+    })
+    await waitForPort(agentPort)
+    npcServer = `ws://127.0.0.1:${agentPort}`
+    socialServer = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['start'], {
+      cwd: socialServerRoot,
+      env: {
+        ...process.env,
+        JWT_SECRET: 'sl11-runtime-browser-gate',
+        SOCIAL_SERVER_PORT: String(socialPort),
+        SOCIAL_DB_PATH: path.join(artifactDir, 'social.sqlite'),
+      },
+      stdio: 'ignore',
+    })
+    await waitForPort(socialPort)
+    socialOrigin = `http://127.0.0.1:${socialPort}`
+    preview = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', [
+      'run', 'preview', '--', '--host', '127.0.0.1', '--port', String(port), '--strictPort',
+    ], { cwd: gameRoot, stdio: 'ignore' })
+    origin = `http://127.0.0.1:${port}`
+  }
+  npcServer ??= 'wss://zm-dev.qmledmq.cn:8443'
+  socialOrigin ??= 'https://zm-dev.qmledmq.cn:8443/social'
   await waitForOrigin(origin)
   browser = await chromium.launch()
   const context = await browser.newContext({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 })
