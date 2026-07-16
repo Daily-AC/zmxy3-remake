@@ -1,0 +1,51 @@
+name: Backend CI and deploy
+
+on:
+  push:
+    branches:
+      - master
+      - "codex/**"
+    paths:
+      - ".github/workflows/deploy-backend.yml"
+      - ".github/scripts/deploy-backend-home.sh"
+      - "agent-server/**"
+      - "social-server/**"
+  workflow_dispatch:
+
+concurrency:
+  group: zaixu-dev-backend
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test-deploy-verify:
+    runs-on: [self-hosted, linux, x64, home, zaixu]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            agent-server/package-lock.json
+            social-server/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci --prefix agent-server && npm ci --prefix social-server
+
+      - name: Typecheck backends
+        run: npm run typecheck --prefix agent-server && npm run typecheck --prefix social-server
+
+      - name: Test backends
+        run: npm test --prefix agent-server && npm test --prefix social-server
+
+      - name: Deploy and verify agent server
+        run: bash .github/scripts/deploy-backend-home.sh agent
+
+      - name: Deploy and verify social server
+        run: bash .github/scripts/deploy-backend-home.sh social
+
