@@ -1,0 +1,63 @@
+name: Frontend CI and deploy
+
+on:
+  push:
+    branches:
+      - master
+      - "codex/**"
+    paths:
+      - ".github/workflows/deploy-frontend.yml"
+      - ".github/scripts/deploy-frontend-home.sh"
+      - "game/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+  workflow_dispatch:
+
+concurrency:
+  group: zaixu-dev-frontend
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-deploy-verify:
+    runs-on: [self-hosted, linux, x64, home, zaixu]
+    timeout-minutes: 30
+    env:
+      VITE_NPC_SERVER_URL: wss://zm-dev.qmledmq.cn:8443
+      VITE_SOCIAL_SERVER_URL: https://zm-dev.qmledmq.cn:8443/social
+      RUNTIME_ORIGIN: https://zaixu-dev.qmledmq.cn:8443
+      RUNTIME_NPC_SERVER: wss://zm-dev.qmledmq.cn:8443
+      RUNTIME_SOCIAL_SERVER: https://zm-dev.qmledmq.cn:8443/social
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck:projects
+
+      - name: Test contracts and game
+        run: npm run test:contracts && npm run test:game
+
+      - name: Build production frontend
+        run: npm run build:game
+
+      - name: Deploy zaixu-dev
+        run: bash .github/scripts/deploy-frontend-home.sh game/dist
+
+      - name: Install acceptance browser
+        run: npx playwright install chromium
+
+      - name: Verify deployed public runtime
+        run: node game/tools/verify-sl11-runtime.mjs
+
