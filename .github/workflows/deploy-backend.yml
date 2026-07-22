@@ -25,9 +25,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-        env:
-          http_proxy: http://127.0.0.1:7890
-          https_proxy: http://127.0.0.1:7890
 
       - uses: actions/setup-node@v4
         with:
