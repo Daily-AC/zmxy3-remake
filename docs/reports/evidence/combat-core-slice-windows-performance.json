@@ -1,46 +1,46 @@
 {
   "schemaVersion": 1,
   "status": "PASS",
-  "testedGitCommit": "a1fbdb49f769c1dd22ed9e66d926446755f6b9f3",
-  "sourceDigest": "379a6a0b13049c2cfec16dbf1c1f447c2e51fd84f715cfe18fccbe395dce9637",
+  "testedGitCommit": "6866115d06700554c3fbd3761908e067493a208b",
+  "sourceDigest": "d0256e9f5da281d70c0746e09487ed753b9ff8568d9f9af38e940db7757b6700",
   "simulationRuns": [
     {
       "actors": 51,
       "warmupTicks": 120,
       "measuredTicks": 600,
-      "p50Ms": 0.004099999999993997,
-      "p95Ms": 0.010100000000022646,
-      "maxMs": 0.34370000000001255
+      "p50Ms": 0.003999999999962256,
+      "p95Ms": 0.008800000000007913,
+      "maxMs": 0.38040000000000873
     },
     {
       "actors": 51,
       "warmupTicks": 120,
       "measuredTicks": 600,
-      "p50Ms": 0.004099999999993997,
-      "p95Ms": 0.009399999999970987,
-      "maxMs": 0.6157999999999788
+      "p50Ms": 0.004000000000019099,
+      "p95Ms": 0.009500000000002728,
+      "maxMs": 0.4227999999999952
     },
     {
       "actors": 51,
       "warmupTicks": 120,
       "measuredTicks": 600,
-      "p50Ms": 0.004099999999993997,
-      "p95Ms": 0.011200000000030741,
-      "maxMs": 0.41360000000003083
+      "p50Ms": 0.004400000000032378,
+      "p95Ms": 0.010699999999985721,
+      "maxMs": 1.0745999999999754
     }
   ],
   "browser": {
     "work": {
       "count": 600,
-      "p50Ms": 0.2000000011175871,
-      "p95Ms": 0.8000000007450581,
-      "maxMs": 4.200000001117587
+      "p50Ms": 0.20000004768371582,
+      "p95Ms": 0.8000000715255737,
+      "maxMs": 4.200000047683716
     },
     "interval": {
       "count": 600,
-      "p50Ms": 5.900000000372529,
-      "p95Ms": 6.599999999627471,
-      "maxMs": 9.600000001490116,
+      "p50Ms": 7,
+      "p95Ms": 7.699999928474426,
+      "maxMs": 11,
       "droppedFrameCount": 0,
       "droppedFrameRate": 0
     }
@@ -49,7 +49,7 @@
     "platform": "win32",
     "architecture": "x64",
     "nodeVersion": "v24.18.0",
-    "chromiumVersion": "150.0.7871.101",
+    "chromiumVersion": "150.0.7871.129",
     "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
     "hardwareConcurrency": 24,
     "deviceScaleFactor": 1,
