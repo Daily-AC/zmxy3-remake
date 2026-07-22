@@ -13,6 +13,7 @@ const socialServerRoot = path.resolve(gameRoot, '../social-server')
 const artifactDir = path.join(gameRoot, 'tmp/sl11-runtime')
 const timeoutMs = 45_000
 const configuredOrigin = process.env.RUNTIME_ORIGIN?.replace(/\/+$/, '')
+const runtimeProxyServer = process.env.RUNTIME_PROXY_SERVER
 
 async function reservePort() {
   const server = net.createServer()
@@ -28,15 +29,16 @@ async function reservePort() {
 
 async function waitForOrigin(origin) {
   const deadline = Date.now() + 15_000
+  let lastError
   while (Date.now() < deadline) {
     try {
       if ((await fetch(origin)).status === 200) return
-    } catch {
-      // Preview is still starting.
+    } catch (error) {
+      lastError = error
     }
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  throw new Error(`preview did not become ready: ${origin}`)
+  throw new Error(`preview did not become ready: ${origin}`, { cause: lastError })
 }
 
 async function waitForPort(port) {
@@ -519,7 +521,9 @@ try {
   npcServer ??= 'wss://zm-dev.qmledmq.cn:8443'
   socialOrigin ??= 'https://zm-dev.qmledmq.cn:8443/social'
   await waitForOrigin(origin)
-  browser = await chromium.launch()
+  browser = await chromium.launch(runtimeProxyServer ? {
+    proxy: { server: runtimeProxyServer },
+  } : {})
   const context = await browser.newContext({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 })
   const errors = []
   const runtimePage = await context.newPage()
