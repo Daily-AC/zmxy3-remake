@@ -116,7 +116,7 @@ function gameUrl(origin, query, npcServer, socialServer) {
 }
 
 async function runProductionRuntime(page, origin, npcServer, socialServer, errors) {
-  await page.goto(gameUrl(origin, 'battleRuntime=1&runtimeDebug=gate', npcServer, socialServer))
+  await page.goto(gameUrl(origin, 'runtimeDebug=gate', npcServer, socialServer))
   await enterWorldMap(page)
   await page.evaluate(() => {
     const key = 'zmxy3-remake.slot.v1.0'
@@ -468,7 +468,7 @@ function expectStopPositions(levelId, stops, expected) {
 }
 
 async function runLegacyFallback(page, origin, npcServer, socialServer) {
-  await page.goto(gameUrl(origin, 'runtimeDebug=gate', npcServer, socialServer))
+  await page.goto(gameUrl(origin, 'battleRuntime=legacy&runtimeDebug=gate', npcServer, socialServer))
   await enterWorldMap(page)
   assert.equal(await page.evaluate(() => window.__shellMapEnterLevel(0)), true)
   await page.waitForFunction(() => window.__scene !== undefined, undefined, { timeout: timeoutMs })
