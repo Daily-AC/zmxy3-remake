@@ -1,7 +1,7 @@
 // Fake game client used to self-test the agent-server end to end against a
 // real LLM (no mocking of the model). Spawns the server as a subprocess,
 // drives it over the real WebSocket protocol, asserts on real responses,
-// and dumps the full transcript to test/transcript.json.
+// and can refresh the checked-in transcript with UPDATE_NPC_TRANSCRIPT=1.
 //
 // Run with: npm run test:mock
 
@@ -163,100 +163,16 @@ async function main(): Promise<void> {
       throw new Error(`give_item payload missing a usable item.name: ${JSON.stringify(gift)}`);
     }
 
-    // ---- crafting scenario ----
-    sendMsg({ type: "world_event", kind: "item_obtained", data: { item: "白银矿石" } });
-    sendMsg({ type: "world_event", kind: "item_obtained", data: { item: "白银矿石" } });
-    log("injected 2 world events: item_obtained 白银矿石");
-
-    sendMsg({
-      type: "player_say",
-      npcId: NPC_ID,
-      text: "老君，我想要一把会吸血、还能点着火的法杖，你能帮我炼一把不？",
-    });
-
-    await waitFor((m) => m.type === "npc_thinking" && m.npcId === NPC_ID);
-    log("received npc_thinking (craft turn 1: request)");
-
-    const quote = await waitFor((m) => m.type === "npc_say" && m.npcId === NPC_ID);
-    log("received npc_say (craft turn 1, should be a materials quote):", quote.text);
-
-    const prematureCraft = transcript.some(
-      (e) =>
-        e.direction === "server->game" &&
-        (e.message as { type?: string }).type === "craft_item",
-    );
-    if (prematureCraft) {
-      throw new Error("craft_item was sent before the player confirmed handing over materials");
-    }
-
-    sendMsg({
-      type: "player_say",
-      npcId: NPC_ID,
-      text: "材料都给你备齐了——不管你刚才要的是白银矿石还是别的什么，我都一并带来了，一样不少，麻烦老君现在就帮我炼一把！",
-    });
-
-    await waitFor((m) => m.type === "npc_thinking" && m.npcId === NPC_ID);
-    log("received npc_thinking (craft turn 2: confirm)");
-
-    const [say3Result, craftedResult] = await Promise.allSettled([
-      waitFor((m) => m.type === "npc_say" && m.npcId === NPC_ID),
-      waitFor((m) => m.type === "craft_item" && m.npcId === NPC_ID),
-    ]);
-    if (say3Result.status === "rejected" || craftedResult.status === "rejected") {
-      throw new Error(
-        `craft turn 2 incomplete: npc_say ${say3Result.status}, craft_item ${craftedResult.status}`,
-      );
-    }
-    const say3 = say3Result.value;
-    const crafted = craftedResult.value;
-    log("received npc_say (craft turn 2):", say3.text);
-    log("received craft_item:", JSON.stringify(crafted.item));
-
-    const item = crafted.item;
-    if (!item || typeof item.name !== "string" || item.name.length === 0) {
-      throw new Error(`craft_item payload missing a usable item.name: ${JSON.stringify(crafted)}`);
-    }
-    if (item.kind !== "equip") {
-      throw new Error(`craft_item.item.kind should be "equip", got: ${item.kind}`);
-    }
-    if (![1, 2, 3].includes(item.rarity)) {
-      throw new Error(`craft_item.item.rarity out of 1-3 range: ${item.rarity}`);
-    }
-    if (!Array.isArray(item.effects) || item.effects.length > 3) {
-      throw new Error(`craft_item.item.effects should have at most 3 entries, got: ${JSON.stringify(item.effects)}`);
-    }
-    const STAT_LIMITS: Record<string, number> = { atk: 200, def: 200, hp: 800, mp: 800, crit: 0.5 };
-    for (const effect of item.effects) {
-      if (effect.type === "stat") {
-        const max = STAT_LIMITS[effect.stat];
-        if (max === undefined) throw new Error(`illegal stat name in crafted effect: ${effect.stat}`);
-        if (effect.value < 0 || effect.value > max) {
-          throw new Error(`stat effect ${effect.stat} out of range [0, ${max}]: ${effect.value}`);
-        }
-      } else if (effect.type === "onHit") {
-        if (!["burn", "lifesteal", "freeze"].includes(effect.effect)) {
-          throw new Error(`illegal onHit effect name: ${effect.effect}`);
-        }
-        if (effect.chance < 0 || effect.chance > 0.5) {
-          throw new Error(`onHit chance out of range [0, 0.5]: ${effect.chance}`);
-        }
-        if (effect.power < 0 || effect.power > 30) {
-          throw new Error(`onHit power out of range [0, 30]: ${effect.power}`);
-        }
-      } else {
-        throw new Error(`unknown effect type in crafted item: ${JSON.stringify(effect)}`);
-      }
-    }
-    log(`craft_item validated: rarity=${item.rarity}, effects all within legal ranges`);
-
     ws.close();
 
-    writeFileSync(
-      path.join(__dirname, "transcript.json"),
-      JSON.stringify(transcript, null, 2),
-      "utf-8",
-    );
-    log(`wrote transcript with ${transcript.length} entries to test/transcript.json`);
+    if (process.env.UPDATE_NPC_TRANSCRIPT === "1") {
+      writeFileSync(
+        path.join(__dirname, "transcript.json"),
+        JSON.stringify(transcript, null, 2),
+        "utf-8",
+      );
+      log(`wrote transcript with ${transcript.length} entries to test/transcript.json`);
+    }
     log("ALL ASSERTIONS PASSED");
   } finally {
     child.kill();

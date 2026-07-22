@@ -7,7 +7,7 @@
         "laojun"
       ]
     },
-    "at": 1783400468913
+    "at": 1784713387635
   },
   {
     "direction": "game->server",
@@ -18,7 +18,7 @@
         "name": "斗战胜佛"
       }
     },
-    "at": 1783400468913
+    "at": 1784713387635
   },
   {
     "direction": "game->server",
@@ -29,7 +29,7 @@
         "monster": "赤炎狼"
       }
     },
-    "at": 1783400468914
+    "at": 1784713387635
   },
   {
     "direction": "game->server",
@@ -40,7 +40,7 @@
         "monster": "石头怪"
       }
     },
-    "at": 1783400468914
+    "at": 1784713387635
   },
   {
     "direction": "game->server",
@@ -49,7 +49,7 @@
       "npcId": "laojun",
       "text": "老君，我刚才战况如何？"
     },
-    "at": 1783400468914
+    "at": 1784713387635
   },
   {
     "direction": "server->game",
@@ -59,7 +59,7 @@
         "laojun"
       ]
     },
-    "at": 1783400468914
+    "at": 1784713387636
   },
   {
     "direction": "server->game",
@@ -67,16 +67,16 @@
       "type": "npc_thinking",
       "npcId": "laojun"
     },
-    "at": 1783400468914
+    "at": 1784713387636
   },
   {
     "direction": "server->game",
     "message": {
       "type": "npc_say",
       "npcId": "laojun",
-      "text": "哼，猴头，打两只山脚小怪就想让老君夸你？那只赤炎狼倒是烤得够酥，石头怪嘛……砸得碎是砸得碎，就是姿势不太好看，跟当年大闹天宫比起来差远了。"
+      "text": "哼，猴头运气倒是不差，赤炎狼和石头怪都让你收拾了。不过打完一场灵魂就剩个零蛋，怕是光顾着蛮干没留后手吧？下次再来丹房，记得带点材料，别让老夫白念叨一场。"
     },
-    "at": 1783400477046
+    "at": 1784713392881
   },
   {
     "direction": "game->server",
@@ -85,7 +85,7 @@
       "npcId": "laojun",
       "text": "老君，我打怪打得辛苦，好歹赏我点什么当奖励吧！"
     },
-    "at": 1783400477046
+    "at": 1784713392881
   },
   {
     "direction": "server->game",
@@ -93,7 +93,16 @@
       "type": "npc_thinking",
       "npcId": "laojun"
     },
-    "at": 1783400477047
+    "at": 1784713392881
+  },
+  {
+    "direction": "server->game",
+    "message": {
+      "type": "npc_say",
+      "npcId": "laojun",
+      "text": "啧，猴头，打两只小怪就喊辛苦，当年大闹天宫的劲头哪去了？罢了罢了，看你可怜，这根行者棍拿去耍耍——接不接得住看你造化。"
+    },
+    "at": 1784713395949
   },
   {
     "direction": "server->game",
@@ -101,140 +110,13 @@
       "type": "give_item",
       "npcId": "laojun",
       "item": {
-        "id": "stone_essence",
-        "name": "石之精魄",
-        "kind": "material",
-        "desc": "石头怪体内凝结的土行精华，凑足九块可炼防具",
-        "qty": 1
-      }
-    },
-    "at": 1783400483785
-  },
-  {
-    "direction": "server->game",
-    "message": {
-      "type": "npc_say",
-      "npcId": "laojun",
-      "text": "啧，猴头就知道讨赏。也罢，那石头怪身上剥下的「石之精魄」你拿去，攒够九块来找老君，兴许能给你融件像样的防具。"
-    },
-    "at": 1783400483785
-  },
-  {
-    "direction": "game->server",
-    "message": {
-      "type": "world_event",
-      "kind": "item_obtained",
-      "data": {
-        "item": "白银矿石"
-      }
-    },
-    "at": 1783400483785
-  },
-  {
-    "direction": "game->server",
-    "message": {
-      "type": "world_event",
-      "kind": "item_obtained",
-      "data": {
-        "item": "白银矿石"
-      }
-    },
-    "at": 1783400483785
-  },
-  {
-    "direction": "game->server",
-    "message": {
-      "type": "player_say",
-      "npcId": "laojun",
-      "text": "老君，我想要一把会吸血、还能点着火的法杖，你能帮我炼一把不？"
-    },
-    "at": 1783400483785
-  },
-  {
-    "direction": "server->game",
-    "message": {
-      "type": "npc_thinking",
-      "npcId": "laojun"
-    },
-    "at": 1783400483786
-  },
-  {
-    "direction": "server->game",
-    "message": {
-      "type": "npc_say",
-      "npcId": "laojun",
-      "text": "哼，猴头口气不小，一要就要两样神通。老君倒不是不会炼——拿来两块白银矿石，丹炉里添把三昧真火，给你煅一柄「血焰法杖」，敲人吸血、过火自燃，怎样？"
-    },
-    "at": 1783400490658
-  },
-  {
-    "direction": "game->server",
-    "message": {
-      "type": "player_say",
-      "npcId": "laojun",
-      "text": "材料都给你备齐了——不管你刚才要的是白银矿石还是别的什么，我都一并带来了，一样不少，麻烦老君现在就帮我炼一把！"
-    },
-    "at": 1783400490659
-  },
-  {
-    "direction": "server->game",
-    "message": {
-      "type": "npc_thinking",
-      "npcId": "laojun"
-    },
-    "at": 1783400490660
-  },
-  {
-    "direction": "server->game",
-    "message": {
-      "type": "give_item",
-      "npcId": "laojun",
-      "item": {
-        "id": "xueyan-fazhang",
-        "name": "血焰法杖",
+        "id": "ptdxzg",
+        "name": "行者棍",
         "kind": "equipment",
-        "desc": "以白银矿石经三昧真火煅造，杖身暗红如凝血，敲人吸血、过火自燃。",
+        "desc": "一根普普通通的铁棍，聊胜于无。",
         "qty": 1
       }
     },
-    "at": 1783400496495
-  },
-  {
-    "direction": "server->game",
-    "message": {
-      "type": "craft_item",
-      "npcId": "laojun",
-      "item": {
-        "id": "xueyan-fazhang",
-        "name": "血焰法杖",
-        "kind": "equip",
-        "rarity": 2,
-        "desc": "以白银矿石经三昧真火煅造，杖身暗红如凝血，敲人吸血、过火自燃。",
-        "effects": [
-          {
-            "type": "onHit",
-            "effect": "lifesteal",
-            "chance": 0.3,
-            "power": 10
-          },
-          {
-            "type": "onHit",
-            "effect": "burn",
-            "chance": 0.4,
-            "power": 8
-          }
-        ]
-      }
-    },
-    "at": 1783400496495
-  },
-  {
-    "direction": "server->game",
-    "message": {
-      "type": "npc_say",
-      "npcId": "laojun",
-      "text": "嘿，还真带来了，手脚倒利索。行，猴头看好了——白银矿石入炉，三昧真火一催，血焰法杖，成了！拿去耍吧，别烧着自己个儿。"
-    },
-    "at": 1783400496495
+    "at": 1784713395949
   }
 ]
