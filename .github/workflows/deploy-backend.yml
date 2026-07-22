@@ -40,7 +40,10 @@ jobs:
         run: npm run typecheck --prefix agent-server && npm run typecheck --prefix social-server
 
       - name: Test backends
-        run: npm test --prefix agent-server && npm test --prefix social-server
+        run: |
+          npm run test:unit --prefix agent-server
+          npm run test:forge --prefix agent-server
+          npm test --prefix social-server
 
       - name: Deploy and verify agent server
         run: bash .github/scripts/deploy-backend-home.sh agent
