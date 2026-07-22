@@ -471,3 +471,17 @@
 **线上部署（2026-07-10）**：用户明确授权后推送 `master`，执行 `ssh home-wsl 'bash ~/deploy-zm-frontend.sh'`；服务器从 `4416f2b` 快进到 `2cd6f0f`，远端 tsc + Vite production build 通过并复制到 `/mnt/c/www/zaixu`。公网 `https://zaixu.qmledmq.cn:8443/` 返回 200，主包为 `index-DMVxN2-q.js`；无缓存 Playwright 实测登录页完整渲染，canvas 960x540、CSS 1440x810、DPR2，console/page/request failure 均为 0。新增连击横幅、三张药品图、武器图标与特效 manifest 的公网 URL 均返回 200。
 
 **未执行**：未跑 Windows Electron/home `acceptance.sh`；本轮用户只要求先部署网页。开发服务仍为 `http://127.0.0.1:5201/`。
+
+## 2026-07-22 Codex 续开发（第一章 BattleRuntime + 真实炼制协议 + home CI）
+
+接手时没有采信旧交接结论，重新跑了项目测试、构建、后端 E2E、Windows 性能采样和公网浏览器门禁。工作分支为 `codex/chapter-one-runtime-host`，本轮提交从 `8db5711` 到 `7033b88`。
+
+**第一章运行时**：单人第一至第三章现在默认进入 `BattleRuntime`；`?battleRuntime=legacy` 是显式回滚入口，后续章节和联机仍走 legacy。路由契约 14 项、game 770 项、core 280 项、contracts 10 项、social 41 项与双人房间 smoke、生产构建均通过。公网 `https://zaixu-dev.qmledmq.cn:8443` 浏览器门禁通过，覆盖默认 production 路由、显式 legacy 回滚及 `wss://zm-dev.qmledmq.cn:8443` / `/social` 服务配置。
+
+**老君炼制协议**：删除普通对话回合可直接发 `craft_item` 的越权路径；自定义装备只能走 `craft_request -> craft_result` 炉子事务，原配方仍保留受白名单约束的 `craft_recipe`。新增 brain turn 回归测试，旧恶意 op 会被 schema 丢弃。agent 22 项单测和确定性 WebSocket forge 通过；真实 DeepSeek 对话、赠礼及“赤焰噬魂枪”炼制已端到端验证，fixture 取自该真实返回。需要外部模型凭据的 `test:mock` 保持显式执行，不放进无凭据的每次 push 门禁。
+
+**Windows 性能证据**：在 home 已登录 Windows 会话中用系统 Chrome 150、RTX 5090 D3D11 重新采样并提交 `docs/reports/evidence/combat-core-slice-windows-performance.json`。3 轮 51 actors 模拟 p95 为 0.0088–0.0107ms，浏览器 work p95 0.8ms、interval p95 7.7ms、掉帧 0；`npm run verify:windows-performance-evidence` 通过，证据绑定源摘要而非手工备注。
+
+**home 交付链**：runner systemd 服务从 `/etc/infra/proxy.env` 读取代理，checkout 使用规范的小写代理变量；移除 self-hosted runner 上会卡住 post-job 的远程 npm cache。部署脚本改为在 home 本机端口做有界健康检查，公网可达性由独立浏览器门禁负责。后端 CI 改为 unit + deterministic forge + social E2E，避免把真实模型认证状态误当代码回归。
+
+**最终 CI 与部署证据**：frontend run [29913890360](https://github.com/Daily-AC/zmxy3-remake/actions/runs/29913890360) 成功，完成类型检查、contracts/game 测试、生产构建、zaixu-dev 部署和公网浏览器验收；backend run [29914833830](https://github.com/Daily-AC/zmxy3-remake/actions/runs/29914833830) 成功，完成两套后端类型检查、测试、部署及本机健康检查。两条流水线均由 home self-hosted runner 实际执行。
