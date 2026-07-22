@@ -8,7 +8,6 @@ test("recipe craft callback only forwards recipes implemented in the live game",
     onSay: () => {},
     onGiveItem: () => {},
     onSetGoal: () => {},
-    onCraftItem: () => {},
     onCraftRecipe: (recipeId) => {
       seenRecipeId = recipeId;
     },

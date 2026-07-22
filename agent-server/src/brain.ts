@@ -7,20 +7,18 @@ import {
   recentWorldEvents,
   type WorldEventRecord,
 } from "./npc-state.js";
-import { validateCraftedItem } from "./craft-validate.js";
 import { getOpencode, OPENCODE_MODEL, stripCodeFence, safeJsonParse } from "./llm.js";
 import {
   checkMaterials,
   findPlayableRecipe,
   listPlayableRecipes,
 } from "./furnace-recipes.js";
-import type { NpcItem, NpcGoal, CraftedItem, CraftMaterialRef } from "./types.js";
+import type { NpcItem, NpcGoal, CraftMaterialRef } from "./types.js";
 
 export interface NpcBrainCallbacks {
   onSay: (text: string) => void;
   onGiveItem: (item: NpcItem) => void;
   onSetGoal: (goal: NpcGoal) => void;
-  onCraftItem: (item: CraftedItem) => void;
   onCraftRecipe: (recipeId: string) => void;
 }
 
@@ -59,24 +57,11 @@ function describeEvent(ev: WorldEventRecord): string {
   }
 }
 
-// Shared crafting-flow guidance, reused verbatim by both provider prompts so
-// the two-round "quote materials, then craft on confirmation" behavior stays
-// in sync regardless of which backend is answering.
-const CRAFT_FLOW_GUIDANCE = `如果玩家是在向你描述一件想要打造的装备（说明想要什么效果/外观/用途）：
-1. 如果对话记录里玩家还没交材料、也没确认交付，这一轮不要打造，只回应报价——
-   说明需要什么材料（优先从"最近的世界事件"里玩家获得过的材料里选，没有就
-   随口要一两样丹房常见材料，比如"两块白银矿石"）。报价时最多要 1-2 样材料，
-   不要一次点名三样以上，免得玩家记不住、你自己也不好判断有没有交齐。
-2. 只要玩家表示材料已经交付/凑齐了（比如说"给你" "在这" "都带来了" "交齐了"
-   之类的笼统说法），就视为材料已经交付完整，不需要玩家逐一报出材料名字才
-   算数——真实游戏里玩家是点一下"交材料"的按钮，不会把材料名字念一遍。
-   这种情况下这一轮就要正式打造，并且仍然要说几句交货时的俏皮话。`;
-
 const RECIPE_CRAFT_GUIDANCE = `如果玩家是在请求原版确定配方打造（例如"帮我炼尾火棍"）：
 1. 优先使用【炼丹炉确定配方】和【玩家当前材料/灵魂快照】判断，不要编造配方、材料或灵魂数量。
 2. 玩家问"你能打造什么"时，列出少量匹配配方或概括可打造清单；玩家问缺什么时，按快照指出缺少的制作书、材料或灵魂。
 3. 只有当玩家明确要打造某个已知配方，并且快照显示材料/灵魂大体齐备时，才发出 craft_recipe 结构化指令。
-4. 原版确定配方不要使用旧的自由炼器 craft_item；旧 craft_item 只留给"自定义神器/自定义效果"那条技术储备流。
+4. 自定义装备只能从炼丹炉界面提交材料后走独立 craft_request 事务；聊天绝不能直接生成装备。
 5. 当前游戏只开放列表中明确给出的配方，不得提及或打造其他角色、饰品或法宝。
 6. 玩家明确求你白送武器时，可以尝试 give_item，但 id 必须是 ptdxzg、名称必须是普通的行者棍；不要承诺一定送到，游戏端会独立判定概率。`;
 
@@ -106,29 +91,11 @@ export function dispatchCraftRecipeIntent(recipeId: string, cb: NpcBrainCallback
   return true;
 }
 
-// Crafting effect DSL, shared shape between both providers. This only
-// constrains structure (legal stat/effect enum names) — it does NOT
-// constrain numeric ranges. That's intentional: the real numeric bounds are
-// enforced downstream by validateCraftedItem (src/craft-validate.ts), a
-// plain function with its own unit tests, so crafting stays safe no matter
-// what number either backend decides to send.
-const statEffectSchema = z.object({
-  type: z.literal("stat"),
-  stat: z.enum(["atk", "def", "hp", "mp", "crit"]),
-  value: z.number(),
-});
-const onHitEffectSchema = z.object({
-  type: z.literal("onHit"),
-  effect: z.enum(["burn", "lifesteal", "freeze"]),
-  chance: z.number(),
-  power: z.number(),
-});
-
 /**
  * Ask an NPC to react to a line the player just said. Dispatches to the
  * configured provider (opencode+DeepSeek by default, claude-agent-sdk as an
  * A/B option), which fires the given callbacks as it decides on
- * say/give_item/set_goal/craft_item, and updates this NPC's conversation
+ * say/give_item/set_goal/craft_recipe, and updates this NPC's conversation
  * history as a side effect.
  */
 export async function askNpc(
@@ -203,15 +170,6 @@ const npcTurnSchema = z.object({
       desc: z.string().optional(),
     })
     .optional(),
-  craft_item: z
-    .object({
-      id: z.string(),
-      name: z.string(),
-      rarity: z.number(),
-      desc: z.string(),
-      effects: z.array(z.discriminatedUnion("type", [statEffectSchema, onHitEffectSchema])).optional(),
-    })
-    .optional(),
   craft_recipe: z
     .object({
       recipeId: z.string(),
@@ -220,6 +178,13 @@ const npcTurnSchema = z.object({
 });
 
 type NpcTurn = z.infer<typeof npcTurnSchema>;
+
+export function parseNpcTurn(rawText: string): NpcTurn | undefined {
+  const parsedRaw = safeJsonParse(stripCodeFence(rawText));
+  if (parsedRaw === undefined) return undefined;
+  const parsed = npcTurnSchema.safeParse(parsedRaw);
+  return parsed.success ? parsed.data : undefined;
+}
 
 async function askViaOpencode(
   persona: NpcPersona,
@@ -240,14 +205,10 @@ JSON 格式（字段说明，不要照抄字面值）：
   "say": "你要对玩家说的话，必填，简短，符合人设口吻，1-3句",
   "give_item": { "id": "英文/拼音slug", "name": "中文名", "kind": "equipment|material|consumable|quest", "desc": "可选描述", "qty": 可选数量 },
   "set_goal": { "id": "英文/拼音slug", "title": "目标标题", "desc": "可选描述" },
-  "craft_item": {
-    "id": "英文/拼音slug", "name": "装备中文名", "rarity": 1到3的品阶, "desc": "装备描述",
-    "effects": [ {"type":"stat","stat":"atk|def|hp|mp|crit","value":数值} 或 {"type":"onHit","effect":"burn|lifesteal|freeze","chance":0到1,"power":数值} ]（最多3条）
-  },
   "craft_recipe": { "recipeId": "确定配方制作书fillName，例如whgzzs" }
 }
-只有剧情确实需要时才带上 give_item / set_goal / craft_item / craft_recipe 字段，平时只需要 say 一个字段，不要四个字段都编出来。
-确定配方打造只能使用 craft_recipe；自由描述、非原版配方的技术储备打造才使用 craft_item。
+只有剧情确实需要时才带上 give_item / set_goal / craft_recipe 字段，平时只需要 say 一个字段，不要三个字段都编出来。
+确定配方打造只能使用 craft_recipe。自定义装备由游戏的炼丹炉事务处理，聊天回复绝不能带 craft_item 或凭空生成装备。
 重要格式要求：字符串值内部绝对不能出现英文双引号 "，会破坏 JSON 结构导致整轮回复失效；
 如果要在台词里引用物品名/说法，一律用中文引号「」或『』，不要用 " " 或 “ ”。`;
 
@@ -267,8 +228,6 @@ ${recipeContextBlock}
 ${playerText}
 
 请只输出符合上面 JSON 格式的一个对象，不要输出其他任何文字。
-
-${CRAFT_FLOW_GUIDANCE}
 
 ${RECIPE_CRAFT_GUIDANCE}`;
 
@@ -306,17 +265,13 @@ ${RECIPE_CRAFT_GUIDANCE}`;
         .join("")
         .trim();
 
-      const parsedRaw = safeJsonParse(stripCodeFence(rawText));
-      const parsed = parsedRaw !== undefined ? npcTurnSchema.safeParse(parsedRaw) : undefined;
-
-      if (parsed?.success) {
-        const turn = parsed.data;
+      const turn = parseNpcTurn(rawText);
+      if (turn) {
         finalTurn = turn;
         finalSay = turn.say;
       } else {
         console.error(
           "[brain:opencode] failed to parse/validate NPC turn JSON",
-          parsed?.error,
           rawText,
         );
         if (rawText) finalSay = rawText;
@@ -333,16 +288,6 @@ ${RECIPE_CRAFT_GUIDANCE}`;
   cb.onSay(finalSay);
   if (finalTurn?.give_item) cb.onGiveItem(finalTurn.give_item);
   if (finalTurn?.set_goal) cb.onSetGoal(finalTurn.set_goal);
-  if (finalTurn?.craft_item) {
-    const item = validateCraftedItem({
-      id: finalTurn.craft_item.id,
-      name: finalTurn.craft_item.name,
-      rarity: finalTurn.craft_item.rarity,
-      desc: finalTurn.craft_item.desc,
-      effects: finalTurn.craft_item.effects ?? [],
-    });
-    cb.onCraftItem(item);
-  }
   if (finalTurn?.craft_recipe) dispatchCraftRecipeIntent(finalTurn.craft_recipe.recipeId, cb);
   return finalSay;
 }
@@ -413,33 +358,6 @@ async function askViaClaudeAgentSdk(
     },
   );
 
-  const craftItemTool = tool(
-    "craft_item",
-    "为玩家炼制一件装备，交给玩家。只有在对话记录显示玩家已经明确交付/确认" +
-      "材料之后才能调用；打造请求刚提出、材料还没到手时，不要调用这个工具，" +
-      "只用 say 报价索要材料。",
-    {
-      id: z.string().describe("装备 id，简短英文/拼音 slug"),
-      name: z.string().describe("装备名称，中文，要贴合玩家的描述"),
-      rarity: z.number().int().describe("品阶，1-3，越高越稀有"),
-      desc: z.string().describe("装备描述，太上老君的炼丹房口吻"),
-      effects: z
-        .array(z.discriminatedUnion("type", [statEffectSchema, onHitEffectSchema]))
-        .describe("装备效果；最多 3 条会生效，数值超出丹炉火候上限会被自动收敛，不必纠结精确数字"),
-    },
-    async (args) => {
-      const item = validateCraftedItem({
-        id: args.id,
-        name: args.name,
-        rarity: args.rarity,
-        desc: args.desc,
-        effects: args.effects,
-      });
-      cb.onCraftItem(item);
-      return { content: [{ type: "text", text: "已炼制完成，交给了玩家" }] };
-    },
-  );
-
   const listRecipesTool = tool(
     "list_recipes",
     "列出原版确定配方炼丹炉能打造的制作书/产物/材料/灵魂消耗。玩家问你能打造什么时使用。",
@@ -481,7 +399,7 @@ async function askViaClaudeAgentSdk(
   const npcTools = createSdkMcpServer({
     name: "npc",
     version: "0.1.0",
-    tools: [sayTool, giveItemTool, setGoalTool, craftItemTool, listRecipesTool, checkMaterialsTool, craftRecipeTool],
+    tools: [sayTool, giveItemTool, setGoalTool, listRecipesTool, checkMaterialsTool, craftRecipeTool],
   });
 
   const prompt = `【最近的世界事件】
@@ -502,11 +420,6 @@ ${playerText}
 请调用 say 工具回应玩家这句话（必须调用且只调用一次 say）；如果剧情合适，
 可以额外调用 give_item、set_goal、list_recipes、check_materials 或 craft_recipe。
 
-${CRAFT_FLOW_GUIDANCE.replace("这一轮不要打造，只回应报价", "这一轮不要调用 craft_item，只用 say 报价").replace(
-  "才正式打造",
-  "才调用 craft_item 正式打造",
-)}
-
 ${RECIPE_CRAFT_GUIDANCE.replace("才发出 craft_recipe 结构化指令", "才调用 craft_recipe 工具")}
 
 除了这些工具调用，不要输出任何其他内容。`;
@@ -522,7 +435,6 @@ ${RECIPE_CRAFT_GUIDANCE.replace("才发出 craft_recipe 结构化指令", "才�
         "mcp__npc__say",
         "mcp__npc__give_item",
         "mcp__npc__set_goal",
-        "mcp__npc__craft_item",
         "mcp__npc__list_recipes",
         "mcp__npc__check_materials",
         "mcp__npc__craft_recipe",
