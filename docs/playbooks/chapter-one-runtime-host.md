@@ -2,9 +2,9 @@
 
 ## Routes
 
-- Production chapter-one opt-in (`sl11`, `sl12`, `sl13`): `/?battleRuntime=1`
-- Legacy fallback: `/` (or any URL without `battleRuntime=1`)
-- Deterministic browser gate only: `/?battleRuntime=1&runtimeDebug=gate`
+- Production chapter one (`sl11`, `sl12`, `sl13`): `/`
+- Explicit legacy rollback: `/?battleRuntime=legacy`
+- Deterministic browser gate only: `/?runtimeDebug=gate`
 
 Campaign indices `0..2` select `BattleRuntimeScene`. Later campaign nodes and co-op continue to use `BattleScene` until their production definitions and server-authoritative command transport are migrated.
 
@@ -73,8 +73,8 @@ Latest local proof on 2026-07-16: `sl11=8df48257`, `sl12=4c95a0fe`, `sl13=48c35d
 - Visual black rectangles: confirm the scene loads `Monster30_clean`; for the `online_floor13` PNG/WebP pair, rows 7..46 of the extractor's opaque black mask must remain transparent.
 - Hash drift: run the core replay/checkpoint suites before changing Phaser presentation code.
 - Progress not unlocked: inspect `zmxy3-remake.slot.v1.<slot>.level` and the `activeSlot` carried in `BattleData`.
-- Legacy regression: reproduce without `battleRuntime=1`; the route must instantiate `BattleScene` and expose no runtime hook.
+- Legacy regression: reproduce with `battleRuntime=legacy`; the route must instantiate `BattleScene` and expose no runtime hook.
 
 ## Deferred Work
 
-The production host now covers the complete first-chapter battle slice, the necessary `slz` skill, authoritative drops and pickup, weapon/armor inventory transactions, hot loadout attributes, save restoration, selling, and the starter recipe. AI-authored free-form forge output remains a map-side validated transaction rather than deterministic combat state. Co-op remains on `BattleScene` until room commands can enter the deterministic runtime through a server-authoritative transport. `BattleScene` also stays byte-locked as the query-free rollback path while those systems migrate.
+The production host now covers the complete first-chapter battle slice, the necessary `slz` skill, authoritative drops and pickup, weapon/armor inventory transactions, hot loadout attributes, save restoration, selling, and the starter recipe. AI-authored free-form forge output remains a map-side validated transaction rather than deterministic combat state. Co-op remains on `BattleScene` until room commands can enter the deterministic runtime through a server-authoritative transport. `BattleScene` also stays byte-locked behind `?battleRuntime=legacy` as the rollback path while those systems migrate.
