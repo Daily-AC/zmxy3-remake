@@ -474,7 +474,7 @@
 
 ## 2026-07-22 Codex 续开发（第一章 BattleRuntime + 真实炼制协议 + home CI）
 
-接手时没有采信旧交接结论，重新跑了项目测试、构建、后端 E2E、Windows 性能采样和公网浏览器门禁。工作分支为 `codex/chapter-one-runtime-host`，本轮提交从 `8db5711` 到 `7033b88`。
+接手时没有采信旧交接结论，重新跑了项目测试、构建、后端 E2E、Windows 性能采样和公网浏览器门禁。工作分支为 `codex/chapter-one-runtime-host`，本轮功能与交付链提交从 `8db5711` 到 `1170b61`。
 
 **第一章运行时**：单人第一至第三章现在默认进入 `BattleRuntime`；`?battleRuntime=legacy` 是显式回滚入口，后续章节和联机仍走 legacy。路由契约 14 项、game 770 项、core 280 项、contracts 10 项、social 41 项与双人房间 smoke、生产构建均通过。公网 `https://zaixu-dev.qmledmq.cn:8443` 浏览器门禁通过，覆盖默认 production 路由、显式 legacy 回滚及 `wss://zm-dev.qmledmq.cn:8443` / `/social` 服务配置。
 
@@ -484,4 +484,4 @@
 
 **home 交付链**：runner 最终保持用户原有的 GitHub 直连设计；接手时 FlClash 未运行，临时反向代理只用于恢复本轮 CI，结束后已撤销，runner 在无代理环境下重启并重新 online。两条 workflow 也删除了临时的 7890 步骤级代理；移除 self-hosted runner 上会卡住 post-job 的远程 npm cache。部署脚本改为在 home 本机端口做有界健康检查，公网可达性由独立浏览器门禁负责。后端 CI 改为 unit + deterministic forge + social E2E，避免把真实模型认证状态误当代码回归。
 
-**最终 CI 与部署证据**：frontend run [29913890360](https://github.com/Daily-AC/zmxy3-remake/actions/runs/29913890360) 成功，完成类型检查、contracts/game 测试、生产构建、zaixu-dev 部署和公网浏览器验收；backend run [29914833830](https://github.com/Daily-AC/zmxy3-remake/actions/runs/29914833830) 成功，完成两套后端类型检查、测试、部署及本机健康检查。两条流水线均由 home self-hosted runner 实际执行。
+**最终 CI 与部署证据**：在临时隧道已经撤销后，frontend run [29915737460](https://github.com/Daily-AC/zmxy3-remake/actions/runs/29915737460) 成功，完成类型检查、contracts/game 测试、生产构建、zaixu-dev 部署和公网浏览器验收；backend run [29915737446](https://github.com/Daily-AC/zmxy3-remake/actions/runs/29915737446) 成功，完成两套后端类型检查、测试、部署及本机健康检查。两条流水线均由 home self-hosted runner 直连实际执行。
