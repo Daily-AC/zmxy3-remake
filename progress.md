@@ -482,6 +482,6 @@
 
 **Windows 性能证据**：在 home 已登录 Windows 会话中用系统 Chrome 150、RTX 5090 D3D11 重新采样并提交 `docs/reports/evidence/combat-core-slice-windows-performance.json`。3 轮 51 actors 模拟 p95 为 0.0088–0.0107ms，浏览器 work p95 0.8ms、interval p95 7.7ms、掉帧 0；`npm run verify:windows-performance-evidence` 通过，证据绑定源摘要而非手工备注。
 
-**home 交付链**：runner systemd 服务从 `/etc/infra/proxy.env` 读取代理，checkout 使用规范的小写代理变量；移除 self-hosted runner 上会卡住 post-job 的远程 npm cache。部署脚本改为在 home 本机端口做有界健康检查，公网可达性由独立浏览器门禁负责。后端 CI 改为 unit + deterministic forge + social E2E，避免把真实模型认证状态误当代码回归。
+**home 交付链**：runner 最终保持用户原有的 GitHub 直连设计；接手时 FlClash 未运行，临时反向代理只用于恢复本轮 CI，结束后已撤销，runner 在无代理环境下重启并重新 online。两条 workflow 也删除了临时的 7890 步骤级代理；移除 self-hosted runner 上会卡住 post-job 的远程 npm cache。部署脚本改为在 home 本机端口做有界健康检查，公网可达性由独立浏览器门禁负责。后端 CI 改为 unit + deterministic forge + social E2E，避免把真实模型认证状态误当代码回归。
 
 **最终 CI 与部署证据**：frontend run [29913890360](https://github.com/Daily-AC/zmxy3-remake/actions/runs/29913890360) 成功，完成类型检查、contracts/game 测试、生产构建、zaixu-dev 部署和公网浏览器验收；backend run [29914833830](https://github.com/Daily-AC/zmxy3-remake/actions/runs/29914833830) 成功，完成两套后端类型检查、测试、部署及本机健康检查。两条流水线均由 home self-hosted runner 实际执行。

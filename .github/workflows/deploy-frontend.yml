@@ -34,9 +34,6 @@ jobs:
       RUNTIME_SOCIAL_SERVER: https://zm-dev.qmledmq.cn:8443/social
     steps:
       - uses: actions/checkout@v4
-        env:
-          http_proxy: http://127.0.0.1:7890
-          https_proxy: http://127.0.0.1:7890
 
       - uses: actions/setup-node@v4
         with:
@@ -61,9 +58,4 @@ jobs:
         run: npx playwright install chromium
 
       - name: Verify deployed public runtime
-        env:
-          NODE_OPTIONS: --use-env-proxy
-          http_proxy: http://127.0.0.1:7890
-          https_proxy: http://127.0.0.1:7890
-          RUNTIME_PROXY_SERVER: http://127.0.0.1:7890
         run: node game/tools/verify-sl11-runtime.mjs
