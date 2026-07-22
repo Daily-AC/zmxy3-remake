@@ -6,12 +6,12 @@ case "$service" in
   agent)
     source_dir=${GITHUB_WORKSPACE:-$PWD}/agent-server
     unit=zmxy-agent
-    public_url=wss://zm-dev.qmledmq.cn:8443
+    smoke_url=ws://127.0.0.1:5181
     ;;
   social)
     source_dir=${GITHUB_WORKSPACE:-$PWD}/social-server
     unit=zmxy-social
-    public_url=https://zm-dev.qmledmq.cn:8443/social
+    smoke_url=http://127.0.0.1:7100
     ;;
   *)
     echo "unknown backend: $service" >&2
@@ -62,29 +62,55 @@ sudo -n systemctl is-active --quiet "$unit"
 if [[ "$service" == social ]]; then
   status=$(curl --silent --output /tmp/zaixu-social-smoke.json --write-out '%{http_code}' \
     --retry 8 --retry-all-errors --retry-delay 1 \
-    -H 'content-type: application/json' -d '{}' "$public_url/auth/register")
+    -H 'content-type: application/json' -d '{}' "$smoke_url/auth/register")
   [[ "$status" == 400 ]]
 else
   (
     cd "$release_dir"
-    PUBLIC_URL="$public_url" node --input-type=module <<'NODE'
+    SMOKE_URL="$smoke_url" node --input-type=module <<'NODE'
 import WebSocket from 'ws'
 
-const socket = new WebSocket(process.env.PUBLIC_URL)
-const timer = setTimeout(() => {
-  socket.terminate()
-  process.exit(1)
-}, 10_000)
-socket.once('message', (raw) => {
-  const message = JSON.parse(raw.toString())
-  if (message.type !== 'welcome' || !Array.isArray(message.npcIds)) process.exit(1)
-  clearTimeout(timer)
-  socket.close()
-})
-socket.once('error', (error) => {
-  console.error(error)
-  process.exit(1)
-})
+const deadline = Date.now() + 30_000
+let lastError = 'no connection attempt completed'
+
+function retry() {
+  if (Date.now() >= deadline) {
+    console.error(`agent smoke test timed out: ${lastError}`)
+    process.exit(1)
+  }
+
+  const socket = new WebSocket(process.env.SMOKE_URL)
+  const attemptTimer = setTimeout(() => {
+    lastError = 'connection attempt timed out'
+    socket.terminate()
+  }, 3_000)
+  let receivedWelcome = false
+
+  socket.once('message', (raw) => {
+    try {
+      const message = JSON.parse(raw.toString())
+      if (message.type !== 'welcome' || !Array.isArray(message.npcIds)) {
+        throw new Error(`unexpected message: ${raw.toString()}`)
+      }
+      receivedWelcome = true
+      clearTimeout(attemptTimer)
+      socket.close()
+      process.exit(0)
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
+      socket.terminate()
+    }
+  })
+  socket.once('error', (error) => {
+    lastError = error.message
+  })
+  socket.once('close', () => {
+    clearTimeout(attemptTimer)
+    if (!receivedWelcome) setTimeout(retry, 500)
+  })
+}
+
+retry()
 NODE
   )
 fi
