@@ -7,14 +7,13 @@
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { writeFileSync } from "node:fs";
+import net from "node:net";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { WebSocket } from "ws";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..");
-const PORT = 5181;
-const WS_URL = `ws://localhost:${PORT}`;
 const NPC_ID = "laojun";
 const MONSTER_A = "赤炎狼";
 const MONSTER_B = "石头怪";
@@ -29,6 +28,20 @@ const transcript: TranscriptEntry[] = [];
 
 function log(...args: unknown[]): void {
   console.log("[mock-game]", ...args);
+}
+
+async function reservePort(): Promise<number> {
+  const server = net.createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("failed to reserve a test port");
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+  });
+  return address.port;
 }
 
 function waitForServerReady(child: ChildProcessWithoutNullStreams): Promise<void> {
@@ -54,26 +67,22 @@ function waitForServerReady(child: ChildProcessWithoutNullStreams): Promise<void
 }
 
 async function main(): Promise<void> {
+  const port = await reservePort();
+  const wsUrl = `ws://127.0.0.1:${port}`;
   const serverEntry = path.join(REPO_ROOT, "src", "server.ts");
   const child = spawn(
     path.join(REPO_ROOT, "node_modules", ".bin", "tsx"),
     [serverEntry],
     {
       cwd: REPO_ROOT,
-      env: { ...process.env, AGENT_SERVER_PORT: String(PORT) },
+      env: { ...process.env, AGENT_SERVER_PORT: String(port) },
     },
   ) as ChildProcessWithoutNullStreams;
 
   try {
     await waitForServerReady(child);
 
-    const ws = new WebSocket(WS_URL);
-    await new Promise<void>((resolve, reject) => {
-      ws.once("open", () => resolve());
-      ws.once("error", reject);
-    });
-    log("connected to agent-server");
-
+    const ws = new WebSocket(wsUrl);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     type Waiter = { pred: (m: any) => boolean; resolve: (m: any) => void };
     const waiters: Waiter[] = [];
@@ -115,7 +124,14 @@ async function main(): Promise<void> {
       ws.send(JSON.stringify(msg));
     }
 
-    await waitFor((m) => m.type === "welcome");
+    const welcome = waitFor((m) => m.type === "welcome", 15_000);
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    log("connected to agent-server");
+
+    await welcome;
     log("received welcome");
 
     sendMsg({ type: "hello", player: { id: "tester", name: "斗战胜佛" } });
